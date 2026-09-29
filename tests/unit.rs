@@ -184,6 +184,7 @@ fn question_groups_fit_budget() {
         purpose: "budget test".into(),
         fields: vec![spec::code("code", 20_000, "Code for the budget test.")],
         questions: (0..6).map(|i| spec::noul(&format!("q{i}"), "Is `code` ok?", "it is fine as written", "it has a problem", spec::advisory("test only, never gates"))).collect(),
+        calibrated_for: vec!["kev-4b".into()],
     };
     let qs: BTreeMap<String, Question> = spec.wire();
     let groups = group_questions(&state, &qs, 2900);
@@ -201,6 +202,7 @@ fn answers_are_validated_not_defaulted() {
         purpose: "answer test".into(),
         fields: vec![spec::text("x", 10, "A field for the answer test.")],
         questions: vec![spec::QuestionSpec { id: "q".into(), ask, gate: spec::advisory("test only, never gates") }],
+        calibrated_for: vec!["kev-4b".into()],
     }
     .wire()
     .remove("q")

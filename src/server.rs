@@ -627,6 +627,10 @@ impl Kritic {
         tokio::spawn(async move {
             let _g = gpu.lock().await;
             let _x = crate::gpu::lock_across_processes(&kev.cfg, "warm-up").await.ok();
+            // Only a local backend has anything to warm; cloud and off resolve without a GPU.
+            if !matches!(kev.resolve_backend().await, Ok(crate::kev::Backend::Local)) {
+                return;
+            }
             if let Err(e) = kev.ensure_up().await {
                 eprintln!("kritic: laya not started: {e}");
             }

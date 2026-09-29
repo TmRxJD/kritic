@@ -80,7 +80,7 @@ pub fn resolve_paths(paths: &[String], base: Option<&str>) -> (Vec<PathBuf>, Vec
 }
 
 /// Canonicalize without the `\\?\` prefix Windows adds; fall back to the input if it doesn't exist.
-fn dunce_canonical(p: &Path) -> PathBuf {
+pub fn dunce_canonical(p: &Path) -> PathBuf {
     match std::fs::canonicalize(p) {
         Ok(c) => {
             let s = c.display().to_string();

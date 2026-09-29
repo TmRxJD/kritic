@@ -9,6 +9,13 @@
 # evidence in specs/*.json. Recalibrate (scripts/calibrate-specs.mjs) instead of editing them.
 
 [kev]
+# Who answers Kev's typed questions:
+#   auto  - local Kev when installed (laya + GGUF), else cloud Jev when a gateway key is configured
+#   local - local Kev only (nothing leaves the machine)
+#   cloud - cloud Jev only (code excerpts are sent to the AI Gateway)
+#   off   - no model: deterministic tools only; Kev-backed verdicts report null
+# backend = "auto"                              # KRITIC_KEV_BACKEND
+#
 # Kev-4B typed-decision model, served by laya. kritic starts laya itself when it is not running.
 # laya_url = "http://127.0.0.1:8089"            # KRITIC_LAYA_URL (default built from laya_port)
 # laya_port = 8089                              # KRITIC_LAYA_PORT
@@ -21,6 +28,15 @@
 # max_seq_tokens = 2048                         # KRITIC_MAX_SEQ_TOKENS
 # request_s = 60                                # KRITIC_KEV_REQUEST_S: one request; a stall stops laya so the next call restarts it
 # critic_deadline_s = 600                       # KRITIC_CRITIC_DEADLINE_S: a whole critic pass returns what it has after this
+
+[cloud]
+# Cloud Jev, TypeSafe AI's typed-evaluation model, through Vercel's AI Gateway. Used when
+# kev.backend is "cloud", or "auto" without a local Kev. The key comes from AI_GATEWAY_API_KEY,
+# else from key_file (written by `kritic setup`); it is never stored here. Kev's calibrated
+# gates are advisory under Jev until you run `kritic calibrate` with the cloud backend.
+# url = "https://ai-gateway.vercel.sh/v1/evaluate"   # KRITIC_CLOUD_URL
+# model = "typesafe-ai/jev"                     # KRITIC_CLOUD_MODEL
+# key_file = "~/.kritic/ai-gateway.key"         # KRITIC_CLOUD_KEY_FILE
 
 [vision]
 # Qwen2.5-VL through Ollama: visual_critic scores and the ux_critic novice.

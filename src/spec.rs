@@ -160,6 +160,28 @@ pub struct DecisionSpec {
     pub purpose: String,
     pub fields: Vec<Field>,
     pub questions: Vec<QuestionSpec>,
+    /// The decision models the `Rule` gates were calibrated on. Under any other model (for example
+    /// cloud Jev) every gate is reported but advisory: a threshold measured on one model's
+    /// probabilities says nothing about another's.
+    #[serde(default = "default_calibrated_for")]
+    pub calibrated_for: Vec<String>,
+}
+
+fn default_calibrated_for() -> Vec<String> {
+    vec!["kev-4b".to_string()]
+}
+
+/// The decision model currently answering (set by the Kev client once its backend is known).
+static ACTIVE_MODEL: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+pub fn set_active_model(model: &str) {
+    if let Ok(mut m) = ACTIVE_MODEL.write() {
+        *m = Some(model.to_string());
+    }
+}
+
+pub fn active_model() -> Option<String> {
+    ACTIVE_MODEL.read().ok().and_then(|m| m.clone())
 }
 
 /// Most fields a yes/no question may read, and a choice or score. Measured: a question that
@@ -410,6 +432,9 @@ impl DecisionSpec {
     /// The failure reason if question `id`'s gate fails for `answer`; None when it passes or
     /// is advisory.
     pub fn check(&self, id: &str, answer: &Answer) -> Option<String> {
+        if !self.gates_apply() {
+            return None;
+        }
         let q = self.question(id)?;
         let Gate::Rule { measure, option, fails_when, threshold, reason, .. } = &q.gate else { return None };
         let v = measured(*measure, option.as_deref(), answer)?;
@@ -437,7 +462,24 @@ impl DecisionSpec {
     }
 
     /// `check` for the worst value over `units` units, at the family-wise threshold.
+    /// Whether this spec's gates may decide under the active model. With no model known yet
+    /// (offline tests, fakes) the calibrated default applies.
+    pub fn gates_apply(&self) -> bool {
+        active_model().is_none_or(|m| self.calibrated_for.iter().any(|c| *c == m))
+    }
+
+    /// Why this spec's gates are advisory right now, if they are.
+    pub fn uncalibrated_note(&self) -> Option<String> {
+        let m = active_model()?;
+        (!self.gates_apply()).then(|| {
+            format!("{}: gates are advisory under {m} (calibrated for {}); run `kritic calibrate` to calibrate them", self.name, self.calibrated_for.join(", "))
+        })
+    }
+
     pub fn check_units(&self, id: &str, v: f64, units: usize) -> Option<String> {
+        if !self.gates_apply() {
+            return None;
+        }
         let q = self.question(id)?;
         let Gate::Rule { fails_when, reason, .. } = &q.gate else { return None };
         let t = self.threshold_for(id, units)?;

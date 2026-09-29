@@ -15,6 +15,14 @@ pub struct Config {
     pub config_file: Option<PathBuf>,
     /// Problems reading the config file (bad TOML, unknown keys). Reported by `status`.
     pub config_errors: Vec<String>,
+    /// Who answers Kev questions: `auto` (local Kev when installed, else cloud Jev when a key is
+    /// configured), `local`, `cloud`, or `off` (deterministic tools only).
+    pub backend: String,
+    /// Cloud Jev (TypeSafe's model through an AI Gateway `/v1/evaluate` endpoint).
+    pub cloud_url: String,
+    pub cloud_model: String,
+    /// File holding the gateway key when `AI_GATEWAY_API_KEY` is not set.
+    pub cloud_key_file: PathBuf,
     pub laya_url: String,
     pub laya_exe: PathBuf,
     pub kev_gguf: PathBuf,
@@ -69,6 +77,10 @@ pub struct Config {
 /// Every key the config file accepts, as `section.key`, with the environment variable that
 /// overrides it. `examples/kritic.toml` documents each one; `tests/unit.rs` keeps them in sync.
 pub const KEYS: &[(&str, &str)] = &[
+    ("kev.backend", "KRITIC_KEV_BACKEND"),
+    ("cloud.url", "KRITIC_CLOUD_URL"),
+    ("cloud.model", "KRITIC_CLOUD_MODEL"),
+    ("cloud.key_file", "KRITIC_CLOUD_KEY_FILE"),
     ("kev.laya_url", "KRITIC_LAYA_URL"),
     ("kev.laya_port", "KRITIC_LAYA_PORT"),
     ("kev.laya_exe", "KRITIC_LAYA_EXE"),
@@ -260,7 +272,16 @@ impl Config {
         let s = Source { file };
         let port: u16 = s.num("kev.laya_port", 8089);
         let harness_dir = default_harness_dir();
+        let mut config_errors = config_errors;
+        let backend = s.str("kev.backend", "auto");
+        if !["auto", "local", "cloud", "off"].contains(&backend.as_str()) {
+            config_errors.push(format!("kev.backend = \"{backend}\": expected auto, local, cloud or off (using auto)"));
+        }
         Config {
+            backend: if ["auto", "local", "cloud", "off"].contains(&backend.as_str()) { backend } else { "auto".into() },
+            cloud_url: s.str("cloud.url", "https://ai-gateway.vercel.sh/v1/evaluate"),
+            cloud_model: s.str("cloud.model", "typesafe-ai/jev"),
+            cloud_key_file: s.path("cloud.key_file", home.join("ai-gateway.key")),
             laya_url: s.str("kev.laya_url", format!("http://127.0.0.1:{port}")),
             laya_exe: s.path("kev.laya_exe", which("laya").unwrap_or_else(|| default_laya(&home))),
             kev_gguf: s.path("kev.gguf", home.join("models").join("kev_4b_q8_0.gguf")),
@@ -303,6 +324,17 @@ impl Config {
             config_file,
             config_errors,
         }
+    }
+
+    /// The AI Gateway key for cloud Jev: `AI_GATEWAY_API_KEY`, else `cloud.key_file`. Never
+    /// stored in `kritic.toml`, never logged.
+    pub fn cloud_key(&self) -> Option<String> {
+        if let Ok(k) = std::env::var("AI_GATEWAY_API_KEY")
+            && !k.trim().is_empty()
+        {
+            return Some(k.trim().to_string());
+        }
+        std::fs::read_to_string(&self.cloud_key_file).ok().map(|k| k.trim().to_string()).filter(|k| !k.is_empty())
     }
 
     /// Alias of [`Config::load`]: environment variables still override the file.

@@ -225,9 +225,12 @@ pub async fn git_diff(base_dir: Option<&str>, paths: &[String]) -> Result<String
     let untracked = git(&base, &["ls-files", "--others", "--exclude-standard"], paths).await?;
     let names: Vec<String> = untracked.lines().filter(|l| !l.trim().is_empty()).map(String::from).collect();
     let (usable, _) = resolve_paths(&names, base.to_str());
+    // resolve_paths canonicalizes, so strip the canonical base: a short-name base
+    // (C:\Users\RUNNER~1\...) never prefixes the long-name paths of the files under it.
+    let canon_base = crate::files::dunce_canonical(&base);
     for p in usable {
         let Ok(text) = read_lossy(&p) else { continue };
-        let rel = p.strip_prefix(&base).unwrap_or(&p).display().to_string().replace('\\', "/");
+        let rel = p.strip_prefix(&canon_base).or_else(|_| p.strip_prefix(&base)).unwrap_or(&p).display().to_string().replace('\\', "/");
         let n = text.lines().count();
         diff.push_str(&format!("diff --git a/{rel} b/{rel}\nnew file mode 100644\n@@ -0,0 +1,{n} @@\n"));
         for l in text.lines() {
@@ -329,6 +332,20 @@ pub async fn artifact_validate<D: Decider>(d: &D, cfg: &Config, inp: ValidateInp
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct StatusResult {
     pub tool: String,
+    /// `kev.backend` as configured (auto, local, cloud, off).
+    pub backend_setting: String,
+    /// The backend Kev questions go to (local or cloud), or null when none is usable.
+    pub backend: Option<String>,
+    /// Why no backend is usable, with what to do about it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend_error: Option<String>,
+    /// The model answering Kev questions (kev-4b locally, typesafe-ai/jev in the cloud).
+    pub decision_model: Option<String>,
+    /// Whether the built-in gates were calibrated for that model; when false, Kev results are
+    /// reported but carry no verdict.
+    pub gates_calibrated: bool,
+    /// A gateway key is configured (the key itself is never shown).
+    pub cloud_key_configured: bool,
     pub laya_up: bool,
     pub laya_url: String,
     pub health: Option<Value>,
@@ -362,10 +379,21 @@ pub struct StatusResult {
 
 pub async fn status(k: &KevClient, start: bool) -> StatusResult {
     let cfg = &k.cfg;
-    let start_error = if start { k.ensure_up().await.err() } else { None };
+    let resolved = k.resolve_backend().await;
+    let start_error = match (&resolved, start) {
+        (Ok(crate::kev::Backend::Local), true) => k.ensure_up().await.err(),
+        _ => None,
+    };
     let health = k.health().await;
+    let decision_model = resolved.as_ref().ok().map(|b| k.model_for(b).to_string());
     StatusResult {
         tool: "status".into(),
+        backend_setting: cfg.backend.clone(),
+        backend: resolved.as_ref().ok().map(|b| b.label().to_string()),
+        backend_error: resolved.as_ref().err().cloned(),
+        gates_calibrated: crate::spec::builtin().values().all(|s| s.gates_apply()),
+        decision_model,
+        cloud_key_configured: cfg.cloud_key().is_some(),
         laya_up: health.is_some(),
         laya_url: cfg.laya_url.clone(),
         health,

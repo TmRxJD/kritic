@@ -15,6 +15,7 @@ fn base() -> DecisionSpec {
         purpose: "test spec".into(),
         fields: vec![code("change", 100, "A unified diff hunk for testing.")],
         questions: vec![noul("defect", "Does `change` add a defect?", "an added line misbehaves", "the added lines behave", advisory("not calibrated in this test"))],
+        calibrated_for: vec!["kev-4b".into()],
     }
 }
 

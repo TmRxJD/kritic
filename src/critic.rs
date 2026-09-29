@@ -507,6 +507,12 @@ pub fn aggregate(
     // Rule failures reject; coverage gaps only make the verdict unknown.
     let rules_pass = reasons.is_empty();
     let mut coverage = Vec::new();
+    // Under a model the gates were not calibrated for, the probabilities are reported but no
+    // verdict is claimed: an uncalibrated "approved" would be a guess presented as a result.
+    if let Some(note) = unit.uncalibrated_note() {
+        r.gates.clear();
+        coverage.push(note);
+    }
     if r.chunks_unscored > 0 {
         coverage.push(format!("{} chunks over the {MAX_CHUNKS}-chunk limit were not scored; score file groups separately", r.chunks_unscored));
     }

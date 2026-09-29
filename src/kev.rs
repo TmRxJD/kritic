@@ -72,6 +72,75 @@ pub struct KevClient {
     pub cfg: Arc<Config>,
     http: reqwest::Client,
     start_lock: tokio::sync::Mutex<()>,
+    backend: tokio::sync::Mutex<Option<Backend>>,
+}
+
+/// Where Kev questions go. Resolved once per process from `kev.backend`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Backend {
+    /// Kev-4B through a local laya server (started on demand).
+    Local,
+    /// Jev through an AI Gateway `/v1/evaluate` endpoint.
+    Cloud { key: String },
+}
+
+impl Backend {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Backend::Local => "local",
+            Backend::Cloud { .. } => "cloud",
+        }
+    }
+}
+
+/// Translate one laya question to the evaluate API: the only difference is the yes/no type name.
+pub fn cloud_question(q: &Question) -> Value {
+    let kind = if q.kind == "noul" { "boolean" } else { q.kind };
+    let mut v = json!({"type": kind, "instructions": q.instructions});
+    if let Some(c) = &q.criteria {
+        v["criteria"] = c.clone();
+    }
+    v
+}
+
+/// Translate one evaluate-API answer into laya's shape, so `parse_answer` validates both the
+/// same way. A missing confidence becomes the answer's own top probability.
+pub fn cloud_answer(q: &Question, raw: &Value) -> Value {
+    let probs = raw.get("probabilities").and_then(Value::as_object);
+    let top = probs.map(|p| p.values().filter_map(Value::as_f64).fold(0.0, f64::max));
+    match raw.get("type").and_then(Value::as_str) {
+        Some("boolean") => {
+            let p = raw.get("probability").and_then(Value::as_f64);
+            let conf = raw.get("confidence").and_then(Value::as_f64).or(p.map(|p| p.max(1.0 - p)));
+            json!({"type": "noul", "noul": p, "confidence": conf})
+        }
+        Some("choice") => {
+            let chosen = raw.get("choice").and_then(Value::as_str).and_then(|c| probs.and_then(|p| p.get(c))).and_then(Value::as_f64);
+            let conf = raw.get("confidence").and_then(Value::as_f64).or(chosen);
+            json!({"type": "choice", "choice": raw.get("choice"), "probabilities": raw.get("probabilities"), "confidence": conf})
+        }
+        Some("score") => {
+            // Score as a 0-based rung index: the expected index over the rung probabilities when
+            // they name the rungs, else the reported score (shifted if it is 1-based).
+            let rungs: Vec<String> = q.criteria.as_ref().and_then(Value::as_array).map(|a| a.iter().filter_map(|r| r.as_str().map(String::from)).collect()).unwrap_or_default();
+            let expected = probs.and_then(|p| {
+                let mut sum = 0.0;
+                let mut mass = 0.0;
+                for (i, rung) in rungs.iter().enumerate() {
+                    let pr = p.get(rung).or_else(|| p.get(&i.to_string())).and_then(Value::as_f64)?;
+                    sum += i as f64 * pr;
+                    mass += pr;
+                }
+                (mass > 0.5).then(|| sum / mass)
+            });
+            let reported = raw.get("score").and_then(Value::as_f64);
+            let n = rungs.len() as f64;
+            let score = expected.or(reported.map(|s| if s > n - 1.0 && s <= n { s - 1.0 } else { s }));
+            let conf = raw.get("confidence").and_then(Value::as_f64).or(top);
+            json!({"type": "score", "score": score, "probabilities": raw.get("probabilities"), "confidence": conf})
+        }
+        _ => raw.clone(),
+    }
 }
 
 /// Conservative token estimate for one row (state + one question). Measured on laya: the
@@ -152,7 +221,73 @@ impl KevClient {
             .timeout(Duration::from_secs(cfg.kev_request_s))
             .build()
             .expect("reqwest client");
-        KevClient { cfg, http, start_lock: tokio::sync::Mutex::new(()) }
+        KevClient { cfg, http, start_lock: tokio::sync::Mutex::new(()), backend: tokio::sync::Mutex::new(None) }
+    }
+
+    /// Whether a local Kev is installed (laya answering, or its binary and weights present).
+    pub async fn local_available(&self) -> bool {
+        self.health().await.is_some() || (self.cfg.laya_exe.is_file() && self.cfg.kev_gguf.is_file())
+    }
+
+    /// Resolve `kev.backend` once. `auto` prefers the local model: code is sent to the cloud only
+    /// when no local Kev is installed and a gateway key has been configured on purpose.
+    pub async fn resolve_backend(&self) -> Result<Backend, String> {
+        let mut cached = self.backend.lock().await;
+        if let Some(b) = cached.as_ref() {
+            return Ok(b.clone());
+        }
+        let cloud = || {
+            self.cfg.cloud_key().map(|key| Backend::Cloud { key }).ok_or_else(|| {
+                format!("cloud Jev needs a gateway key: set AI_GATEWAY_API_KEY or write it to {} (`kritic setup --backend cloud`)", self.cfg.cloud_key_file.display())
+            })
+        };
+        let b = match self.cfg.backend.as_str() {
+            "off" => return Err("Kev is off (kev.backend = \"off\"): only deterministic checks run".into()),
+            "local" => Backend::Local,
+            "cloud" => cloud()?,
+            _ if self.local_available().await => Backend::Local,
+            _ => cloud().map_err(|_| {
+                format!(
+                    "no Kev backend: local Kev is not installed ({} / {}) and no cloud key is configured. Run `kritic setup`.",
+                    self.cfg.laya_exe.display(),
+                    self.cfg.kev_gguf.display()
+                )
+            })?,
+        };
+        crate::spec::set_active_model(self.model_for(&b));
+        *cached = Some(b.clone());
+        Ok(b)
+    }
+
+    pub fn model_for(&self, b: &Backend) -> &str {
+        match b {
+            Backend::Local => &self.cfg.model,
+            Backend::Cloud { .. } => &self.cfg.cloud_model,
+        }
+    }
+
+    /// One request to the evaluate API. Answers come back translated to laya's shape.
+    async fn cloud_exchange(&self, key: &str, state: &Value, questions: &BTreeMap<String, Question>) -> Result<(Value, u64), String> {
+        let wire: serde_json::Map<String, Value> = questions.iter().map(|(id, q)| (id.clone(), cloud_question(q))).collect();
+        let body = json!({"model": self.cfg.cloud_model, "state": state, "questions": wire});
+        let t0 = Instant::now();
+        let send = self.http.post(&self.cfg.cloud_url).bearer_auth(key).json(&body).send();
+        let r = tokio::time::timeout(Duration::from_secs(self.cfg.kev_request_s), send)
+            .await
+            .map_err(|_| format!("cloud Jev did not answer within {}s", self.cfg.kev_request_s))?
+            .map_err(|e| format!("cloud Jev request failed: {e}"))?;
+        let status = r.status();
+        let v: Value = r.json().await.map_err(|e| format!("cloud Jev returned non-JSON ({status}): {e}"))?;
+        if !status.is_success() {
+            let msg = v.pointer("/error/message").and_then(Value::as_str).unwrap_or("unknown error");
+            let hint = if status == 401 || status == 403 { " (check the gateway key)" } else { "" };
+            return Err(format!("cloud Jev HTTP {status}: {msg}{hint}"));
+        }
+        let answers = v.get("answers").and_then(Value::as_object).ok_or("cloud Jev response has no answers")?;
+        let translated: serde_json::Map<String, Value> =
+            questions.iter().filter_map(|(id, q)| answers.get(id).map(|a| (id.clone(), cloud_answer(q, a)))).collect();
+        let tokens = v.pointer("/usage/inputTokens").and_then(Value::as_u64).unwrap_or(0);
+        Ok((json!({"answers": translated, "usage": {"input_tokens": tokens}}), t0.elapsed().as_millis() as u64))
     }
 
     pub async fn health(&self) -> Option<Value> {
@@ -267,16 +402,28 @@ impl KevClient {
 
 impl Decider for KevClient {
     async fn decide(&self, state: &Value, questions: &BTreeMap<String, Question>) -> Result<Decision, String> {
-        self.ensure_up().await?;
+        let backend = self.resolve_backend().await?;
+        if backend == Backend::Local {
+            self.ensure_up().await?;
+        }
+        let model = self.model_for(&backend).to_string();
+        // laya slows sharply above ~3.7k tokens per batch; the cloud endpoint takes one request.
+        let groups = match &backend {
+            Backend::Local => group_questions(state, questions, self.cfg.token_budget),
+            Backend::Cloud { .. } => vec![questions.clone()],
+        };
         let mut out = Decision::default();
-        for group in group_questions(state, questions, self.cfg.token_budget) {
-            let (v, ms) = self.post(state, &group).await?;
+        for group in groups {
+            let (v, ms) = match &backend {
+                Backend::Local => self.post(state, &group).await?,
+                Backend::Cloud { key } => self.cloud_exchange(key, state, &group).await?,
+            };
             out.latency_ms += ms;
             let tokens = v.pointer("/usage/input_tokens").and_then(Value::as_u64).unwrap_or(0);
             out.input_tokens += tokens;
             crate::usage::log_model_usage(
                 &self.cfg,
-                json!({"model": self.cfg.model, "input_tokens": tokens, "output_tokens": 0, "latency_ms": ms, "rows": group.len()}),
+                json!({"model": model, "backend": backend.label(), "input_tokens": tokens, "output_tokens": 0, "latency_ms": ms, "rows": group.len()}),
             );
             let answers = v.get("answers").and_then(Value::as_object).ok_or("laya response has no answers")?;
             for (id, q) in &group {
@@ -284,7 +431,8 @@ impl Decider for KevClient {
                 out.answers.insert(id.clone(), parse_answer(id, q, raw)?);
             }
             let tokens = v.pointer("/usage/input_tokens").and_then(Value::as_u64).unwrap_or(0) as usize;
-            if tokens / group.len().max(1) >= self.cfg.max_seq_tokens.saturating_sub(8) {
+            // laya cuts rows silently at max_seq_tokens; the cloud model's window is not ours to know.
+            if backend == Backend::Local && tokens / group.len().max(1) >= self.cfg.max_seq_tokens.saturating_sub(8) {
                 out.truncated = true;
             }
         }
