@@ -1,0 +1,5 @@
+name: kritic
+description: Lossless context management by kritic. Archives whole messages instead of summarising them, ranks what to archive by relevance to the task with the Kev typed-decision model, and gives the agent kritic_recall to read anything back.
+version: 0.5.0
+author: kritic
+homepage: https://github.com/TmRxJD/kritic

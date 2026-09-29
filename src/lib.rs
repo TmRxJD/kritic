@@ -3,8 +3,10 @@
 //! supply facts. Approval is always computed in code from thresholds.
 
 pub mod checks;
+pub mod cli;
 pub mod chunk;
 pub mod config;
+pub mod context;
 pub mod critic;
 pub mod events;
 pub mod files;

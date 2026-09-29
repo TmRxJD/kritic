@@ -564,7 +564,12 @@ fn finished(tool: &str, t0: std::time::Instant, result: &impl serde::Serialize) 
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct TokenParams {
-    /// Claude Code session id (transcript file stem). Default: the most recently active session.
+    /// Where to read usage from: "auto" (Claude Code's transcript when there is one, else the
+    /// Hermes plugin's usage log), "claude-code" or "hermes".
+    #[serde(default = "auto_source")]
+    pub source: String,
+    /// Session id (Claude Code: transcript file stem; Hermes: session id). Default: the most
+    /// recently active session.
     #[serde(default)]
     pub session_id: Option<String>,
     /// How many recent tasks (human turns) to include.
@@ -577,11 +582,22 @@ pub struct TokenParams {
 fn ten() -> usize {
     10
 }
+fn auto_source() -> String {
+    "auto".into()
+}
 
 #[derive(Debug, serde::Serialize, JsonSchema)]
 pub struct TokenMetrics {
     pub tool: String,
-    pub session: crate::usage::SessionUsage,
+    /// "claude-code" or "hermes".
+    pub source: String,
+    /// Claude Code session usage (source claude-code).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session: Option<crate::usage::SessionUsage>,
+    /// Hermes session usage, as logged by the kritic context engine (source hermes).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hermes: Option<crate::usage::HermesUsage>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub recent_tasks: Vec<crate::usage::TaskUsage>,
     /// Kev (laya) and vision (Ollama) usage since the session started.
     pub local_models: Vec<crate::usage::LocalModelStats>,
@@ -1150,7 +1166,31 @@ impl Kritic {
     #[tool(name = "token_metrics")]
     pub async fn token_metrics(&self, Parameters(p): Parameters<TokenParams>) -> Result<Json<TokenMetrics>, String> {
         let cfg = &self.kev.cfg;
-        let path = crate::usage::find_transcript(p.session_id.as_deref()).ok_or("no Claude Code transcript found")?;
+        let transcript = if p.source == "hermes" { None } else { crate::usage::find_transcript(p.session_id.as_deref()) };
+        if transcript.is_none() && p.source != "claude-code" {
+            let h = crate::usage::hermes_usage(cfg, p.session_id.as_deref()).ok_or(
+                "no Claude Code transcript and no Hermes usage log (the kritic context engine writes it: kritic register --hermes --hermes-context)",
+            )?;
+            let obs = vec![
+                format!(
+                    "Hermes context {} tokens = {:.1}% of {}; peak {}; growing ~{:.0} tokens/call over the last 20 calls",
+                    h.context_now, h.context_utilization_pct, h.context_length, h.context_peak, h.context_growth_per_call
+                ),
+                format!("{} compactions by kritic; {} messages archived and recallable with kritic_recall", h.compactions, h.archived_messages),
+            ];
+            let local_models = crate::usage::local_model_stats(cfg, None);
+            return Ok(Json(TokenMetrics {
+                tool: "token_metrics".into(),
+                source: "hermes".into(),
+                session: None,
+                hermes: Some(h),
+                recent_tasks: vec![],
+                local_models,
+                context_trim_calls: 0,
+                observations: obs,
+            }));
+        }
+        let path = transcript.ok_or("no Claude Code transcript found")?;
         let limit = p.context_limit.unwrap_or(cfg.context_limit);
         let (session, tasks, calls) = crate::usage::analyze(&path, limit)?;
         let since = calls.first().and_then(|c| c.ts.parse::<chrono::DateTime<chrono::Utc>>().ok());
@@ -1178,7 +1218,7 @@ impl Kritic {
         }
         let n = tasks.len();
         let recent = tasks.into_iter().skip(n.saturating_sub(p.last_tasks)).collect();
-        let r = TokenMetrics { tool: "token_metrics".into(), session, recent_tasks: recent, local_models, context_trim_calls: trim_calls, observations: obs };
+        let r = TokenMetrics { tool: "token_metrics".into(), source: "claude-code".into(), session: Some(session), hermes: None, recent_tasks: recent, local_models, context_trim_calls: trim_calls, observations: obs };
         Ok(Json(r))
     }
 }

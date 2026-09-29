@@ -329,3 +329,64 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
     };
     Ok((s, tasks, only.into_iter().cloned().collect()))
 }
+
+// ------------------------------------------------------------------ Hermes
+
+/// Context use of one Hermes session, from the kritic context-engine plugin's usage log
+/// (`<home>/logs/hermes-usage.jsonl`, one line per model call).
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema, Default)]
+pub struct HermesUsage {
+    pub session_id: String,
+    pub api_calls: usize,
+    /// Prompt tokens of the latest call: the context as the model last saw it.
+    pub context_now: u64,
+    pub context_peak: u64,
+    pub context_length: u64,
+    pub context_utilization_pct: f64,
+    /// Mean change in prompt tokens per call over the last 20 calls.
+    pub context_growth_per_call: f64,
+    /// Compactions the kritic engine has run, and messages it has archived (recallable).
+    pub compactions: u64,
+    pub archived_messages: u64,
+    pub processed_input_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub output_tokens: u64,
+}
+
+/// The given Hermes session, or the one with the latest call.
+pub fn hermes_usage(cfg: &Config, session: Option<&str>) -> Option<HermesUsage> {
+    hermes_usage_from(&cfg.log_path.with_file_name("hermes-usage.jsonl"), session)
+}
+
+pub fn hermes_usage_from(path: &Path, session: Option<&str>) -> Option<HermesUsage> {
+    let rows: Vec<Value> = std::fs::read_to_string(path).ok()?.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let sid = match session {
+        Some(s) => s.to_string(),
+        None => rows.last()?["session_id"].as_str()?.to_string(),
+    };
+    let rows: Vec<&Value> = rows.iter().filter(|r| r["session_id"] == sid.as_str()).collect();
+    if rows.is_empty() {
+        return None;
+    }
+    let n = |r: &Value, k: &str| r[k].as_u64().unwrap_or(0);
+    let prompts: Vec<u64> = rows.iter().map(|r| n(r, "prompt_tokens")).collect();
+    let last = rows.last()?;
+    let window = &prompts[prompts.len().saturating_sub(21)..];
+    let growth = if window.len() > 1 { (window[window.len() - 1] as f64 - window[0] as f64) / (window.len() - 1) as f64 } else { 0.0 };
+    let length = n(last, "context_length");
+    let now = *prompts.last()?;
+    Some(HermesUsage {
+        session_id: sid,
+        api_calls: rows.len(),
+        context_now: now,
+        context_peak: prompts.iter().copied().max().unwrap_or(0),
+        context_length: length,
+        context_utilization_pct: if length > 0 { (now as f64 / length as f64 * 1000.0).round() / 10.0 } else { 0.0 },
+        context_growth_per_call: (growth * 10.0).round() / 10.0,
+        compactions: n(last, "compression_count"),
+        archived_messages: n(last, "archived_total"),
+        processed_input_tokens: prompts.iter().sum(),
+        cache_read_tokens: rows.iter().map(|r| n(r, "cache_read_tokens")).sum(),
+        output_tokens: rows.iter().map(|r| n(r, "completion_tokens")).sum(),
+    })
+}

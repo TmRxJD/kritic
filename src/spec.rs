@@ -465,7 +465,7 @@ impl DecisionSpec {
     /// Whether this spec's gates may decide under the active model. With no model known yet
     /// (offline tests, fakes) the calibrated default applies.
     pub fn gates_apply(&self) -> bool {
-        active_model().is_none_or(|m| self.calibrated_for.iter().any(|c| *c == m))
+        active_model().is_none_or(|m| self.calibrated_for.contains(&m))
     }
 
     /// Why this spec's gates are advisory right now, if they are.
