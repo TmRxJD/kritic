@@ -51,11 +51,16 @@
 # context_limit = 1000000                       # KRITIC_CONTEXT_LIMIT: model context size token_metrics measures against
 
 [ui]
-# Playwright web harness (ui_test, visual_critic screenshots, ux_critic on web apps).
-# node = "node"                                 # KRITIC_NODE
-# harness = "<install>/harness/ui_test.mjs"     # KRITIC_HARNESS (default: harness/ beside the binary, else the source tree)
-# playwright_browsers = ""                      # KRITIC_PLAYWRIGHT_BROWSERS (default: Playwright's own location)
+# Web testing (ui_test, visual_critic screenshots, ux_critic on web apps) drives Chrome or Edge
+# directly over the DevTools protocol; no Node or Playwright needed.
+# browser = ""                                  # KRITIC_BROWSER (default: installed Chrome/Chromium/Edge, else the Chrome for Testing `kritic setup` downloads)
 # timeout_s = 300                               # KRITIC_UI_TIMEOUT
+
+[output]
+# How your agent writes its replies. "concise": `kritic register` installs the kritic-concise
+# output style (Claude Code), a short reply rule in CLAUDE.md, and the same rule for Hermes.
+# "default": leave the agent's style alone. Measure the effect with token_metrics (output tokens per task).
+# style = "concise"                             # KRITIC_OUTPUT_STYLE
 
 [scan]
 # security_critic / code_quality_critic. Each tool is looked up in tools_bin, then on PATH.

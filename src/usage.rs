@@ -29,12 +29,20 @@ pub fn log_model_usage(cfg: &Config, rec: Value) {
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    if path.metadata().map(|m| m.len() > 5_000_000).unwrap_or(false) {
+    if path
+        .metadata()
+        .map(|m| m.len() > 5_000_000)
+        .unwrap_or(false)
+    {
         let _ = std::fs::rename(&path, path.with_extension("old.jsonl"));
     }
     let mut rec = rec;
     rec["ts"] = json!(Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = writeln!(f, "{rec}");
     }
 }
@@ -54,17 +62,33 @@ pub struct LocalModelStats {
 }
 
 pub fn local_model_stats(cfg: &Config, since: Option<DateTime<Utc>>) -> Vec<LocalModelStats> {
-    let Ok(f) = std::fs::File::open(model_usage_path(cfg)) else { return Vec::new() };
+    let Ok(f) = std::fs::File::open(model_usage_path(cfg)) else {
+        return Vec::new();
+    };
     let mut by: BTreeMap<String, (LocalModelStats, u64)> = BTreeMap::new();
     for line in std::io::BufReader::new(f).lines().map_while(Result::ok) {
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
-        if let (Some(s), Some(ts)) = (since, v["ts"].as_str().and_then(|t| t.parse::<DateTime<Utc>>().ok()))
-            && ts < s
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if let (Some(s), Some(ts)) = (
+            since,
+            v["ts"]
+                .as_str()
+                .and_then(|t| t.parse::<DateTime<Utc>>().ok()),
+        ) && ts < s
         {
             continue;
         }
         let model = v["model"].as_str().unwrap_or("?").to_string();
-        let e = by.entry(model.clone()).or_insert_with(|| (LocalModelStats { model, ..Default::default() }, 0));
+        let e = by.entry(model.clone()).or_insert_with(|| {
+            (
+                LocalModelStats {
+                    model,
+                    ..Default::default()
+                },
+                0,
+            )
+        });
         e.0.requests += 1;
         e.0.input_tokens += v["input_tokens"].as_u64().unwrap_or(0);
         e.0.output_tokens += v["output_tokens"].as_u64().unwrap_or(0);
@@ -76,10 +100,12 @@ pub fn local_model_stats(cfg: &Config, since: Option<DateTime<Utc>>) -> Vec<Loca
         .map(|(mut s, eval_ms)| {
             let compute_ms = s.total_ms.saturating_sub(s.load_ms_total);
             if compute_ms > 0 && s.input_tokens > 0 {
-                s.input_tokens_per_s = Some(round1(s.input_tokens as f64 * 1000.0 / compute_ms as f64));
+                s.input_tokens_per_s =
+                    Some(round1(s.input_tokens as f64 * 1000.0 / compute_ms as f64));
             }
             if eval_ms > 0 && s.output_tokens > 0 {
-                s.output_tokens_per_s = Some(round1(s.output_tokens as f64 * 1000.0 / eval_ms as f64));
+                s.output_tokens_per_s =
+                    Some(round1(s.output_tokens as f64 * 1000.0 / eval_ms as f64));
             }
             s
         })
@@ -155,7 +181,9 @@ pub struct SessionUsage {
 }
 
 pub fn projects_dir() -> PathBuf {
-    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default();
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
     PathBuf::from(home).join(".claude").join("projects")
 }
 
@@ -163,7 +191,9 @@ pub fn projects_dir() -> PathBuf {
 pub fn find_transcript(session_id: Option<&str>) -> Option<PathBuf> {
     let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
     for proj in std::fs::read_dir(projects_dir()).ok()?.flatten() {
-        let Ok(rd) = std::fs::read_dir(proj.path()) else { continue };
+        let Ok(rd) = std::fs::read_dir(proj.path()) else {
+            continue;
+        };
         for f in rd.flatten() {
             let p = f.path();
             if p.extension().and_then(|e| e.to_str()) != Some("jsonl") {
@@ -187,39 +217,66 @@ pub fn find_transcript(session_id: Option<&str>) -> Option<PathBuf> {
 fn text_of(content: &Value) -> String {
     match content {
         Value::String(s) => s.clone(),
-        Value::Array(a) => a.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join(" "),
+        Value::Array(a) => a
+            .iter()
+            .filter_map(|b| b["text"].as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
         _ => String::new(),
     }
 }
 
 /// Parse a transcript into per-call usage and per-task aggregates.
-pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<TaskUsage>, Vec<CallUsage>), String> {
-    let f = std::fs::File::open(path).map_err(|e| format!("cannot open {}: {e}", path.display()))?;
+pub fn analyze(
+    path: &Path,
+    context_limit: u64,
+) -> Result<(SessionUsage, Vec<TaskUsage>, Vec<CallUsage>), String> {
+    let f =
+        std::fs::File::open(path).map_err(|e| format!("cannot open {}: {e}", path.display()))?;
     let mut calls: Vec<(usize, CallUsage)> = Vec::new(); // (task index, call)
     let mut tasks: Vec<TaskUsage> = Vec::new();
     // message id -> (index in `calls`, request start). A response is written as one entry per
     // content block; the call ends at its last block.
-    let mut seen_ids: std::collections::HashMap<String, (usize, Option<DateTime<Utc>>)> = std::collections::HashMap::new();
+    let mut seen_ids: std::collections::HashMap<String, (usize, Option<DateTime<Utc>>)> =
+        std::collections::HashMap::new();
     let mut prev_ts: Option<DateTime<Utc>> = None;
     let mut compactions = 0;
     let mut model = String::new();
     for line in std::io::BufReader::new(f).lines().map_while(Result::ok) {
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
-        let ts = v["timestamp"].as_str().and_then(|t| t.parse::<DateTime<Utc>>().ok());
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let ts = v["timestamp"]
+            .as_str()
+            .and_then(|t| t.parse::<DateTime<Utc>>().ok());
         let kind = v["type"].as_str().unwrap_or("");
-        if v["isCompactSummary"] == true || (kind == "system" && v["subtype"].as_str().is_some_and(|s| s.contains("compact"))) {
+        if v["isCompactSummary"] == true
+            || (kind == "system" && v["subtype"].as_str().is_some_and(|s| s.contains("compact")))
+        {
             compactions += 1;
         }
         if kind == "user" && v["origin"]["kind"] == "human" {
-            let prompt: String = text_of(&v["message"]["content"]).split_whitespace().collect::<Vec<_>>().join(" ").chars().take(100).collect();
-            tasks.push(TaskUsage { index: tasks.len(), prompt, started: v["timestamp"].as_str().unwrap_or("").into(), ..Default::default() });
+            let prompt: String = text_of(&v["message"]["content"])
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(100)
+                .collect();
+            tasks.push(TaskUsage {
+                index: tasks.len(),
+                prompt,
+                started: v["timestamp"].as_str().unwrap_or("").into(),
+                ..Default::default()
+            });
         }
         if kind == "assistant" && v["isSidechain"] != true {
             let m = &v["message"];
             let id = m["id"].as_str().unwrap_or("").to_string();
             let u = &m["usage"];
             let g = |k: &str| u[k].as_u64().unwrap_or(0);
-            let ctx = g("input_tokens") + g("cache_read_input_tokens") + g("cache_creation_input_tokens");
+            let ctx =
+                g("input_tokens") + g("cache_read_input_tokens") + g("cache_creation_input_tokens");
             if let Some((idx, Some(start))) = seen_ids.get(&id).copied()
                 && let Some(end) = ts
                 && end > start
@@ -244,7 +301,9 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
                         cache_read_tokens: g("cache_read_input_tokens"),
                         cache_write_tokens: g("cache_creation_input_tokens"),
                         output_tokens: g("output_tokens"),
-                        thinking_tokens: u["output_tokens_details"]["thinking_tokens"].as_u64().unwrap_or(0),
+                        thinking_tokens: u["output_tokens_details"]["thinking_tokens"]
+                            .as_u64()
+                            .unwrap_or(0),
                         context_tokens: ctx,
                         duration_ms,
                     },
@@ -256,7 +315,10 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
         }
     }
     if tasks.is_empty() {
-        tasks.push(TaskUsage { prompt: "(no human prompt recorded)".into(), ..Default::default() });
+        tasks.push(TaskUsage {
+            prompt: "(no human prompt recorded)".into(),
+            ..Default::default()
+        });
     }
     let mut rates = Vec::new();
     for (ti, c) in &calls {
@@ -278,7 +340,11 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
         }
     }
     for t in tasks.iter_mut() {
-        let tc: Vec<&CallUsage> = calls.iter().filter(|(i, _)| *i == t.index).map(|(_, c)| c).collect();
+        let tc: Vec<&CallUsage> = calls
+            .iter()
+            .filter(|(i, _)| *i == t.index)
+            .map(|(_, c)| c)
+            .collect();
         let dur: u64 = tc.iter().filter_map(|c| c.duration_ms).sum();
         if dur > 0 {
             t.output_tokens_per_s = Some(round1(t.output_tokens as f64 * 1000.0 / dur as f64));
@@ -296,7 +362,8 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
     let n = only.len();
     let last20 = &only[n.saturating_sub(20)..];
     let growth = if last20.len() > 1 {
-        (last20.last().unwrap().context_tokens as f64 - last20[0].context_tokens as f64) / (last20.len() - 1) as f64
+        (last20.last().unwrap().context_tokens as f64 - last20[0].context_tokens as f64)
+            / (last20.len() - 1) as f64
     } else {
         0.0
     };
@@ -305,7 +372,11 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
     let processed = sum(|c| c.context_tokens);
     let task_count = tasks.iter().filter(|t| t.api_calls > 0).count().max(1);
     let s = SessionUsage {
-        session_id: path.file_stem().and_then(|s| s.to_str()).unwrap_or("").into(),
+        session_id: path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .into(),
         transcript: path.display().to_string(),
         model,
         api_calls: n,
@@ -322,7 +393,9 @@ pub fn analyze(path: &Path, context_limit: u64) -> Result<(SessionUsage, Vec<Tas
         context_utilization_pct: round1(context_now as f64 * 100.0 / context_limit.max(1) as f64),
         context_growth_per_call: round1(growth),
         compactions,
-        cache_hit_rate_pct: round1(sum(|c| c.cache_read_tokens) as f64 * 100.0 / processed.max(1) as f64),
+        cache_hit_rate_pct: round1(
+            sum(|c| c.cache_read_tokens) as f64 * 100.0 / processed.max(1) as f64,
+        ),
         output_tokens_per_s_median: rates.get(rates.len() / 2).map(|r| round1(*r)),
         output_tokens_per_task_avg: round1(sum(|c| c.output_tokens) as f64 / task_count as f64),
         processed_input_per_task_avg: round1(processed as f64 / task_count as f64),
@@ -359,12 +432,19 @@ pub fn hermes_usage(cfg: &Config, session: Option<&str>) -> Option<HermesUsage> 
 }
 
 pub fn hermes_usage_from(path: &Path, session: Option<&str>) -> Option<HermesUsage> {
-    let rows: Vec<Value> = std::fs::read_to_string(path).ok()?.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let rows: Vec<Value> = std::fs::read_to_string(path)
+        .ok()?
+        .lines()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect();
     let sid = match session {
         Some(s) => s.to_string(),
         None => rows.last()?["session_id"].as_str()?.to_string(),
     };
-    let rows: Vec<&Value> = rows.iter().filter(|r| r["session_id"] == sid.as_str()).collect();
+    let rows: Vec<&Value> = rows
+        .iter()
+        .filter(|r| r["session_id"] == sid.as_str())
+        .collect();
     if rows.is_empty() {
         return None;
     }
@@ -372,7 +452,11 @@ pub fn hermes_usage_from(path: &Path, session: Option<&str>) -> Option<HermesUsa
     let prompts: Vec<u64> = rows.iter().map(|r| n(r, "prompt_tokens")).collect();
     let last = rows.last()?;
     let window = &prompts[prompts.len().saturating_sub(21)..];
-    let growth = if window.len() > 1 { (window[window.len() - 1] as f64 - window[0] as f64) / (window.len() - 1) as f64 } else { 0.0 };
+    let growth = if window.len() > 1 {
+        (window[window.len() - 1] as f64 - window[0] as f64) / (window.len() - 1) as f64
+    } else {
+        0.0
+    };
     let length = n(last, "context_length");
     let now = *prompts.last()?;
     Some(HermesUsage {
@@ -381,7 +465,11 @@ pub fn hermes_usage_from(path: &Path, session: Option<&str>) -> Option<HermesUsa
         context_now: now,
         context_peak: prompts.iter().copied().max().unwrap_or(0),
         context_length: length,
-        context_utilization_pct: if length > 0 { (now as f64 / length as f64 * 1000.0).round() / 10.0 } else { 0.0 },
+        context_utilization_pct: if length > 0 {
+            (now as f64 / length as f64 * 1000.0).round() / 10.0
+        } else {
+            0.0
+        },
         context_growth_per_call: (growth * 10.0).round() / 10.0,
         compactions: n(last, "compression_count"),
         archived_messages: n(last, "archived_total"),

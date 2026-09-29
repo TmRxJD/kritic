@@ -19,7 +19,10 @@ use serde_json::{Value, json};
 fn parses_bandit() {
     let j = r#"{"results":[{"test_id":"B602","test_name":"subprocess_popen_with_shell_equals_true","issue_severity":"HIGH","issue_confidence":"HIGH","filename":"./app.py","line_number":10,"issue_text":"subprocess call with shell=True"}]}"#;
     let f = scan::parse_bandit(Path::new("."), j).unwrap();
-    assert_eq!((f[0].severity.as_str(), f[0].file.as_str(), f[0].line), ("high", "app.py", 10));
+    assert_eq!(
+        (f[0].severity.as_str(), f[0].file.as_str(), f[0].line),
+        ("high", "app.py", 10)
+    );
 }
 
 #[test]
@@ -28,7 +31,10 @@ fn parses_semgrep_severity_mapping() {
                            {"check_id":"x.y.warn","path":"b.py","start":{"line":1},"extra":{"severity":"WARNING","message":"m"}}]}"#;
     let f = scan::parse_semgrep(Path::new("."), j).unwrap();
     assert_eq!(f[0].rule, "subprocess-shell-true");
-    assert_eq!((f[0].severity.as_str(), f[1].severity.as_str()), ("high", "medium"));
+    assert_eq!(
+        (f[0].severity.as_str(), f[1].severity.as_str()),
+        ("high", "medium")
+    );
 }
 
 #[test]
@@ -47,7 +53,10 @@ fn parses_osv_one_finding_per_package_at_worst_cvss() {
         {"package":{"name":"ok","version":"1"},"vulnerabilities":[],"groups":[]}]}]}"#;
     let f = scan::parse_osv(j).unwrap();
     assert_eq!(f.len(), 1);
-    assert_eq!((f[0].severity.as_str(), f[0].file.as_str()), ("high", "requirements.txt"));
+    assert_eq!(
+        (f[0].severity.as_str(), f[0].file.as_str()),
+        ("high", "requirements.txt")
+    );
     assert!(f[0].message.contains("2 known vulnerabilities"));
     assert_eq!(cvss_to_severity(9.8), "critical");
     assert_eq!(cvss_to_severity(0.0), "info");
@@ -58,12 +67,18 @@ fn parses_ruff_clippy_eslint_tsc() {
     let base = Path::new(".");
     let ruff = r#"[{"code":"F821","filename":"a.py","location":{"row":3},"message":"Undefined name `x`"},{"code":"E501","filename":"a.py","location":{"row":4},"message":"long"}]"#;
     let f = scan::parse_ruff(base, ruff).unwrap();
-    assert_eq!((f[0].severity.as_str(), f[1].severity.as_str()), ("high", "low"));
+    assert_eq!(
+        (f[0].severity.as_str(), f[1].severity.as_str()),
+        ("high", "low")
+    );
     let clippy = "{\"reason\":\"compiler-message\",\"message\":{\"level\":\"warning\",\"message\":\"needless borrow\",\"code\":{\"code\":\"clippy::needless_borrow\"},\"spans\":[{\"is_primary\":true,\"file_name\":\"src/a.rs\",\"line_start\":7}]}}\n{\"reason\":\"build-finished\"}";
     let c = scan::parse_clippy(base, clippy);
     assert_eq!((c.len(), c[0].line, c[0].severity.as_str()), (1, 7, "low"));
     let eslint = r#"[{"filePath":"a.js","messages":[{"ruleId":"no-undef","severity":2,"line":1,"message":"x is not defined"}]}]"#;
-    assert_eq!(scan::parse_eslint(base, eslint).unwrap()[0].severity, "high");
+    assert_eq!(
+        scan::parse_eslint(base, eslint).unwrap()[0].severity,
+        "high"
+    );
     let tsc = "src/a.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.";
     let t = scan::parse_tsc(base, tsc);
     assert_eq!((t[0].rule.as_str(), t[0].line), ("TS2322", 12));
@@ -73,7 +88,10 @@ fn parses_ruff_clippy_eslint_tsc() {
 fn security_score_is_deterministic() {
     let c = BTreeMap::from([("high".to_string(), 2), ("medium".to_string(), 2)]);
     assert_eq!(security_score(&c), 5.0);
-    assert_eq!(security_score(&BTreeMap::from([("critical".to_string(), 5)])), 0.0);
+    assert_eq!(
+        security_score(&BTreeMap::from([("critical".to_string(), 5)])),
+        0.0
+    );
 }
 
 // ------------------------------------------------------------------ metrics
@@ -92,7 +110,10 @@ fn measures_python_rust_and_js_functions() {
     assert!(r[0].complexity >= 3);
     let js = "export async function load(u) {\n  if (!u) return null;\n  return fetch(u).then(r => r.ok ? r.json() : null);\n}\nconst add = (a, b) => {\n  return a + b;\n};\n";
     let j = functions("a.js", js);
-    assert_eq!(j.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(), vec!["load", "add"]);
+    assert_eq!(
+        j.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(),
+        vec!["load", "add"]
+    );
     // braces inside strings don't confuse the extent
     let tricky = "fn s() {\n    let x = \"}}}\";\n    let y = 1;\n}\nfn t() {}\n";
     assert_eq!(functions("t.rs", tricky)[0].lines, 4);
@@ -100,8 +121,13 @@ fn measures_python_rust_and_js_functions() {
 
 #[test]
 fn finds_duplicate_blocks() {
-    let block: String = (0..10).map(|i| format!("    total += compute_value(item_{i}, factor);\n")).collect();
-    let files = vec![("a.rs".to_string(), format!("fn a() {{\n{block}}}\n")), ("b.rs".to_string(), format!("fn b() {{\n{block}}}\n"))];
+    let block: String = (0..10)
+        .map(|i| format!("    total += compute_value(item_{i}, factor);\n"))
+        .collect();
+    let files = vec![
+        ("a.rs".to_string(), format!("fn a() {{\n{block}}}\n")),
+        ("b.rs".to_string(), format!("fn b() {{\n{block}}}\n")),
+    ];
     let d = duplicates(&files, 8);
     assert!(!d.is_empty());
     assert!(d[0].first.starts_with("a.rs") && d[0].second.starts_with("b.rs"));
@@ -113,7 +139,14 @@ fn finds_duplicate_blocks() {
 fn budgets_and_leak_heuristics() {
     let stats = json!({"cpu_avg_pct": 180.0, "rss_peak_mb": 900.0, "rss_slope_mb_per_min": 40.0, "duration_s": 30.0,
                        "handles_start": 100, "handles_end": 900, "exited_early": false, "gpu_util_avg_pct": 5.0});
-    let v = check_budgets(&stats, &Budgets { max_cpu_avg_pct: Some(100.0), max_rss_mb: Some(500.0), ..Default::default() });
+    let v = check_budgets(
+        &stats,
+        &Budgets {
+            max_cpu_avg_pct: Some(100.0),
+            max_rss_mb: Some(500.0),
+            ..Default::default()
+        },
+    );
     assert_eq!(v.len(), 4, "{v:?}"); // cpu, rss, slope, handles
     let calm = json!({"cpu_avg_pct": 3.0, "rss_peak_mb": 80.0, "rss_slope_mb_per_min": 0.4, "duration_s": 30.0, "handles_start": 300, "handles_end": 310});
     assert!(check_budgets(&calm, &Budgets::default()).is_empty());
@@ -139,7 +172,10 @@ fn desktop_judging() {
     assert_eq!(s["skipped"], 1);
     let (_, _, a) = judge_desktop(&json!({"ok": false, "error": "no window"}), &[]);
     assert_eq!(a, None);
-    let (_, b, a) = judge_desktop(&json!({"ok": false, "error": "exited during startup with code 7", "crashes": [{"after": "startup", "exit_code": 7}]}), &[]);
+    let (_, b, a) = judge_desktop(
+        &json!({"ok": false, "error": "exited during startup with code 7", "crashes": [{"after": "startup", "exit_code": 7}]}),
+        &[],
+    );
     assert_eq!((a, b.len()), (Some(false), 1));
 }
 
@@ -147,14 +183,38 @@ fn desktop_judging() {
 
 struct FakeKev;
 impl Decider for FakeKev {
-    async fn decide(&self, state: &Value, qs: &BTreeMap<String, Question>) -> Result<Decision, String> {
+    async fn decide(
+        &self,
+        state: &Value,
+        qs: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
         // The spec shows Kev the function, not its metrics (code judges those).
-        let hard = state["function"].as_str().unwrap_or("").matches("if ").count() > 10;
+        let hard = state["function"]
+            .as_str()
+            .unwrap_or("")
+            .matches("if ")
+            .count()
+            > 10;
         let answers = qs
             .keys()
-            .map(|k| (k.clone(), Answer { value: if hard { 0.9 } else { 0.1 }, choice: None, probabilities: None, confidence: 0.9 }))
+            .map(|k| {
+                (
+                    k.clone(),
+                    Answer {
+                        value: if hard { 0.9 } else { 0.1 },
+                        choice: None,
+                        probabilities: None,
+                        confidence: 0.9,
+                    },
+                )
+            })
             .collect();
-        Ok(Decision { answers, truncated: false, latency_ms: 1, input_tokens: 100 })
+        Ok(Decision {
+            answers,
+            truncated: false,
+            latency_ms: 1,
+            input_tokens: 100,
+        })
     }
 }
 
@@ -162,17 +222,48 @@ impl Decider for FakeKev {
 async fn quality_flags_complex_functions_and_scores_maintainability() {
     let mut cfg = Config::from_env();
     cfg.max_hotspots = 5;
-    let simple = ("ok.py".to_string(), "def f(x):\n    return x + 1\n".to_string());
-    let branches: String = (0..25).map(|i| format!("    if x == {i}:\n        y += {i}\n")).collect();
-    let complex = ("bad.py".to_string(), format!("def g(x):\n    y = 0\n{branches}    return y\n"));
-    let opts = QualityOptions { max_complexity: 20, max_function_lines: 150, run_linters: false, use_kev: true };
-    let r = phase3::quality(&FakeKev, &cfg, Path::new("."), &[simple.clone(), complex], opts).await;
+    let simple = (
+        "ok.py".to_string(),
+        "def f(x):\n    return x + 1\n".to_string(),
+    );
+    let branches: String = (0..25)
+        .map(|i| format!("    if x == {i}:\n        y += {i}\n"))
+        .collect();
+    let complex = (
+        "bad.py".to_string(),
+        format!("def g(x):\n    y = 0\n{branches}    return y\n"),
+    );
+    let opts = QualityOptions {
+        max_complexity: 20,
+        max_function_lines: 150,
+        run_linters: false,
+        use_kev: true,
+    };
+    let r = phase3::quality(
+        &FakeKev,
+        &cfg,
+        Path::new("."),
+        &[simple.clone(), complex],
+        opts,
+    )
+    .await;
     assert_eq!(r.approval, Some(false));
-    assert!(r.reasons.iter().any(|x| x.contains("g in bad.py") && x.contains("complexity")), "{:?}", r.reasons);
+    assert!(
+        r.reasons
+            .iter()
+            .any(|x| x.contains("g in bad.py") && x.contains("complexity")),
+        "{:?}",
+        r.reasons
+    );
     assert_eq!(r.hotspots[0].metric.name, "g");
     assert_eq!(r.hotspots[0].p_hard_to_maintain, Some(0.9));
     assert!(r.maintainability.unwrap() < 5.0);
-    let opts = QualityOptions { max_complexity: 20, max_function_lines: 150, run_linters: false, use_kev: true };
+    let opts = QualityOptions {
+        max_complexity: 20,
+        max_function_lines: 150,
+        run_linters: false,
+        use_kev: true,
+    };
     let clean = phase3::quality(&FakeKev, &cfg, Path::new("."), &[simple], opts).await;
     assert_eq!(clean.approval, Some(true), "{:?}", clean.reasons);
     assert_eq!(clean.risk_level, "low");
@@ -207,24 +298,50 @@ async fn live_security_vulnerable_vs_clean() {
     let bad = tempfile::tempdir().unwrap();
     vuln_project(bad.path());
     let r = phase3::security(&kev, &cfg, bad.path(), true, "p/python").await;
-    eprintln!("vulnerable: approval={:?} score={} counts={:?} {}ms", r.approval, r.security_score, r.counts, r.duration_ms);
+    eprintln!(
+        "vulnerable: approval={:?} score={} counts={:?} {}ms",
+        r.approval, r.security_score, r.counts, r.duration_ms
+    );
     for t in &r.tools {
-        eprintln!("  tool {} {} {} findings {}", t.tool, t.status, t.detail, t.findings);
+        eprintln!(
+            "  tool {} {} {} findings {}",
+            t.tool, t.status, t.detail, t.findings
+        );
     }
     for f in r.findings.iter().take(10) {
-        eprintln!("  [{}] {} {} {}:{} p_true={:?}", f.finding.severity, f.finding.tool, f.finding.rule, f.finding.file, f.finding.line, f.p_true_positive);
+        eprintln!(
+            "  [{}] {} {} {}:{} p_true={:?}",
+            f.finding.severity,
+            f.finding.tool,
+            f.finding.rule,
+            f.finding.file,
+            f.finding.line,
+            f.p_true_positive
+        );
     }
     assert_eq!(r.approval, Some(false));
     let tools: Vec<&str> = r.findings.iter().map(|f| f.finding.tool.as_str()).collect();
     for t in ["gitleaks", "bandit", "osv-scanner"] {
         assert!(tools.contains(&t), "no {t} finding");
     }
-    assert!(r.findings.iter().all(|f| !f.finding.message.contains("QYLPMN5")), "secret leaked into output");
+    assert!(
+        r.findings
+            .iter()
+            .all(|f| !f.finding.message.contains("QYLPMN5")),
+        "secret leaked into output"
+    );
 
     let clean = tempfile::tempdir().unwrap();
-    std::fs::write(clean.path().join("util.py"), "def add(a: int, b: int) -> int:\n    return a + b\n").unwrap();
+    std::fs::write(
+        clean.path().join("util.py"),
+        "def add(a: int, b: int) -> int:\n    return a + b\n",
+    )
+    .unwrap();
     let c = phase3::security(&kev, &cfg, clean.path(), true, "p/python").await;
-    eprintln!("clean: approval={:?} score={} counts={:?} reasons={:?}", c.approval, c.security_score, c.counts, c.reasons);
+    eprintln!(
+        "clean: approval={:?} score={} counts={:?} reasons={:?}",
+        c.approval, c.security_score, c.counts, c.reasons
+    );
     assert_eq!(c.approval, Some(true));
 }
 
@@ -238,20 +355,71 @@ async fn live_quality_on_this_crate() {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let paths = kritic::tools::source_files(&base.join("src"), 80);
     let lf = kritic::tools::load_files(&paths, base.to_str()).await;
-    let files: Vec<(String, String)> = lf.files.into_iter().map(|(f, t)| (Path::new(&f).strip_prefix(base).unwrap().display().to_string(), t)).collect();
-    let r = phase3::quality(&kev, &cfg, base, &files, QualityOptions { max_complexity: 20, max_function_lines: 150, run_linters: true, use_kev: true }).await;
-    eprintln!("crate: approval={:?} score={} risk={} maint={:?} fns={} maxcx={} maxlen={} dups={} {}ms", r.approval, r.quality_score, r.risk_level, r.maintainability, r.functions_analyzed, r.max_complexity, r.max_function_lines, r.duplicates.len(), r.duration_ms);
+    let files: Vec<(String, String)> = lf
+        .files
+        .into_iter()
+        .map(|(f, t)| {
+            (
+                Path::new(&f)
+                    .strip_prefix(base)
+                    .unwrap()
+                    .display()
+                    .to_string(),
+                t,
+            )
+        })
+        .collect();
+    let r = phase3::quality(
+        &kev,
+        &cfg,
+        base,
+        &files,
+        QualityOptions {
+            max_complexity: 20,
+            max_function_lines: 150,
+            run_linters: true,
+            use_kev: true,
+        },
+    )
+    .await;
+    eprintln!(
+        "crate: approval={:?} score={} risk={} maint={:?} fns={} maxcx={} maxlen={} dups={} {}ms",
+        r.approval,
+        r.quality_score,
+        r.risk_level,
+        r.maintainability,
+        r.functions_analyzed,
+        r.max_complexity,
+        r.max_function_lines,
+        r.duplicates.len(),
+        r.duration_ms
+    );
     for t in &r.tools {
-        eprintln!("  tool {} {} {} findings {}", t.tool, t.status, t.detail, t.findings);
+        eprintln!(
+            "  tool {} {} {} findings {}",
+            t.tool, t.status, t.detail, t.findings
+        );
     }
     for h in &r.hotspots {
-        eprintln!("  {}:{} {} lines={} cx={} p_hard={:?}", h.metric.file, h.metric.start_line, h.metric.name, h.metric.lines, h.metric.complexity, h.p_hard_to_maintain);
+        eprintln!(
+            "  {}:{} {} lines={} cx={} p_hard={:?}",
+            h.metric.file,
+            h.metric.start_line,
+            h.metric.name,
+            h.metric.lines,
+            h.metric.complexity,
+            h.p_hard_to_maintain
+        );
     }
     for x in &r.reasons {
         eprintln!("  reason: {x}");
     }
     assert!(r.kev_ok == Some(true) && r.functions_analyzed > 50);
-    assert!(r.tools.iter().any(|t| t.tool == "clippy" && t.status == "ran"));
+    assert!(
+        r.tools
+            .iter()
+            .any(|t| t.tool == "clippy" && t.status == "ran")
+    );
 }
 
 #[tokio::test]
@@ -263,23 +431,77 @@ async fn live_desktop_fixture_via_rust() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("harness/py/tests/fixture_app.ps1");
     let state = tempfile::tempdir().unwrap();
     let args = |mode: &str| -> Vec<String> {
-        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &fixture.display().to_string(), "-Mode", mode, "-StateFile", &state.path().join("s.json").display().to_string()]
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        [
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &fixture.display().to_string(),
+            "-Mode",
+            mode,
+            "-StateFile",
+            &state.path().join("s.json").display().to_string(),
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
     };
     let persist = vec![json!({"auto_id": "nameBox"})];
-    let good = phase3::desktop_test(&cfg, "powershell.exe", &args("good"), None, Some("Kritic Fixture"), &persist, 60, false, false, 5.0, &[], &[], true, &json!({})).await;
-    eprintln!("good: approval={:?} summary={:?} breakages={:?} err={:?} {}ms", good.approval, good.summary, good.breakages, good.error, good.duration_ms);
+    let good = phase3::desktop_test(
+        &cfg,
+        "powershell.exe",
+        &args("good"),
+        None,
+        Some("Kritic Fixture"),
+        &persist,
+        60,
+        false,
+        false,
+        5.0,
+        &[],
+        &[],
+        true,
+        &json!({}),
+    )
+    .await;
+    eprintln!(
+        "good: approval={:?} summary={:?} breakages={:?} err={:?} {}ms",
+        good.approval, good.summary, good.breakages, good.error, good.duration_ms
+    );
     assert_eq!(good.approval, Some(true));
-    let bad = phase3::desktop_test(&cfg, "powershell.exe", &args("broken"), None, Some("Kritic Fixture"), &persist, 60, false, false, 5.0, &[], &[], true, &json!({})).await;
-    eprintln!("broken: approval={:?} summary={:?}", bad.approval, bad.summary);
+    let bad = phase3::desktop_test(
+        &cfg,
+        "powershell.exe",
+        &args("broken"),
+        None,
+        Some("Kritic Fixture"),
+        &persist,
+        60,
+        false,
+        false,
+        5.0,
+        &[],
+        &[],
+        true,
+        &json!({}),
+    )
+    .await;
+    eprintln!(
+        "broken: approval={:?} summary={:?}",
+        bad.approval, bad.summary
+    );
     for b in &bad.breakages {
         eprintln!("  - {b}");
     }
     assert_eq!(bad.approval, Some(false));
     let all = bad.breakages.join("\n");
-    for needle in ["Object reference", "Does nothing", "crash", "did not persist", "widget cache failed"] {
+    for needle in [
+        "Object reference",
+        "Does nothing",
+        "crash",
+        "did not persist",
+        "widget cache failed",
+    ] {
         assert!(all.contains(needle), "missing {needle}");
     }
 }
@@ -291,14 +513,50 @@ async fn live_resource_leaky_vs_idle() {
     }
     let cfg = Config::from_env();
     let kev = KevClient::new(std::sync::Arc::new(Config::from_env()));
-    let leaky = json!(["python", "-c", "import time\nx=[]\nwhile True:\n    x.append(bytearray(400000)); time.sleep(0.02)"]);
-    let r = phase3::resource(&kev, &cfg, Some(leaky), None, false, None, 20.0, "a CLI tool idling", Budgets::default()).await;
-    eprintln!("leaky: approval={:?} p_fits={:?} violations={:?} stats={}", r.approval, r.p_reasonable, r.budget_violations, r.stats);
+    let leaky = json!([
+        "python",
+        "-c",
+        "import time\nx=[]\nwhile True:\n    x.append(bytearray(400000)); time.sleep(0.02)"
+    ]);
+    let r = phase3::resource(
+        &kev,
+        &cfg,
+        Some(leaky),
+        None,
+        false,
+        None,
+        20.0,
+        "a CLI tool idling",
+        Budgets::default(),
+    )
+    .await;
+    eprintln!(
+        "leaky: approval={:?} p_fits={:?} violations={:?} stats={}",
+        r.approval, r.p_reasonable, r.budget_violations, r.stats
+    );
     assert_eq!(r.approval, Some(false));
-    assert!(r.budget_violations.iter().any(|v| v.contains("memory growing")));
+    assert!(
+        r.budget_violations
+            .iter()
+            .any(|v| v.contains("memory growing"))
+    );
     let idle = json!(["python", "-c", "import time\ntime.sleep(60)"]);
-    let r = phase3::resource(&kev, &cfg, Some(idle), None, false, None, 20.0, "a CLI tool idling", Budgets::default()).await;
-    eprintln!("idle: approval={:?} p_fits={:?} violations={:?}", r.approval, r.p_reasonable, r.budget_violations);
+    let r = phase3::resource(
+        &kev,
+        &cfg,
+        Some(idle),
+        None,
+        false,
+        None,
+        20.0,
+        "a CLI tool idling",
+        Budgets::default(),
+    )
+    .await;
+    eprintln!(
+        "idle: approval={:?} p_fits={:?} violations={:?}",
+        r.approval, r.p_reasonable, r.budget_violations
+    );
     assert!(r.budget_violations.is_empty());
 }
 
@@ -306,7 +564,12 @@ async fn live_resource_leaky_vs_idle() {
 
 #[test]
 fn vendored_paths_are_recognized() {
-    for p in ["harness/py/.venv/Lib/site-packages/x.py", r"a\node_modules\b.js", "target/debug/x.rs", "web/dist/app.js"] {
+    for p in [
+        "harness/py/.venv/Lib/site-packages/x.py",
+        r"a\node_modules\b.js",
+        "target/debug/x.rs",
+        "web/dist/app.js",
+    ] {
         assert!(scan::is_vendored(p), "{p}");
     }
     for p in ["src/venv_utils.py", "src/targeting.rs", "app.py"] {
@@ -330,27 +593,48 @@ fn gitleaks_config_extends_defaults_and_allowlists_vendored() {
 
 struct TruncatingKev;
 impl Decider for TruncatingKev {
-    async fn decide(&self, state: &Value, qs: &BTreeMap<String, Question>) -> Result<Decision, String> {
+    async fn decide(
+        &self,
+        state: &Value,
+        qs: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
         // pretend anything over 600 chars of diff was cut off
         let truncated = state["diff"].as_str().is_some_and(|d| d.len() > 600);
         let answers = qs
             .iter()
             .map(|(k, q)| {
                 let a = if q.kind == "choice" {
-                    Answer { value: 0.9, choice: Some("none".into()), probabilities: Some(BTreeMap::from([("none".into(), 0.9)])), confidence: 0.9 }
+                    Answer {
+                        value: 0.9,
+                        choice: Some("none".into()),
+                        probabilities: Some(BTreeMap::from([("none".into(), 0.9)])),
+                        confidence: 0.9,
+                    }
                 } else {
-                    Answer { value: if k == "complete" { 0.9 } else { 0.05 }, choice: None, probabilities: None, confidence: 0.9 }
+                    Answer {
+                        value: if k == "complete" { 0.9 } else { 0.05 },
+                        choice: None,
+                        probabilities: None,
+                        confidence: 0.9,
+                    }
                 };
                 (k.clone(), a)
             })
             .collect();
-        Ok(Decision { answers, truncated, latency_ms: 1, input_tokens: 100 })
+        Ok(Decision {
+            answers,
+            truncated,
+            latency_ms: 1,
+            input_tokens: 100,
+        })
     }
 }
 
 #[tokio::test]
 async fn diff_mode_resplits_truncated_hunks() {
-    let body: String = (0..40).map(|i| format!("+let value_{i} = compute(input_{i});\n")).collect();
+    let body: String = (0..40)
+        .map(|i| format!("+let value_{i} = compute(input_{i});\n"))
+        .collect();
     let diff = format!("diff --git a/x.rs b/x.rs\n@@ -0,0 +1,40 @@\n{body}");
     let cfg = Config::from_env();
     let r = kritic::critic::critic_diff(&TruncatingKev, &cfg, "t", &diff, 0).await;
@@ -407,11 +691,19 @@ fn unity_soak_judging() {
     let (_, b, a) = phase3::judge_desktop_with(&rep, &[], Some(55.0), Some(2.0));
     assert_eq!(a, Some(false));
     let all = b.join("\n");
-    for needle in ["crashed during soak 3.2s", "2 exception", "41.0 fps < 55", "4.0% of frames stutter"] {
+    for needle in [
+        "crashed during soak 3.2s",
+        "2 exception",
+        "41.0 fps < 55",
+        "4.0% of frames stutter",
+    ] {
         assert!(all.contains(needle), "missing {needle}: {all}");
     }
     let clean = json!({"ok": true, "interactions": [], "crashes": [], "hangs": [], "unity": {"log": {"counts": {}}, "steps": [], "frames": {"ok": false, "error": "PresentMon needs admin"}}});
-    assert_eq!(phase3::judge_desktop_with(&clean, &[], None, None).2, Some(true));
+    assert_eq!(
+        phase3::judge_desktop_with(&clean, &[], None, None).2,
+        Some(true)
+    );
     let (_, b, _) = phase3::judge_desktop_with(&clean, &[], Some(60.0), None);
     assert!(b[0].contains("no frame timing") && b[0].contains("PresentMon needs admin"));
 }
@@ -420,7 +712,11 @@ fn unity_soak_judging() {
 async fn unity_tests_reports_missing_editor_honestly() {
     let d = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(d.path().join("ProjectSettings")).unwrap();
-    std::fs::write(d.path().join("ProjectSettings/ProjectVersion.txt"), "m_EditorVersion: 1999.1.1f1\n").unwrap();
+    std::fs::write(
+        d.path().join("ProjectSettings/ProjectVersion.txt"),
+        "m_EditorVersion: 1999.1.1f1\n",
+    )
+    .unwrap();
     let mut cfg = Config::from_env();
     cfg.unity_editor = None;
     let r = kritic::unity::run_tests(&cfg, d.path(), "EditMode", None, 60).await;

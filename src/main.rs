@@ -50,5 +50,6 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Register(a)) => exit_on(kritic::cli::register(a)),
         Some(Cmd::Uninstall(a)) => exit_on(kritic::cli::uninstall(a)),
         Some(Cmd::Context(a)) => exit_on(kritic::cli::context::run(a).await),
+        Some(Cmd::Key(a)) => exit_on(kritic::cli::key(a)),
     }
 }

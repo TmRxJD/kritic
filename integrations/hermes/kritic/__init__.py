@@ -9,7 +9,7 @@ This module is a thin shim: every decision is made by the ``kritic`` binary (``k
 which ranks messages with Kev when a Kev backend is available and oldest-first otherwise. The shim
 fails open: if kritic is missing or errors, messages pass through unchanged and the error is logged.
 
-Activate with ``context.engine: kritic`` in ``~/.hermes/config.yaml`` (``kritic register --hermes
+Activate with ``context.engine: kritic`` in Hermes' ``config.yaml`` (``kritic register --hermes
 --hermes-context`` does this). Optional settings, all with defaults, under a top-level
 ``kritic_context:`` section of the same file:
 
@@ -21,6 +21,11 @@ Activate with ``context.engine: kritic`` in ``~/.hermes/config.yaml`` (``kritic 
       big_chars: 8000       # tool results above this are archived when pruning
       use_kev: true         # rank by relevance with Kev; false = oldest first
       timeout_s: 90         # one kritic call
+
+Concise replies: when ``output.style = "concise"`` in kritic.toml (the default), ``kritic register``
+writes ``concise.md`` beside this file and the plugin adds it to each turn through Hermes'
+``pre_llm_call`` hook (about 70 tokens per turn). Delete the file, or set ``output.style =
+"default"`` and re-register, to turn it off.
 """
 
 from __future__ import annotations
@@ -81,7 +86,12 @@ def _settings() -> Dict[str, Any]:
     try:
         import yaml  # Hermes depends on PyYAML
 
-        home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
+        try:
+            from hermes_constants import get_hermes_home  # knows the Windows location too
+
+            home = Path(get_hermes_home())
+        except Exception:
+            home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
         cfg = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
         defaults.update({k: v for k, v in (cfg.get("kritic_context") or {}).items() if k in defaults})
     except Exception as exc:  # a missing or odd config keeps the defaults
@@ -238,5 +248,19 @@ class KriticContextEngine(ContextEngine):
         return status
 
 
+def _concise_rule() -> str:
+    try:
+        return (_HERE / "concise.md").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _on_pre_llm_call(**_kwargs: Any) -> Optional[Dict[str, str]]:
+    rule = _concise_rule()
+    return {"context": rule} if rule else None
+
+
 def register(ctx) -> None:
     ctx.register_context_engine(KriticContextEngine())
+    if _concise_rule() and hasattr(ctx, "register_hook"):
+        ctx.register_hook("pre_llm_call", _on_pre_llm_call)

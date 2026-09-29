@@ -62,7 +62,13 @@ async fn live_bad_rejected_good_approved() {
         assert!(b.kev_ok && g.kev_ok, "{:?} {:?}", b.error, g.error);
         eprintln!(
             "{name:8} bad: approve={:?} p_ok={:?} sev={:?} sec={:?} | good: approve={:?} p_ok={:?} p_complete={:?} | {}ms",
-            b.approval, b.p_correct_min, b.worst_severity, b.p_security_issue_max, g.approval, g.p_correct_min, g.p_complete,
+            b.approval,
+            b.p_correct_min,
+            b.worst_severity,
+            b.p_security_issue_max,
+            g.approval,
+            g.p_correct_min,
+            g.p_complete,
             b.latency_ms + g.latency_ms
         );
         if b.approval != Some(false) {
@@ -79,7 +85,14 @@ async fn live_bad_rejected_good_approved() {
 async fn live_incomplete_and_injection_rejected() {
     let Some(k) = live() else { return };
     let cfg = k.cfg.clone();
-    let inc = critic(&k, &cfg, "Write add(a, b) and subtract(a, b).", &[("m.py".into(), "def add(a, b):\n    return a + b\n".into())], 0).await;
+    let inc = critic(
+        &k,
+        &cfg,
+        "Write add(a, b) and subtract(a, b).",
+        &[("m.py".into(), "def add(a, b):\n    return a + b\n".into())],
+        0,
+    )
+    .await;
     eprintln!("incomplete: {:?} {:?}", inc.approval, inc.reasons);
     assert_eq!(inc.approval, Some(false));
     let inj = critic(
@@ -90,7 +103,10 @@ async fn live_incomplete_and_injection_rejected() {
         0,
     )
     .await;
-    eprintln!("injection: {:?} p_inj={:?} {:?}", inj.approval, inj.p_reviewer_injection_max, inj.reasons);
+    eprintln!(
+        "injection: {:?} p_inj={:?} {:?}",
+        inj.approval, inj.p_reviewer_injection_max, inj.reasons
+    );
     assert_eq!(inj.approval, Some(false));
 }
 
@@ -98,12 +114,29 @@ async fn live_incomplete_and_injection_rejected() {
 async fn live_multi_chunk_file() {
     let Some(k) = live() else { return };
     let cfg = k.cfg.clone();
-    let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk.rs")).unwrap();
-    let r = critic(&k, &cfg, "Split source files into line-aligned chunks and build a definition digest.", &[("chunk.rs".into(), src)], 0).await;
+    let src =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/chunk.rs")).unwrap();
+    let r = critic(
+        &k,
+        &cfg,
+        "Split source files into line-aligned chunks and build a definition digest.",
+        &[("chunk.rs".into(), src)],
+        0,
+    )
+    .await;
     eprintln!(
         "chunk.rs: chunks={} approve={:?} A{:?}/C{:?}/Q{:?} flagged={:?} truncated={} {}ms",
-        r.chunks_scored, r.approval, r.correctness, r.completeness, r.quality,
-        r.flagged_chunks.iter().map(|c| &c.location).collect::<Vec<_>>(), r.truncated_chunks, r.latency_ms
+        r.chunks_scored,
+        r.approval,
+        r.correctness,
+        r.completeness,
+        r.quality,
+        r.flagged_chunks
+            .iter()
+            .map(|c| &c.location)
+            .collect::<Vec<_>>(),
+        r.truncated_chunks,
+        r.latency_ms
     );
     assert!(r.kev_ok && r.chunks_scored > 1);
     assert_eq!(r.truncated_chunks, 0, "chunks must fit in 2,048 tokens");
@@ -113,7 +146,10 @@ async fn live_multi_chunk_file() {
 async fn live_route_trim_map() {
     let Some(k) = live() else { return };
     let cfg = k.cfg.clone();
-    for t in ["Rename the variable `usr` to `user` across three files.", "Redesign the plugin boundaries across six packages; the current design has circular dependencies."] {
+    for t in [
+        "Rename the variable `usr` to `user` across three files.",
+        "Redesign the plugin boundaries across six packages; the current design has circular dependencies.",
+    ] {
         let r = route(&k, t, "", "").await;
         eprintln!("route: {t:.40} -> {:?} ({:?})", r.suggestion, r.confidence);
         assert!(r.kev_ok);
@@ -123,17 +159,39 @@ async fn live_route_trim_map() {
         "The weather in Lisbon is mild in spring.".to_string(),
         "Approval requires p(correct) >= 0.8 and p(complete) >= 0.7.".to_string(),
     ];
-    let t = context_trim(&k, &cfg, "How is approval decided?", &chunks, 8000, 0.2, None).await;
+    let t = context_trim(
+        &k,
+        &cfg,
+        "How is approval decided?",
+        &chunks,
+        8000,
+        0.2,
+        None,
+    )
+    .await;
     eprintln!("trim: {:?} kept={:?}", t.ranked, t.kept);
     assert!(t.kev_ok && !t.kept.contains(&1));
 
     let notes: Vec<_> = (0..128)
         .map(|i| json!({"b": 4.0 + i as f64 * 0.5, "x": 1 + (i % 2), "y": 0, "c": i % 2, "d": if (i / 2) % 2 == 0 { 1 } else { 0 }}))
         .collect();
-    let m = map::evaluate(&k, &cfg, &json!({"version": "3.3.0", "colorNotes": notes}).to_string(), Some(120.0), true).await;
+    let m = map::evaluate(
+        &k,
+        &cfg,
+        &json!({"version": "3.3.0", "colorNotes": notes}).to_string(),
+        Some(120.0),
+        true,
+    )
+    .await;
     eprintln!(
         "map: approve={:?} slices={} p_awkward_max={:?} flagged={} reasons={:?} advisory={:?} {}ms",
-        m.approval, m.slices_scored, m.p_awkward_max, m.flagged_slices.len(), m.reasons, m.kev_advisory, m.latency_ms
+        m.approval,
+        m.slices_scored,
+        m.p_awkward_max,
+        m.flagged_slices.len(),
+        m.reasons,
+        m.kev_advisory,
+        m.latency_ms
     );
     assert!(m.kev_ok && m.heuristic_issues.is_empty());
 }
@@ -144,16 +202,32 @@ async fn live_self_review_report() {
     let Some(k) = live() else { return };
     let cfg = k.cfg.clone();
     let tasks = [
-        ("chunk.rs", "Split source files into line-aligned chunks and build a definition digest."),
-        ("files.rs", "Resolve and filter file paths for review, skipping binaries and vendored directories."),
-        ("checks.rs", "Run deterministic parse checks and project commands, reporting output verbatim."),
-        ("map.rs", "Evaluate Beat Saber difficulty maps with deterministic stats and model judgments."),
-        ("kev.rs", "Client for the Kev decision model over HTTP with answer validation."),
+        (
+            "chunk.rs",
+            "Split source files into line-aligned chunks and build a definition digest.",
+        ),
+        (
+            "files.rs",
+            "Resolve and filter file paths for review, skipping binaries and vendored directories.",
+        ),
+        (
+            "checks.rs",
+            "Run deterministic parse checks and project commands, reporting output verbatim.",
+        ),
+        (
+            "map.rs",
+            "Evaluate Beat Saber difficulty maps with deterministic stats and model judgments.",
+        ),
+        (
+            "kev.rs",
+            "Client for the Kev decision model over HTTP with answer validation.",
+        ),
     ];
     let mut total_ms = 0;
     let mut chunks = 0;
     for (f, task) in tasks {
-        let src = std::fs::read_to_string(format!("{}/src/{f}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let src =
+            std::fs::read_to_string(format!("{}/src/{f}", env!("CARGO_MANIFEST_DIR"))).unwrap();
         let r = critic(&k, &cfg, task, &[(f.into(), src)], 0).await;
         assert!(r.kev_ok, "{:?}", r.error);
         assert_eq!(r.truncated_chunks, 0);
@@ -161,8 +235,20 @@ async fn live_self_review_report() {
         chunks += r.chunks_scored;
         eprintln!(
             "{f:10} chunks={:2} approve={:?} A{:?} C{:?} Q{:?} {}ms reasons={:?} flagged={:?}",
-            r.chunks_scored, r.approval, r.correctness, r.completeness, r.quality, r.latency_ms, r.reasons,
-            r.flagged_chunks.iter().map(|c| format!("{} ok={:.2} sev={} sec={:.2} unf={:.2}", c.location, c.p_correct, c.severity, c.p_security_issue, c.p_unfinished)).collect::<Vec<_>>()
+            r.chunks_scored,
+            r.approval,
+            r.correctness,
+            r.completeness,
+            r.quality,
+            r.latency_ms,
+            r.reasons,
+            r.flagged_chunks
+                .iter()
+                .map(|c| format!(
+                    "{} ok={:.2} sev={} sec={:.2} unf={:.2}",
+                    c.location, c.p_correct, c.severity, c.p_security_issue, c.p_unfinished
+                ))
+                .collect::<Vec<_>>()
         );
     }
     eprintln!("avg {} ms/chunk", total_ms / chunks.max(1) as u64);
@@ -215,38 +301,70 @@ async fn live_planted_bugs_report() {
         let at = src.find(from).unwrap();
         let line_no = src[..at].lines().count() + 1;
         let lines: Vec<&str> = src.lines().collect();
-        let (lo, hi) = (line_no.saturating_sub(4), (line_no + from.lines().count() + 2).min(lines.len()));
-        let mut hunk = format!("diff --git a/src/{f} b/src/{f}
+        let (lo, hi) = (
+            line_no.saturating_sub(4),
+            (line_no + from.lines().count() + 2).min(lines.len()),
+        );
+        let mut hunk = format!(
+            "diff --git a/src/{f} b/src/{f}
 @@ -{} +{} @@
-", lo + 1, lo + 1);
+",
+            lo + 1,
+            lo + 1
+        );
         for (i, l) in lines[lo..hi].iter().enumerate() {
             let n = lo + i + 1;
             if n >= line_no && n < line_no + from.lines().count().max(1) {
-                hunk.push_str(&format!("-{l}
-"));
+                hunk.push_str(&format!(
+                    "-{l}
+"
+                ));
             } else {
-                hunk.push_str(&format!(" {l}
-"));
+                hunk.push_str(&format!(
+                    " {l}
+"
+                ));
             }
         }
-        let insert_at = hunk.rfind(&format!("-{}", from.lines().last().unwrap_or(""))).map(|i| i + from.lines().last().unwrap_or("").len() + 2).unwrap_or(hunk.len());
-        let added: String = to.lines().map(|l| format!("+{l}
-")).collect();
+        let insert_at = hunk
+            .rfind(&format!("-{}", from.lines().last().unwrap_or("")))
+            .map(|i| i + from.lines().last().unwrap_or("").len() + 2)
+            .unwrap_or(hunk.len());
+        let added: String = to
+            .lines()
+            .map(|l| {
+                format!(
+                    "+{l}
+"
+                )
+            })
+            .collect();
         hunk.insert_str(insert_at.min(hunk.len()), &added);
         let rd = critic_diff(&k, &cfg, task, &hunk, 0).await;
-        eprintln!("   diff mode: approve={:?} reasons={:?}", rd.approval, rd.reasons);
+        eprintln!(
+            "   diff mode: approve={:?} reasons={:?}",
+            rd.approval, rd.reasons
+        );
         if r.approval == Some(false) {
             caught += 1;
         }
         // Count only the bug question: completeness of a one-hunk diff against a whole-file
         // task is meaningless here and would "catch" clean hunks too.
-        if rd.reasons.iter().any(|x| x.contains("introduces a bug") || x.contains("severity") || x.contains("security")) {
+        if rd.reasons.iter().any(|x| {
+            x.contains("introduces a bug") || x.contains("severity") || x.contains("security")
+        }) {
             caught_diff += 1;
         }
         eprintln!(
             "{f:10} [{what}] approve={:?} sev={:?} p_ok_min={:?} sec={:?} flagged={:?}",
-            r.approval, r.worst_severity, r.p_correct_min, r.p_security_issue_max,
-            r.flagged_chunks.iter().map(|c| format!("{} ok={:.2} sev={}", c.location, c.p_correct, c.severity)).collect::<Vec<_>>()
+            r.approval,
+            r.worst_severity,
+            r.p_correct_min,
+            r.p_security_issue_max,
+            r.flagged_chunks
+                .iter()
+                .map(|c| format!("{} ok={:.2} sev={}", c.location, c.p_correct, c.severity))
+                .collect::<Vec<_>>()
         );
     }
     eprintln!("caught {caught}/4 planted bugs in files mode, {caught_diff}/4 in diff mode");

@@ -5,21 +5,23 @@ use std::sync::Arc;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{Implementation, ServerCapabilities, ServerConfig};
-use schemars::JsonSchema;
 use rmcp::{Json, ServerHandler, tool, tool_handler, tool_router};
+use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::config::Config;
 use crate::critic::{CriticResult, critic, critic_diff};
 use crate::kev::KevClient;
 use crate::map::{MapResult, evaluate};
+use crate::phase3::{
+    Budgets, DesktopResult, QualityOptions, QualityResult, ResourceResult, SecurityResult,
+};
+use crate::tools::{
+    RouteResult, StatusResult, TrimResult, ValidateInput, ValidateResult, artifact_validate, audit,
+    context_trim, git_diff, load_files, route, status,
+};
 use crate::ui::{UiOptions, UiResult};
 use crate::vision::VisualResult;
-use crate::phase3::{Budgets, DesktopResult, QualityOptions, QualityResult, ResourceResult, SecurityResult};
-use crate::tools::{
-    RouteResult, StatusResult, TrimResult, ValidateInput, ValidateResult, artifact_validate, audit, context_trim,
-    git_diff, load_files, route, status,
-};
 
 #[derive(Clone)]
 pub struct Kritic {
@@ -642,7 +644,9 @@ impl Kritic {
         let gpu = self.gpu.clone();
         tokio::spawn(async move {
             let _g = gpu.lock().await;
-            let _x = crate::gpu::lock_across_processes(&kev.cfg, "warm-up").await.ok();
+            let _x = crate::gpu::lock_across_processes(&kev.cfg, "warm-up")
+                .await
+                .ok();
             // Only a local backend has anything to warm; cloud and off resolve without a GPU.
             if !matches!(kev.resolve_backend().await, Ok(crate::kev::Backend::Local)) {
                 return;
@@ -659,7 +663,10 @@ impl Kritic {
 
     /// Health check: laya/Kev reachable, paths, thresholds, log. Call first if another tool returns kev_ok=false.
     #[tool(name = "status")]
-    pub async fn status_tool(&self, Parameters(p): Parameters<StatusParams>) -> Result<Json<StatusResult>, String> {
+    pub async fn status_tool(
+        &self,
+        Parameters(p): Parameters<StatusParams>,
+    ) -> Result<Json<StatusResult>, String> {
         Ok(Json(status(&self.kev, p.start).await))
     }
 
@@ -670,7 +677,10 @@ impl Kritic {
     /// not explanations: inspect `flagged_chunks` yourself. A coarse screen for obvious bugs,
     /// security patterns, missing work: NOT a substitute for tests. Advisory only.
     #[tool(name = "critic_score")]
-    pub async fn critic_score(&self, Parameters(p): Parameters<CriticParams>) -> Result<Json<CriticResult>, String> {
+    pub async fn critic_score(
+        &self,
+        Parameters(p): Parameters<CriticParams>,
+    ) -> Result<Json<CriticResult>, String> {
         let t0 = started("critic_score");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("critic_score").await;
@@ -683,7 +693,7 @@ impl Kritic {
             let mut r = critic_diff(self.kev.as_ref(), cfg, &p.task, &diff, p.revision).await;
             r.flagged_chunks.truncate(15);
             r.flagged_chunks.truncate(15);
-        finished("critic_score", t0, &r);
+            finished("critic_score", t0, &r);
             audit(cfg, "critic_score", &r);
             return Ok(Json(r));
         }
@@ -693,7 +703,9 @@ impl Kritic {
             skipped = lf.skipped;
             lf.files
         } else {
-            p.artifact.map(|a| vec![("<artifact>".to_string(), a)]).unwrap_or_default()
+            p.artifact
+                .map(|a| vec![("<artifact>".to_string(), a)])
+                .unwrap_or_default()
         };
         let mut r = critic(self.kev.as_ref(), cfg, &p.task, &files, p.revision).await;
         for s in skipped.iter().filter(|s| s.reason == "not found") {
@@ -709,7 +721,10 @@ impl Kritic {
     /// merge markers, UTF-8), the project's own `commands` (tsc, lint, tests) run verbatim, then
     /// optionally the Kev critic. Any deterministic or command failure forces approval=false.
     #[tool(name = "artifact_validate")]
-    pub async fn artifact_validate(&self, Parameters(p): Parameters<ValidateParams>) -> Result<Json<ValidateResult>, String> {
+    pub async fn artifact_validate(
+        &self,
+        Parameters(p): Parameters<ValidateParams>,
+    ) -> Result<Json<ValidateResult>, String> {
         let t0 = started("artifact_validate");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("artifact_validate").await;
@@ -738,17 +753,25 @@ impl Kritic {
     /// duplicates, parity breaks, density curve) plus Kev judgments on the stats and on 16-beat
     /// slices. Any heuristic issue forces approval=false.
     #[tool(name = "map_eval")]
-    pub async fn map_eval(&self, Parameters(p): Parameters<MapParams>) -> Result<Json<MapResult>, String> {
+    pub async fn map_eval(
+        &self,
+        Parameters(p): Parameters<MapParams>,
+    ) -> Result<Json<MapResult>, String> {
         let t0 = started("map_eval");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("map_eval").await;
         crate::gpu::unload_vision(cfg).await;
         let content = match (&p.path, &p.content) {
-            (Some(path), _) => crate::files::read_lossy(std::path::Path::new(path)).map_err(|e| format!("cannot read {path}: {e}"))?,
+            (Some(path), _) => crate::files::read_lossy(std::path::Path::new(path))
+                .map_err(|e| format!("cannot read {path}: {e}"))?,
             (None, Some(c)) => c.clone(),
             (None, None) => return Err("give path or content".into()),
         };
-        let bpm = p.bpm.or_else(|| p.path.as_deref().and_then(|x| crate::map::bpm_beside(std::path::Path::new(x))));
+        let bpm = p.bpm.or_else(|| {
+            p.path
+                .as_deref()
+                .and_then(|x| crate::map::bpm_beside(std::path::Path::new(x)))
+        });
         let r = evaluate(self.kev.as_ref(), cfg, &content, bpm, p.kev_slices).await;
         finished("map_eval", t0, &r);
         audit(cfg, "map_eval", &r);
@@ -758,7 +781,10 @@ impl Kritic {
     /// Second-opinion worker suggestion (local_worker | haiku | sonnet | opus) with calibrated
     /// probabilities. Never overrides the user's model-routing rules.
     #[tool(name = "route")]
-    pub async fn route_tool(&self, Parameters(p): Parameters<RouteParams>) -> Result<Json<RouteResult>, String> {
+    pub async fn route_tool(
+        &self,
+        Parameters(p): Parameters<RouteParams>,
+    ) -> Result<Json<RouteResult>, String> {
         let t0 = started("route");
         let _gpu = self.gpu("route").await;
         crate::gpu::unload_vision(&self.kev.cfg).await;
@@ -771,12 +797,24 @@ impl Kritic {
     /// Rank context chunks by Kev relevance to `query`; keep the best within `budget_chars`,
     /// above `min_relevance`, optionally at most `top_n`. Extractive only (no summaries).
     #[tool(name = "context_trim")]
-    pub async fn context_trim_tool(&self, Parameters(p): Parameters<TrimParams>) -> Result<Json<TrimResult>, String> {
+    pub async fn context_trim_tool(
+        &self,
+        Parameters(p): Parameters<TrimParams>,
+    ) -> Result<Json<TrimResult>, String> {
         let t0 = started("context_trim");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("context_trim").await;
         crate::gpu::unload_vision(cfg).await;
-        let r = context_trim(self.kev.as_ref(), cfg, &p.query, &p.chunks, p.budget_chars, p.min_relevance, p.top_n).await;
+        let r = context_trim(
+            self.kev.as_ref(),
+            cfg,
+            &p.query,
+            &p.chunks,
+            p.budget_chars,
+            p.min_relevance,
+            p.top_n,
+        )
+        .await;
         finished("context_trim", t0, &r);
         audit(cfg, "context_trim", &r);
         Ok(Json(r))
@@ -788,7 +826,10 @@ impl Kritic {
     /// ui_test's axe results for verified contrast/a11y problems. Pass image_path or url.
     /// Stops laya to free the GPU (Kev restarts on its next call, ~13s).
     #[tool(name = "visual_critic")]
-    pub async fn visual_critic(&self, Parameters(p): Parameters<VisualParams>) -> Result<Json<VisualResult>, String> {
+    pub async fn visual_critic(
+        &self,
+        Parameters(p): Parameters<VisualParams>,
+    ) -> Result<Json<VisualResult>, String> {
         let t0 = started("visual_critic");
         let cfg = &self.kev.cfg;
         let image = match (&p.image_path, &p.url) {
@@ -814,11 +855,17 @@ impl Kritic {
     /// `persist` selectors), and axe-core accessibility violations, with screenshots. Skips
     /// destructive-looking controls unless allow_destructive. Any breakage => approval=false.
     #[tool(name = "ui_test")]
-    pub async fn ui_test_tool(&self, Parameters(p): Parameters<UiParams>) -> Result<Json<UiResult>, String> {
+    pub async fn ui_test_tool(
+        &self,
+        Parameters(p): Parameters<UiParams>,
+    ) -> Result<Json<UiResult>, String> {
         let t0 = started("ui_test");
         let cfg = &self.kev.cfg;
-        let persist: Vec<serde_json::Value> =
-            p.persist.iter().map(|c| serde_json::json!({"selector": c.selector, "url": c.url})).collect();
+        let persist: Vec<serde_json::Value> = p
+            .persist
+            .iter()
+            .map(|c| serde_json::json!({"selector": c.selector, "url": c.url}))
+            .collect();
         let mut r = crate::ui::ui_test(
             cfg,
             &p.url,
@@ -832,11 +879,16 @@ impl Kritic {
             p.axe,
             &p.flows,
             p.explore,
-            UiOptions { axe_blocking: p.axe_blocking, ignore: p.ignore },
+            UiOptions {
+                axe_blocking: p.axe_blocking,
+                ignore: p.ignore,
+            },
         )
         .await;
         r.full_result = crate::tools::save_full(cfg, "ui_test", &r);
-        r.report.interactions.retain(|i| !matches!(i.result.as_str(), "ok" | "navigated"));
+        r.report
+            .interactions
+            .retain(|i| !matches!(i.result.as_str(), "ok" | "navigated"));
         r.report.interactions.truncate(crate::tools::MAX_ITEMS);
         r.report.console_errors.truncate(crate::tools::MAX_ITEMS);
         r.report.failed_requests.truncate(crate::tools::MAX_ITEMS);
@@ -850,7 +902,10 @@ impl Kritic {
     /// triages each code finding with its source context. Approval=false on any high/critical
     /// finding (Kev triage never overrides that). Tools that aren't installed are listed as skipped.
     #[tool(name = "security_critic")]
-    pub async fn security_critic(&self, Parameters(p): Parameters<SecurityParams>) -> Result<Json<SecurityResult>, String> {
+    pub async fn security_critic(
+        &self,
+        Parameters(p): Parameters<SecurityParams>,
+    ) -> Result<Json<SecurityResult>, String> {
         let t0 = started("security_critic");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("security_critic").await;
@@ -859,7 +914,9 @@ impl Kritic {
         if !base.is_dir() {
             return Err(format!("base_dir is not a directory: {}", p.base_dir));
         }
-        let sg = p.semgrep_config.unwrap_or_else(|| cfg.semgrep_config.clone());
+        let sg = p
+            .semgrep_config
+            .unwrap_or_else(|| cfg.semgrep_config.clone());
         let mut r = crate::phase3::security(self.kev.as_ref(), cfg, &base, p.triage, &sg).await;
         r.full_result = crate::tools::save_full(cfg, "security_critic", &r);
         r.findings.truncate(crate::tools::MAX_ITEMS);
@@ -873,7 +930,10 @@ impl Kritic {
     /// maintainability of the worst functions. Approval=false on linter errors or functions over
     /// max_complexity / max_function_lines.
     #[tool(name = "code_quality_critic")]
-    pub async fn code_quality_critic(&self, Parameters(p): Parameters<QualityParams>) -> Result<Json<QualityResult>, String> {
+    pub async fn code_quality_critic(
+        &self,
+        Parameters(p): Parameters<QualityParams>,
+    ) -> Result<Json<QualityResult>, String> {
         let t0 = started("code_quality_critic");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("code_quality_critic").await;
@@ -882,19 +942,36 @@ impl Kritic {
         if !base.is_dir() {
             return Err(format!("base_dir is not a directory: {}", p.base_dir));
         }
-        let paths = if p.paths.is_empty() { crate::tools::source_files(&base, crate::files::MAX_FILES) } else { p.paths.clone() };
+        let paths = if p.paths.is_empty() {
+            crate::tools::source_files(&base, crate::files::MAX_FILES)
+        } else {
+            p.paths.clone()
+        };
         let lf = load_files(&paths, Some(&p.base_dir)).await;
         let files: Vec<(String, String)> = lf
             .files
             .into_iter()
-            .map(|(f, t)| (std::path::Path::new(&f).strip_prefix(&base).map(|x| x.display().to_string()).unwrap_or(f), t))
+            .map(|(f, t)| {
+                (
+                    std::path::Path::new(&f)
+                        .strip_prefix(&base)
+                        .map(|x| x.display().to_string())
+                        .unwrap_or(f),
+                    t,
+                )
+            })
             .collect();
         let mut r = crate::phase3::quality(
             self.kev.as_ref(),
             cfg,
             &base,
             &files,
-            QualityOptions { max_complexity: p.max_complexity, max_function_lines: p.max_function_lines, run_linters: p.run_linters, use_kev: p.use_kev },
+            QualityOptions {
+                max_complexity: p.max_complexity,
+                max_function_lines: p.max_function_lines,
+                run_linters: p.run_linters,
+                use_kev: p.use_kev,
+            },
         )
         .await;
         r.full_result = crate::tools::save_full(cfg, "code_quality_critic", &r);
@@ -910,7 +987,10 @@ impl Kritic {
     /// growth > 5 MB/min, handles +500) and Kev's leak-risk / reasonableness judgment on the
     /// measurements. No admin/ETW; per-frame timing is not measured.
     #[tool(name = "resource_critic")]
-    pub async fn resource_critic(&self, Parameters(p): Parameters<ResourceParams>) -> Result<Json<ResourceResult>, String> {
+    pub async fn resource_critic(
+        &self,
+        Parameters(p): Parameters<ResourceParams>,
+    ) -> Result<Json<ResourceResult>, String> {
         let t0 = started("resource_critic");
         let cfg = &self.kev.cfg;
         if p.command.is_none() && p.pid.is_none() {
@@ -927,7 +1007,18 @@ impl Kritic {
         let r = {
             let _gpu = self.gpu("resource_critic").await;
             crate::gpu::unload_vision(cfg).await;
-            crate::phase3::resource(self.kev.as_ref(), cfg, p.command, p.pid, p.allow_attach, p.cwd.as_deref(), p.duration_s, &p.workload, budgets).await
+            crate::phase3::resource(
+                self.kev.as_ref(),
+                cfg,
+                p.command,
+                p.pid,
+                p.allow_attach,
+                p.cwd.as_deref(),
+                p.duration_s,
+                &p.workload,
+                budgets,
+            )
+            .await
         };
         let mut r = r;
         r.full_result = crate::tools::save_full(cfg, "resource_critic", &r);
@@ -945,12 +1036,16 @@ impl Kritic {
     /// the handle), and leftover files. `clean` kills orphans and socket inheritors; files are only
     /// reported. desktop_test and resource_critic run the same checks around every launch.
     #[tool(name = "hygiene_critic")]
-    pub async fn hygiene_critic(&self, Parameters(p): Parameters<HygieneParams>) -> Result<Json<crate::hygiene::HygieneResult>, String> {
+    pub async fn hygiene_critic(
+        &self,
+        Parameters(p): Parameters<HygieneParams>,
+    ) -> Result<Json<crate::hygiene::HygieneResult>, String> {
         let t0 = started("hygiene_critic");
         let cfg = &self.kev.cfg;
         let mut roots = vec![p.base_dir.clone()];
         roots.extend(p.roots);
-        let mut r = crate::hygiene::audit(cfg, roots, &p.ignore_names, &p.leftover_globs, p.clean).await;
+        let mut r =
+            crate::hygiene::audit(cfg, roots, &p.ignore_names, &p.leftover_globs, p.clean).await;
         r.full_result = crate::tools::save_full(cfg, "hygiene_critic", &r);
         r.reasons.truncate(crate::tools::MAX_ITEMS);
         finished("hygiene_critic", t0, &r);
@@ -964,7 +1059,10 @@ impl Kritic {
     /// errors, and `persist` controls that lose their value across a relaunch. Skips
     /// destructive-looking controls and window chrome. Screenshots in out_dir.
     #[tool(name = "desktop_test")]
-    pub async fn desktop_test_tool(&self, Parameters(p): Parameters<DesktopParams>) -> Result<Json<DesktopResult>, String> {
+    pub async fn desktop_test_tool(
+        &self,
+        Parameters(p): Parameters<DesktopParams>,
+    ) -> Result<Json<DesktopResult>, String> {
         if let Some(url) = &p.app_events
             && !p.allow_remote_app_events
         {
@@ -972,7 +1070,11 @@ impl Kritic {
         }
         let t0 = started("desktop_test");
         let cfg = &self.kev.cfg;
-        let persist: Vec<serde_json::Value> = p.persist.iter().map(|c| serde_json::json!({"auto_id": c.auto_id, "name": c.name})).collect();
+        let persist: Vec<serde_json::Value> = p
+            .persist
+            .iter()
+            .map(|c| serde_json::json!({"auto_id": c.auto_id, "name": c.name}))
+            .collect();
         let mut r = crate::phase3::desktop_test(
             cfg,
             &p.exe,
@@ -996,7 +1098,11 @@ impl Kritic {
         )
         .await;
         r.full_result = crate::tools::save_full(cfg, "desktop_test", &r);
-        if let Some(arr) = r.report.get_mut("interactions").and_then(|v| v.as_array_mut()) {
+        if let Some(arr) = r
+            .report
+            .get_mut("interactions")
+            .and_then(|v| v.as_array_mut())
+        {
             arr.retain(|i| i["result"] != "ok");
             arr.truncate(crate::tools::MAX_ITEMS);
         }
@@ -1013,31 +1119,63 @@ impl Kritic {
     /// sees only the goal and a numbered screenshot; a primary task fails if it fails 2 of 3 runs.
     /// Hand `critic_brief` to the ux-critic agent. Treat hard fails as restructure findings.
     #[tool(name = "ux_critic")]
-    pub async fn ux_critic(&self, Parameters(p): Parameters<UxParams>) -> Result<Json<crate::ux::UxResult>, String> {
+    pub async fn ux_critic(
+        &self,
+        Parameters(p): Parameters<UxParams>,
+    ) -> Result<Json<crate::ux::UxResult>, String> {
         let t0 = started("ux_critic");
         let cfg = &self.kev.cfg;
-        let path = p.spec_path.clone().map(std::path::PathBuf::from).unwrap_or_else(|| std::path::Path::new(&p.base_dir).join(".kritic").join("ux.toml"));
-        let spec = crate::ux::load_spec(&path).map_err(|e| format!("ux spec invalid:
-{}", e.join("
-")))?;
+        let path = p
+            .spec_path
+            .clone()
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(&p.base_dir)
+                    .join(".kritic")
+                    .join("ux.toml")
+            });
+        let spec = crate::ux::load_spec(&path).map_err(|e| {
+            format!(
+                "ux spec invalid:
+{}",
+                e.join(
+                    "
+"
+                )
+            )
+        })?;
         if !["auto", "vision", "kev", "off"].contains(&p.novice.as_str()) {
-            return Err(format!("novice must be auto, vision, kev or off (got {})", p.novice));
+            return Err(format!(
+                "novice must be auto, vision, kev or off (got {})",
+                p.novice
+            ));
         }
         if let Some(u) = spec.app.app_events.as_deref() {
             crate::tools::require_loopback_ws(u)?;
         }
         let out_dir = crate::vision::run_dir(cfg, "ux");
         let opts = crate::ux::Options {
-            max_depth: p.max_depth.unwrap_or_else(|| crate::ux::default_depth(&spec)).max(1),
+            max_depth: p
+                .max_depth
+                .unwrap_or_else(|| crate::ux::default_depth(&spec))
+                .max(1),
             max_actions: p.max_actions,
             runs: p.runs.max(1),
             deadline: std::time::Instant::now() + std::time::Duration::from_secs(p.timeout_s),
             out_dir: out_dir.clone(),
         };
         let mut run = crate::ux::Run::new(&spec, opts);
-        let start = crate::ux::start_request(&spec, p.url.as_deref(), p.allow_destructive, p.allow_remote, p.headed, p.stall_s, &out_dir);
+        let start = crate::ux::start_request(
+            &spec,
+            p.url.as_deref(),
+            p.allow_destructive,
+            p.allow_remote,
+            p.headed,
+            p.stall_s,
+            &out_dir,
+        );
         let novice_requested = p.novice != "off";
-        match crate::ux::ProcAdapter::launch(cfg, &spec, start, p.stall_s).await {
+        match crate::ux::AppAdapter::launch(cfg, &spec, start, p.stall_s).await {
             Err(e) => run.fail(e),
             Ok(mut a) => {
                 run.explore(&mut a).await;
@@ -1055,11 +1193,25 @@ impl Kritic {
                         ("vision", Err(e)) => run.set_novice_error(&cfg.vision_model, e),
                         ("vision" | "auto", Ok(())) => {
                             crate::gpu::stop_laya(cfg).await;
-                            run.novice(&mut a, &crate::ux::VisionNav { cfg }, &cfg.vision_model, true).await;
+                            run.novice(
+                                &mut a,
+                                &crate::ux::VisionNav { cfg },
+                                &cfg.vision_model,
+                                true,
+                            )
+                            .await;
                         }
                         _ => {
                             crate::gpu::unload_vision(cfg).await;
-                            run.novice(&mut a, &crate::ux::KevNav { d: self.kev.as_ref() }, "kev-4b (spec ux_novice_step)", false).await;
+                            run.novice(
+                                &mut a,
+                                &crate::ux::KevNav {
+                                    d: self.kev.as_ref(),
+                                },
+                                "kev-4b (spec ux_novice_step)",
+                                false,
+                            )
+                            .await;
                         }
                     }
                 }
@@ -1071,7 +1223,10 @@ impl Kritic {
         let full = out_dir.join("result.json");
         r.full_result = Some(full.display().to_string());
         r.critic_brief = crate::ux::critic_brief(&r, &spec);
-        if std::fs::create_dir_all(&out_dir).and_then(|_| std::fs::write(&full, serde_json::to_vec_pretty(&r).unwrap_or_default())).is_err() {
+        if std::fs::create_dir_all(&out_dir)
+            .and_then(|_| std::fs::write(&full, serde_json::to_vec_pretty(&r).unwrap_or_default()))
+            .is_err()
+        {
             r.full_result = None;
         }
         r.rules.truncate(crate::tools::MAX_ITEMS);
@@ -1085,10 +1240,20 @@ impl Kritic {
     /// the NUnit results. Uses the editor version from ProjectSettings/ProjectVersion.txt (Unity Hub
     /// install) or KRITIC_UNITY_EDITOR. The project must not be open in another editor.
     #[tool(name = "unity_tests")]
-    pub async fn unity_tests(&self, Parameters(p): Parameters<UnityTestParams>) -> Result<Json<crate::unity::UnityTestResult>, String> {
+    pub async fn unity_tests(
+        &self,
+        Parameters(p): Parameters<UnityTestParams>,
+    ) -> Result<Json<crate::unity::UnityTestResult>, String> {
         let t0 = started("unity_tests");
         let cfg = &self.kev.cfg;
-        let r = crate::unity::run_tests(cfg, std::path::Path::new(&p.project_path), &p.platform, p.test_filter.as_deref(), p.timeout_s).await;
+        let r = crate::unity::run_tests(
+            cfg,
+            std::path::Path::new(&p.project_path),
+            &p.platform,
+            p.test_filter.as_deref(),
+            p.timeout_s,
+        )
+        .await;
         finished("unity_tests", t0, &r);
         audit(cfg, "unity_tests", &r);
         Ok(Json(r))
@@ -1100,8 +1265,18 @@ impl Kritic {
     /// vocabulary, and gates only with dated calibration evidence. Returns every error at once.
     /// with_schema returns the JSON Schema; builtin lists the built-in specs.
     #[tool(name = "spec_lint")]
-    pub async fn spec_lint(&self, Parameters(p): Parameters<SpecLintParams>) -> Result<Json<SpecLintResult>, String> {
-        let mut r = SpecLintResult { tool: "spec_lint".into(), valid: false, errors: vec![], gates: vec![], schema: None, builtin: None };
+    pub async fn spec_lint(
+        &self,
+        Parameters(p): Parameters<SpecLintParams>,
+    ) -> Result<Json<SpecLintResult>, String> {
+        let mut r = SpecLintResult {
+            tool: "spec_lint".into(),
+            valid: false,
+            errors: vec![],
+            gates: vec![],
+            schema: None,
+            builtin: None,
+        };
         if p.with_schema {
             r.schema = Some(crate::spec::json_schema());
         }
@@ -1113,14 +1288,21 @@ impl Kritic {
         }
         let text = match (&p.spec, &p.path) {
             (Some(v), _) => v.to_string(),
-            (None, Some(path)) => std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?,
+            (None, Some(path)) => {
+                std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?
+            }
             (None, None) if p.with_schema => return Ok(Json(r)),
             (None, None) => return Err("give spec, path, builtin=true or with_schema=true".into()),
         };
         match crate::spec::load(&text) {
             Ok(spec) => {
                 r.valid = true;
-                r.gates = spec.questions.iter().filter(|q| spec.gates(&q.id)).map(|q| q.id.clone()).collect();
+                r.gates = spec
+                    .questions
+                    .iter()
+                    .filter(|q| spec.gates(&q.id))
+                    .map(|q| q.id.clone())
+                    .collect();
             }
             Err(errors) => r.errors = errors,
         }
@@ -1130,10 +1312,18 @@ impl Kritic {
     /// List repo-specific evaluator plugins in <base_dir>/.kritic/plugins/ (manifests: name,
     /// description, command, input_schema, optional Kev questions/rules). See plugin_run.
     #[tool(name = "plugin_list")]
-    pub async fn plugin_list(&self, Parameters(p): Parameters<PluginListParams>) -> Result<Json<PluginList>, String> {
+    pub async fn plugin_list(
+        &self,
+        Parameters(p): Parameters<PluginListParams>,
+    ) -> Result<Json<PluginList>, String> {
         let base = std::path::PathBuf::from(&p.base_dir);
         let (plugins, errors) = crate::plugins::discover(&base);
-        Ok(Json(PluginList { tool: "plugin_list".into(), plugin_dir: crate::plugins::plugin_dir(&base).display().to_string(), plugins, errors }))
+        Ok(Json(PluginList {
+            tool: "plugin_list".into(),
+            plugin_dir: crate::plugins::plugin_dir(&base).display().to_string(),
+            plugins,
+            errors,
+        }))
     }
 
     /// Run a repo plugin with the same guarantees as built-in tools: JSON contract validated,
@@ -1142,11 +1332,17 @@ impl Kritic {
     /// findings, and the spec's calibrated gates. Full output
     /// in full_result. Plugins are commands defined by the repo itself; run only in repos you trust.
     #[tool(name = "plugin_run")]
-    pub async fn plugin_run(&self, Parameters(p): Parameters<PluginRunParams>) -> Result<Json<crate::plugins::PluginResult>, String> {
+    pub async fn plugin_run(
+        &self,
+        Parameters(p): Parameters<PluginRunParams>,
+    ) -> Result<Json<crate::plugins::PluginResult>, String> {
         let t0 = started("plugin_run");
         let cfg = &self.kev.cfg;
         let base = std::path::PathBuf::from(&p.base_dir);
-        let uses_kev = crate::plugins::discover(&base).0.iter().any(|m| m.name == p.name && m.kev.is_some());
+        let uses_kev = crate::plugins::discover(&base)
+            .0
+            .iter()
+            .any(|m| m.name == p.name && m.kev.is_some());
         let r = if p.gpu || uses_kev {
             let _gpu = self.gpu("plugin_run").await;
             crate::gpu::unload_vision(cfg).await;
@@ -1164,9 +1360,16 @@ impl Kritic {
     /// cache hit rate, output tokens/sec. Local side: Kev and vision token counts and speeds.
     /// Plus how much context_trim was used.
     #[tool(name = "token_metrics")]
-    pub async fn token_metrics(&self, Parameters(p): Parameters<TokenParams>) -> Result<Json<TokenMetrics>, String> {
+    pub async fn token_metrics(
+        &self,
+        Parameters(p): Parameters<TokenParams>,
+    ) -> Result<Json<TokenMetrics>, String> {
         let cfg = &self.kev.cfg;
-        let transcript = if p.source == "hermes" { None } else { crate::usage::find_transcript(p.session_id.as_deref()) };
+        let transcript = if p.source == "hermes" {
+            None
+        } else {
+            crate::usage::find_transcript(p.session_id.as_deref())
+        };
         if transcript.is_none() && p.source != "claude-code" {
             let h = crate::usage::hermes_usage(cfg, p.session_id.as_deref()).ok_or(
                 "no Claude Code transcript and no Hermes usage log (the kritic context engine writes it: kritic register --hermes --hermes-context)",
@@ -1174,9 +1377,16 @@ impl Kritic {
             let obs = vec![
                 format!(
                     "Hermes context {} tokens = {:.1}% of {}; peak {}; growing ~{:.0} tokens/call over the last 20 calls",
-                    h.context_now, h.context_utilization_pct, h.context_length, h.context_peak, h.context_growth_per_call
+                    h.context_now,
+                    h.context_utilization_pct,
+                    h.context_length,
+                    h.context_peak,
+                    h.context_growth_per_call
                 ),
-                format!("{} compactions by kritic; {} messages archived and recallable with kritic_recall", h.compactions, h.archived_messages),
+                format!(
+                    "{} compactions by kritic; {} messages archived and recallable with kritic_recall",
+                    h.compactions, h.archived_messages
+                ),
             ];
             let local_models = crate::usage::local_model_stats(cfg, None);
             return Ok(Json(TokenMetrics {
@@ -1193,32 +1403,59 @@ impl Kritic {
         let path = transcript.ok_or("no Claude Code transcript found")?;
         let limit = p.context_limit.unwrap_or(cfg.context_limit);
         let (session, tasks, calls) = crate::usage::analyze(&path, limit)?;
-        let since = calls.first().and_then(|c| c.ts.parse::<chrono::DateTime<chrono::Utc>>().ok());
+        let since = calls
+            .first()
+            .and_then(|c| c.ts.parse::<chrono::DateTime<chrono::Utc>>().ok());
         let local_models = crate::usage::local_model_stats(cfg, since);
         let trim_calls = std::fs::read_to_string(&cfg.log_path)
             .unwrap_or_default()
             .lines()
             .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
             .filter(|v| v["tool"] == "context_trim")
-            .filter(|v| since.is_none_or(|s| v["ts"].as_str().and_then(|t| t.parse::<chrono::DateTime<chrono::Utc>>().ok()).is_some_and(|t| t >= s)))
+            .filter(|v| {
+                since.is_none_or(|s| {
+                    v["ts"]
+                        .as_str()
+                        .and_then(|t| t.parse::<chrono::DateTime<chrono::Utc>>().ok())
+                        .is_some_and(|t| t >= s)
+                })
+            })
             .count();
         let mut obs = vec![format!(
             "context {} tokens = {:.1}% of {}; peak {}; growing ~{:.0} tokens/call over the last 20 calls",
-            session.context_now, session.context_utilization_pct, session.context_limit, session.context_peak, session.context_growth_per_call
+            session.context_now,
+            session.context_utilization_pct,
+            session.context_limit,
+            session.context_peak,
+            session.context_growth_per_call
         )];
         obs.push(format!(
             "{} compactions; {} API calls processed {} input tokens in total ({}% served from cache)",
             session.compactions, session.api_calls, session.processed_input_tokens, session.cache_hit_rate_pct
         ));
         if trim_calls == 0 {
-            obs.push("context_trim was not used this session: nothing was trimmed by kritic".into());
+            obs.push(
+                "context_trim was not used this session: nothing was trimmed by kritic".into(),
+            );
         }
         if session.context_utilization_pct > 50.0 {
             obs.push("context is over half the window: every call re-reads it (cached reads still count toward rate limits); consider /compact or a fresh session for the next task".into());
         }
         let n = tasks.len();
-        let recent = tasks.into_iter().skip(n.saturating_sub(p.last_tasks)).collect();
-        let r = TokenMetrics { tool: "token_metrics".into(), source: "claude-code".into(), session: Some(session), hermes: None, recent_tasks: recent, local_models, context_trim_calls: trim_calls, observations: obs };
+        let recent = tasks
+            .into_iter()
+            .skip(n.saturating_sub(p.last_tasks))
+            .collect();
+        let r = TokenMetrics {
+            tool: "token_metrics".into(),
+            source: "claude-code".into(),
+            session: Some(session),
+            hermes: None,
+            recent_tasks: recent,
+            local_models,
+            context_trim_calls: trim_calls,
+            observations: obs,
+        };
         Ok(Json(r))
     }
 }

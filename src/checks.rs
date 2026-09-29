@@ -26,13 +26,25 @@ pub struct Check {
 
 impl Check {
     fn pass(name: &str) -> Self {
-        Check { check: name.into(), status: Status::Pass, detail: None }
+        Check {
+            check: name.into(),
+            status: Status::Pass,
+            detail: None,
+        }
     }
     fn fail(name: &str, detail: impl Into<String>) -> Self {
-        Check { check: name.into(), status: Status::Fail, detail: Some(clip(&detail.into(), 300)) }
+        Check {
+            check: name.into(),
+            status: Status::Fail,
+            detail: Some(clip(&detail.into(), 300)),
+        }
     }
     fn skipped(name: &str, detail: &str) -> Self {
-        Check { check: name.into(), status: Status::Skipped, detail: Some(detail.into()) }
+        Check {
+            check: name.into(),
+            status: Status::Skipped,
+            detail: Some(detail.into()),
+        }
     }
 }
 
@@ -62,7 +74,9 @@ pub async fn deterministic_checks(content: &str, kind: &str) -> Vec<Check> {
         }),
         "yaml" => {
             let parsed: Result<Vec<serde_yaml::Value>, _> =
-                serde_yaml::Deserializer::from_str(content).map(serde::Deserialize::deserialize).collect();
+                serde_yaml::Deserializer::from_str(content)
+                    .map(serde::Deserialize::deserialize)
+                    .collect();
             out.push(match parsed {
                 Ok(_) => Check::pass("yaml_parse"),
                 Err(e) => Check::fail("yaml_parse", e.to_string()),
@@ -78,8 +92,14 @@ pub async fn deterministic_checks(content: &str, kind: &str) -> Vec<Check> {
         "python" => out.push(python_syntax(content).await),
         _ => {}
     }
-    if content.lines().any(|l| l.starts_with("<<<<<<< ") || l.starts_with(">>>>>>> ")) {
-        out.push(Check::fail("no_merge_conflict_markers", "merge conflict markers present"));
+    if content
+        .lines()
+        .any(|l| l.starts_with("<<<<<<< ") || l.starts_with(">>>>>>> "))
+    {
+        out.push(Check::fail(
+            "no_merge_conflict_markers",
+            "merge conflict markers present",
+        ));
     }
     if content.contains('\u{FFFD}') {
         out.push(Check::fail("utf8_clean", "invalid UTF-8 bytes"));
@@ -89,7 +109,10 @@ pub async fn deterministic_checks(content: &str, kind: &str) -> Vec<Check> {
 
 async fn python_syntax(content: &str) -> Check {
     let child = tokio::process::Command::new("python")
-        .args(["-c", "import ast,sys; ast.parse(sys.stdin.buffer.read().decode('utf-8','replace'))"])
+        .args([
+            "-c",
+            "import ast,sys; ast.parse(sys.stdin.buffer.read().decode('utf-8','replace'))",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -105,7 +128,11 @@ async fn python_syntax(content: &str) -> Check {
         Ok(Ok(o)) if o.status.success() => Check::pass("python_syntax"),
         Ok(Ok(o)) => {
             let err = String::from_utf8_lossy(&o.stderr);
-            let last = err.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("syntax error");
+            let last = err
+                .lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("syntax error");
             Check::fail("python_syntax", last)
         }
         _ => Check::skipped("python_syntax", "python check timed out"),
@@ -136,14 +163,22 @@ pub async fn run_command(cmd: &str, dir: &Path, timeout_s: u64) -> CommandResult
         c.args(["-c", cmd]);
         c
     };
-    c.current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    c.current_dir(dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
     let res = match c.spawn() {
         Err(e) => Err(format!("failed to start: {e}")),
-        Ok(child) => match tokio::time::timeout(Duration::from_secs(timeout_s), child.wait_with_output()).await {
-            Err(_) => Err(format!("timed out after {timeout_s}s")),
-            Ok(Err(e)) => Err(e.to_string()),
-            Ok(Ok(o)) => Ok(o),
-        },
+        Ok(child) => {
+            match tokio::time::timeout(Duration::from_secs(timeout_s), child.wait_with_output())
+                .await
+            {
+                Err(_) => Err(format!("timed out after {timeout_s}s")),
+                Ok(Err(e)) => Err(e.to_string()),
+                Ok(Ok(o)) => Ok(o),
+            }
+        }
     };
     let duration_ms = t0.elapsed().as_millis() as u64;
     match res {
@@ -152,12 +187,22 @@ pub async fn run_command(cmd: &str, dir: &Path, timeout_s: u64) -> CommandResult
             text.push_str(&String::from_utf8_lossy(&o.stderr));
             CommandResult {
                 command: cmd.into(),
-                status: if o.status.success() { Status::Pass } else { Status::Fail },
+                status: if o.status.success() {
+                    Status::Pass
+                } else {
+                    Status::Fail
+                },
                 exit_code: o.status.code(),
                 duration_ms,
                 output_tail: tail(&text, 4000),
             }
         }
-        Err(e) => CommandResult { command: cmd.into(), status: Status::Fail, exit_code: None, duration_ms, output_tail: e },
+        Err(e) => CommandResult {
+            command: cmd.into(),
+            status: Status::Fail,
+            exit_code: None,
+            duration_ms,
+            output_tail: e,
+        },
     }
 }

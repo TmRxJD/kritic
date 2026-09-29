@@ -40,17 +40,25 @@ fn fn_re() -> &'static Regex {
 
 fn branch_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\b(if|elif|for|while|case|catch|except|when)\b|&&|\|\||\?\s*[^:?]+:|=>").unwrap())
+    RE.get_or_init(|| {
+        Regex::new(r"\b(if|elif|for|while|case|catch|except|when)\b|&&|\|\||\?\s*[^:?]+:|=>")
+            .unwrap()
+    })
 }
 
 fn strip_strings(line: &str) -> String {
     static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| Regex::new(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`|//.*$|#.*$"#).unwrap());
+    let re = RE.get_or_init(|| {
+        Regex::new(r#""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`|//.*$|#.*$"#).unwrap()
+    });
     re.replace_all(line, "\"\"").into_owned()
 }
 
 fn indent(l: &str) -> usize {
-    l.chars().take_while(|c| *c == ' ' || *c == '\t').map(|c| if c == '\t' { 4 } else { 1 }).sum()
+    l.chars()
+        .take_while(|c| *c == ' ' || *c == '\t')
+        .map(|c| if c == '\t' { 4 } else { 1 })
+        .sum()
 }
 
 /// Find functions and measure them. Python-like files use indentation; others use braces.
@@ -59,8 +67,14 @@ pub fn functions(file: &str, text: &str) -> Vec<FunctionMetric> {
     let python = file.ends_with(".py");
     let mut out = Vec::new();
     for (i, l) in lines.iter().enumerate() {
-        let Some(c) = fn_re().captures(l) else { continue };
-        let name = c.get(1).or(c.get(2)).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let Some(c) = fn_re().captures(l) else {
+            continue;
+        };
+        let name = c
+            .get(1)
+            .or(c.get(2))
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
         let end = if python {
             let base = indent(l);
             let mut j = i + 1;
@@ -96,9 +110,17 @@ pub fn functions(file: &str, text: &str) -> Vec<FunctionMetric> {
             j
         };
         let body = &lines[i..end.min(lines.len())];
-        let complexity = 1 + body.iter().map(|b| branch_re().find_iter(&strip_strings(b)).count()).sum::<usize>();
+        let complexity = 1 + body
+            .iter()
+            .map(|b| branch_re().find_iter(&strip_strings(b)).count())
+            .sum::<usize>();
         let base_indent = indent(l);
-        let max_nesting = body.iter().filter(|b| !b.trim().is_empty()).map(|b| indent(b).saturating_sub(base_indent) / 4).max().unwrap_or(0);
+        let max_nesting = body
+            .iter()
+            .filter(|b| !b.trim().is_empty())
+            .map(|b| indent(b).saturating_sub(base_indent) / 4)
+            .max()
+            .unwrap_or(0);
         out.push(FunctionMetric {
             file: file.into(),
             name,
@@ -121,14 +143,27 @@ pub fn duplicates(files: &[(String, String)], window: usize) -> Vec<Duplicate> {
             .lines()
             .enumerate()
             .map(|(i, l)| (i + 1, l.trim().to_string()))
-            .filter(|(_, l)| l.len() > 3 && !l.starts_with("//") && !l.starts_with('#') && !matches!(l.as_str(), "}" | "{" | "};" | ")" | "]"))
+            .filter(|(_, l)| {
+                l.len() > 3
+                    && !l.starts_with("//")
+                    && !l.starts_with('#')
+                    && !matches!(l.as_str(), "}" | "{" | "};" | ")" | "]")
+            })
             .collect();
         let mut i = 0;
         while i + window <= norm.len() {
-            let key: String = norm[i..i + window].iter().map(|(_, l)| l.as_str()).collect::<Vec<_>>().join("\n");
+            let key: String = norm[i..i + window]
+                .iter()
+                .map(|(_, l)| l.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
             let here = format!("{f}:{}", norm[i].0);
             if let Some(first) = seen.get(&key) {
-                out.push(Duplicate { first: first.clone(), second: here, lines: window });
+                out.push(Duplicate {
+                    first: first.clone(),
+                    second: here,
+                    lines: window,
+                });
                 i += window; // don't report overlapping windows of the same block
                 continue;
             }

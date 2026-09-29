@@ -18,7 +18,9 @@ async fn mock(status: u16, body: Value) -> (String, Arc<tokio::sync::Mutex<Vec<(
     let seen2 = seen.clone();
     tokio::spawn(async move {
         loop {
-            let Ok((mut sock, _)) = listener.accept().await else { return };
+            let Ok((mut sock, _)) = listener.accept().await else {
+                return;
+            };
             let mut buf = Vec::new();
             let mut chunk = [0u8; 8192];
             // read headers, then Content-Length bytes of body
@@ -31,17 +33,31 @@ async fn mock(status: u16, body: Value) -> (String, Arc<tokio::sync::Mutex<Vec<(
             };
             let len: usize = head
                 .lines()
-                .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse().unwrap()))
+                .find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("content-length:")
+                        .map(|v| v.trim().parse().unwrap())
+                })
                 .unwrap_or(0);
             while buf.len() < body_start + len {
                 let n = sock.read(&mut chunk).await.unwrap();
                 buf.extend_from_slice(&chunk[..n]);
             }
-            let auth = head.lines().find_map(|l| l.strip_prefix("authorization: ").or_else(|| l.strip_prefix("Authorization: "))).unwrap_or("").to_string();
+            let auth = head
+                .lines()
+                .find_map(|l| {
+                    l.strip_prefix("authorization: ")
+                        .or_else(|| l.strip_prefix("Authorization: "))
+                })
+                .unwrap_or("")
+                .to_string();
             let req: Value = serde_json::from_slice(&buf[body_start..body_start + len]).unwrap();
             seen2.lock().await.push((auth, req));
             let text = body.to_string();
-            let resp = format!("HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}", text.len());
+            let resp = format!(
+                "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{text}",
+                text.len()
+            );
             sock.write_all(resp.as_bytes()).await.unwrap();
         }
     });
@@ -49,7 +65,11 @@ async fn mock(status: u16, body: Value) -> (String, Arc<tokio::sync::Mutex<Vec<(
 }
 
 fn q(kind: &'static str, criteria: Value) -> Question {
-    Question { kind, instructions: format!("a {kind} question about `code`"), criteria: Some(criteria) }
+    Question {
+        kind,
+        instructions: format!("a {kind} question about `code`"),
+        criteria: Some(criteria),
+    }
 }
 
 #[test]
@@ -62,12 +82,18 @@ fn translations_are_exact() {
     assert_eq!(a, json!({"type": "noul", "noul": 0.2, "confidence": 0.8}));
 
     let ch = q("choice", json!({"a": "first", "b": "second"}));
-    let a = cloud_answer(&ch, &json!({"type": "choice", "choice": "b", "probabilities": {"a": 0.3, "b": 0.7}}));
+    let a = cloud_answer(
+        &ch,
+        &json!({"type": "choice", "choice": "b", "probabilities": {"a": 0.3, "b": 0.7}}),
+    );
     assert_eq!(a["confidence"], 0.7);
 
     // Score: rung probabilities keyed by the rung text give the expected 0-based index.
     let sc = q("score", json!(["low: bad", "mid: ok", "high: good"]));
-    let a = cloud_answer(&sc, &json!({"type": "score", "score": 3, "probabilities": {"low: bad": 0.0, "mid: ok": 0.5, "high: good": 0.5}}));
+    let a = cloud_answer(
+        &sc,
+        &json!({"type": "score", "score": 3, "probabilities": {"low: bad": 0.0, "mid: ok": 0.5, "high: good": 0.5}}),
+    );
     assert_eq!(a["score"], 1.5);
     // Without usable probabilities a 1-based top score is shifted to the last rung.
     let a = cloud_answer(&sc, &json!({"type": "score", "score": 3}));
@@ -108,10 +134,21 @@ async fn cloud_backend_end_to_end() {
         std::env::set_var("KRITIC_CLOUD_URL", &url);
     }
     let k = KevClient::new(Arc::new(Config::load()));
-    assert_eq!(k.resolve_backend().await.unwrap(), Backend::Cloud { key: "test-key".into() });
+    assert_eq!(
+        k.resolve_backend().await.unwrap(),
+        Backend::Cloud {
+            key: "test-key".into()
+        }
+    );
     let mut questions = BTreeMap::new();
-    questions.insert("ok".to_string(), q("noul", json!({"true": "fine", "false": "broken"})));
-    let d = k.decide(&json!({"code": "x = 1"}), &questions).await.unwrap();
+    questions.insert(
+        "ok".to_string(),
+        q("noul", json!({"true": "fine", "false": "broken"})),
+    );
+    let d = k
+        .decide(&json!({"code": "x = 1"}), &questions)
+        .await
+        .unwrap();
     assert_eq!(d.answers["ok"].value, 0.9);
     assert_eq!(d.input_tokens, 42);
     let (auth, req) = seen.lock().await[0].clone();
@@ -122,18 +159,34 @@ async fn cloud_backend_end_to_end() {
     // Built-in gates were calibrated on kev-4b: under Jev they no longer decide.
     let spec = &kritic::spec::builtin()["code_chunk"];
     assert!(!spec.gates_apply());
-    assert!(spec.uncalibrated_note().unwrap().contains("typesafe-ai/jev"));
+    assert!(
+        spec.uncalibrated_note()
+            .unwrap()
+            .contains("typesafe-ai/jev")
+    );
 
     // A rejected key is reported as such, not as a generic failure.
     let (url, _) = mock(403, json!({"error": {"message": "forbidden"}})).await;
     unsafe { std::env::set_var("KRITIC_CLOUD_URL", &url) };
     let k = KevClient::new(Arc::new(Config::load()));
-    let err = k.decide(&json!({"code": "x"}), &questions).await.unwrap_err();
+    let err = k
+        .decide(&json!({"code": "x"}), &questions)
+        .await
+        .unwrap_err();
     assert!(err.contains("403") && err.contains("key"), "{err}");
 
     // An answer that is out of range is an error, never a default.
-    let (url, _) = mock(200, json!({"answers": {"ok": {"type": "boolean", "probability": 1.7}}})).await;
+    let (url, _) = mock(
+        200,
+        json!({"answers": {"ok": {"type": "boolean", "probability": 1.7}}}),
+    )
+    .await;
     unsafe { std::env::set_var("KRITIC_CLOUD_URL", &url) };
     let k = KevClient::new(Arc::new(Config::load()));
-    assert!(k.decide(&json!({"code": "x"}), &questions).await.unwrap_err().contains("out of"));
+    assert!(
+        k.decide(&json!({"code": "x"}), &questions)
+            .await
+            .unwrap_err()
+            .contains("out of")
+    );
 }

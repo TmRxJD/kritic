@@ -132,10 +132,15 @@ pub struct Done {
 impl Done {
     /// Every predicate given must hold on the observation.
     pub fn holds(&self, o: &Obs) -> bool {
-        self.control.as_ref().is_none_or(|r| o.controls.iter().any(|c| r.is_match(&c.label)))
+        self.control
+            .as_ref()
+            .is_none_or(|r| o.controls.iter().any(|c| r.is_match(&c.label)))
             && self.text.as_ref().is_none_or(|r| r.is_match(&o.text))
             && self.url.as_ref().is_none_or(|r| r.is_match(&o.url))
-            && self.event.as_ref().is_none_or(|r| o.events.iter().any(|e| r.is_match(e)))
+            && self
+                .event
+                .as_ref()
+                .is_none_or(|r| o.events.iter().any(|e| r.is_match(e)))
     }
 }
 
@@ -169,7 +174,10 @@ fn rx(errors: &mut Vec<String>, at: &str, pattern: &Option<String>) -> Option<Re
     match Regex::new(p) {
         Ok(r) => Some(r),
         Err(e) => {
-            errors.push(format!("{at}: invalid regex {p:?}: {}", e.to_string().lines().last().unwrap_or("")));
+            errors.push(format!(
+                "{at}: invalid regex {p:?}: {}",
+                e.to_string().lines().last().unwrap_or("")
+            ));
             None
         }
     }
@@ -177,7 +185,9 @@ fn rx(errors: &mut Vec<String>, at: &str, pattern: &Option<String>) -> Option<Re
 
 fn done(errors: &mut Vec<String>, at: &str, d: &DoneSpec, app: &AppSpec) -> Done {
     if d.control.is_none() && d.text.is_none() && d.url.is_none() && d.event.is_none() {
-        errors.push(format!("{at}.done: give at least one of control, text, url, event"));
+        errors.push(format!(
+            "{at}.done: give at least one of control, text, url, event"
+        ));
     }
     if d.url.is_some() && app.kind != "web" {
         errors.push(format!("{at}.done.url: only for kind = \"web\""));
@@ -199,18 +209,26 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
     let mut errors = Vec::new();
     let app = &f.app;
     if !KINDS.contains(&app.kind.as_str()) {
-        errors.push(format!("app.kind: {:?} is not one of web, desktop, unity", app.kind));
+        errors.push(format!(
+            "app.kind: {:?} is not one of web, desktop, unity",
+            app.kind
+        ));
     }
     if app.purpose.trim().is_empty() {
         errors.push("app.purpose: say what the app is for".into());
     }
     match app.kind.as_str() {
         "web" if app.url.is_none() => errors.push("app.url: required for kind = \"web\"".into()),
-        "desktop" | "unity" if app.exe.is_none() => errors.push(format!("app.exe: required for kind = \"{}\"", app.kind)),
+        "desktop" | "unity" if app.exe.is_none() => {
+            errors.push(format!("app.exe: required for kind = \"{}\"", app.kind))
+        }
         _ => {}
     }
     if app.kind == "unity" && app.app_events.is_none() {
-        errors.push("app.app_events: required for kind = \"unity\" (the adapter drives the app over it)".into());
+        errors.push(
+            "app.app_events: required for kind = \"unity\" (the adapter drives the app over it)"
+                .into(),
+        );
     }
     rx(&mut errors, "app.window_title_re", &app.window_title_re);
     rx(&mut errors, "app.ready_event", &app.ready_event);
@@ -228,7 +246,13 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}: name must be non-empty and unique"));
         }
         let d = done(&mut errors, &at, &m.done, app);
-        modes.push(Goal { name: m.name.clone(), goal: format!("open {}", m.name), done: d, budget: 1, primary: true });
+        modes.push(Goal {
+            name: m.name.clone(),
+            goal: format!("open {}", m.name),
+            done: d,
+            budget: 1,
+            primary: true,
+        });
     }
     let mut tasks = Vec::new();
     for (i, t) in f.tasks.iter().enumerate() {
@@ -237,7 +261,9 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}: name must be non-empty and unique"));
         }
         if t.goal.trim().is_empty() {
-            errors.push(format!("{at}.goal: say what the user wants, in plain words"));
+            errors.push(format!(
+                "{at}.goal: say what the user wants, in plain words"
+            ));
         }
         let budget = t.budget.unwrap_or(DEFAULT_BUDGET);
         if budget == 0 {
@@ -247,24 +273,42 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}.budget: a primary task takes at most {PRIMARY_MAX_BUDGET} steps (got {budget}); restructure the UI rather than raising it"));
         }
         let d = done(&mut errors, &at, &t.done, app);
-        tasks.push(Goal { name: t.name.clone(), goal: t.goal.clone(), done: d, budget, primary: t.primary });
+        tasks.push(Goal {
+            name: t.name.clone(),
+            goal: t.goal.clone(),
+            done: d,
+            budget,
+            primary: t.primary,
+        });
     }
     if errors.is_empty() {
-        Ok(Spec { path: path.into(), text: text.into(), app: f.app, modes, tasks, ignore: f.ignore })
+        Ok(Spec {
+            path: path.into(),
+            text: text.into(),
+            app: f.app,
+            modes,
+            tasks,
+            ignore: f.ignore,
+        })
     } else {
         Err(errors)
     }
 }
 
 pub fn load_spec(path: &Path) -> Result<Spec, Vec<String>> {
-    let text = std::fs::read_to_string(path).map_err(|e| vec![format!("cannot read {}: {e}", path.display())])?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| vec![format!("cannot read {}: {e}", path.display())])?;
     let mut spec = parse_spec(&text, &path.display().to_string())?;
     // a web url without a scheme is a file beside the spec (the calibration fixtures)
     if let Some(u) = spec.app.url.as_mut().filter(|u| !u.contains("://")) {
         let file = path.parent().unwrap_or(Path::new(".")).join(&*u);
-        let abs = std::fs::canonicalize(&file).map_err(|e| vec![format!("app.url: {}: {e}", file.display())])?;
+        let abs = std::fs::canonicalize(&file)
+            .map_err(|e| vec![format!("app.url: {}: {e}", file.display())])?;
         let s = abs.display().to_string();
-        *u = format!("file:///{}", s.trim_start_matches(r"\\?\").replace('\\', "/"));
+        *u = format!(
+            "file:///{}",
+            s.trim_start_matches(r"\\?\").replace('\\', "/")
+        );
     }
     Ok(spec)
 }
@@ -308,10 +352,17 @@ impl Control {
         self.enabled && self.skip.is_none()
     }
     pub fn shown(&self) -> String {
-        if self.label.trim().is_empty() { "(no label)".into() } else { self.label.clone() }
+        if self.label.trim().is_empty() {
+            "(no label)".into()
+        } else {
+            self.label.clone()
+        }
     }
     fn centre(&self) -> (f64, f64) {
-        (self.rect[0] + self.rect[2] / 2.0, self.rect[1] + self.rect[3] / 2.0)
+        (
+            self.rect[0] + self.rect[2] / 2.0,
+            self.rect[1] + self.rect[3] / 2.0,
+        )
     }
 }
 
@@ -359,7 +410,14 @@ pub trait Adapter: Send {
 /// Picks the next control for the novice: an index into `labels`. `pressed` is what it already
 /// pressed this run, in order: a first-time user still remembers their own clicks.
 pub trait Navigator: Sync {
-    fn choose(&self, goal: &str, pressed: &[String], image: Option<&str>, labels: &[String], seed: u64) -> impl Future<Output = Result<usize, String>> + Send;
+    fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> impl Future<Output = Result<usize, String>> + Send;
 }
 
 // ------------------------------------------------------------------ harness process adapter
@@ -378,30 +436,43 @@ pub struct ProcAdapter {
 
 impl ProcAdapter {
     /// Start the harness for `spec.app.kind` and send it `start`.
-    pub async fn launch(cfg: &Config, spec: &Spec, start: Value, stall_s: f64) -> Result<Self, String> {
-        let mut cmd = if spec.app.kind == "web" {
-            let script = cfg.harness.with_file_name("ux_web.mjs");
-            let mut c = tokio::process::Command::new(&cfg.node_exe);
-            c.arg(script).current_dir(cfg.harness.parent().unwrap_or(Path::new(".")));
-            if let Some(dir) = &cfg.playwright_browsers {
-                c.env("PLAYWRIGHT_BROWSERS_PATH", dir);
-            }
-            c
-        } else {
-            let mut c = tokio::process::Command::new(&cfg.uv_exe);
-            c.args(["run", "--quiet", "--project"]).arg(&cfg.harness_py).arg("python").arg(cfg.harness_py.join("ux_adapter.py")).current_dir(&cfg.harness_py);
-            c
-        };
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
-        let mut child = cmd.spawn().map_err(|e| format!("cannot start ux adapter: {e}"))?;
+    pub async fn launch(
+        cfg: &Config,
+        spec: &Spec,
+        start: Value,
+        stall_s: f64,
+    ) -> Result<Self, String> {
+        let mut cmd = tokio::process::Command::new(&cfg.uv_exe);
+        cmd.args(["run", "--quiet", "--project"])
+            .arg(&cfg.harness_py)
+            .arg("python")
+            .arg(cfg.harness_py.join("ux_adapter.py"))
+            .current_dir(&cfg.harness_py);
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("cannot start ux adapter: {e}"))?;
         let stdin = child.stdin.take();
         let out = BufReader::new(child.stdout.take().ok_or("no stdout")?).lines();
-        let err = child.stderr.take().map(|e| crate::proc::relay_stderr(e, "ux_critic"));
+        let err = child
+            .stderr
+            .take()
+            .map(|e| crate::proc::relay_stderr(e, "ux_critic"));
         let ready_s = spec.app.ready_timeout_s.unwrap_or(120.0);
         let stall = Duration::from_secs_f64(stall_s.max(1.0));
         // launching or relaunching an app waits for it to be ready, then the stall limit applies
-        let slow = if spec.app.kind == "web" { stall.max(Duration::from_secs(30)) } else { Duration::from_secs_f64(ready_s + stall_s) };
-        let mut a = ProcAdapter { child, stdin, out, err, stall, slow };
+        let slow = Duration::from_secs_f64(ready_s + stall_s);
+        let mut a = ProcAdapter {
+            child,
+            stdin,
+            out,
+            err,
+            stall,
+            slow,
+        };
         a.call(start, a.slow.max(Duration::from_secs(60))).await?;
         Ok(a)
     }
@@ -410,22 +481,47 @@ impl ProcAdapter {
         let op = req["op"].as_str().unwrap_or("?").to_string();
         let stdin = self.stdin.as_mut().ok_or("adapter closed")?;
         let line = format!("{req}\n");
-        stdin.write_all(line.as_bytes()).await.map_err(|e| format!("adapter gone ({op}): {e}"))?;
+        stdin
+            .write_all(line.as_bytes())
+            .await
+            .map_err(|e| format!("adapter gone ({op}): {e}"))?;
         stdin.flush().await.map_err(|e| e.to_string())?;
         match tokio::time::timeout(limit, self.out.next_line()).await {
-            Err(_) => Err(format!("adapter stalled: no reply to {op} within {:.0}s", limit.as_secs_f64())),
+            Err(_) => Err(format!(
+                "adapter stalled: no reply to {op} within {:.0}s",
+                limit.as_secs_f64()
+            )),
             Ok(Err(e)) => Err(format!("adapter output unreadable ({op}): {e}")),
-            Ok(Ok(None)) => Err(format!("adapter exited during {op}: {}", self.stderr_tail().await)),
+            Ok(Ok(None)) => Err(format!(
+                "adapter exited during {op}: {}",
+                self.stderr_tail().await
+            )),
             Ok(Ok(Some(l))) => {
-                let v: Value = serde_json::from_str(&l).map_err(|e| format!("adapter reply to {op} is not JSON ({e}): {l:.200}"))?;
-                if v["ok"] == true { Ok(v) } else { Err(format!("{op}: {}", v["error"].as_str().unwrap_or("failed"))) }
+                let v: Value = serde_json::from_str(&l)
+                    .map_err(|e| format!("adapter reply to {op} is not JSON ({e}): {l:.200}"))?;
+                if v["ok"] == true {
+                    Ok(v)
+                } else {
+                    Err(format!("{op}: {}", v["error"].as_str().unwrap_or("failed")))
+                }
             }
         }
     }
 
     async fn stderr_tail(&mut self) -> String {
         match self.err.take() {
-            Some(h) => tokio::time::timeout(Duration::from_secs(3), h).await.ok().and_then(Result::ok).unwrap_or_default().chars().rev().take(400).collect::<Vec<_>>().into_iter().rev().collect(),
+            Some(h) => tokio::time::timeout(Duration::from_secs(3), h)
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default()
+                .chars()
+                .rev()
+                .take(400)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect(),
             None => String::new(),
         }
     }
@@ -433,19 +529,86 @@ impl ProcAdapter {
     /// Ask the harness to close the app and exit; returns its closing report (desktop/unity:
     /// processes and ports the run left alive). Kills the process tree if it doesn't exit.
     pub async fn close(mut self) -> Option<Value> {
-        let report = self.call(json!({"op": "close"}), Duration::from_secs(30)).await.ok();
+        let report = self
+            .call(json!({"op": "close"}), Duration::from_secs(30))
+            .await
+            .ok();
         self.stdin = None;
-        if tokio::time::timeout(Duration::from_secs(10), self.child.wait()).await.is_err() {
+        if tokio::time::timeout(Duration::from_secs(10), self.child.wait())
+            .await
+            .is_err()
+        {
             kill_tree(&mut self.child);
         }
         report.and_then(|v| v.get("hygiene").cloned())
     }
 }
 
+/// The adapter for a spec: web runs in-process over CDP; desktop and Unity run the harness.
+pub enum AppAdapter {
+    Web(crate::native::web::WebSession),
+    Proc(ProcAdapter),
+}
+
+impl AppAdapter {
+    pub async fn launch(
+        cfg: &Config,
+        spec: &Spec,
+        start: Value,
+        stall_s: f64,
+    ) -> Result<Self, String> {
+        if spec.app.kind == "web" {
+            crate::native::web::WebSession::start(cfg, &start)
+                .await
+                .map(AppAdapter::Web)
+        } else {
+            ProcAdapter::launch(cfg, spec, start, stall_s)
+                .await
+                .map(AppAdapter::Proc)
+        }
+    }
+
+    /// Close the app; returns the harness's hygiene report, if it made one.
+    pub async fn close(self) -> Option<Value> {
+        match self {
+            AppAdapter::Web(w) => {
+                w.close().await;
+                None
+            }
+            AppAdapter::Proc(p) => p.close().await,
+        }
+    }
+}
+
+impl Adapter for AppAdapter {
+    async fn reset(&mut self) -> Result<(), String> {
+        match self {
+            AppAdapter::Web(w) => w.reset().await,
+            AppAdapter::Proc(p) => p.reset().await,
+        }
+    }
+    async fn observe(&mut self, opts: Value) -> Result<Obs, String> {
+        match self {
+            AppAdapter::Web(w) => w.observe(opts).await,
+            AppAdapter::Proc(p) => p.observe(opts).await,
+        }
+    }
+    async fn act(&mut self, id: &str) -> Result<(), String> {
+        match self {
+            AppAdapter::Web(w) => w.act(id).await,
+            AppAdapter::Proc(p) => p.act(id).await,
+        }
+    }
+}
+
 fn kill_tree(child: &mut tokio::process::Child) {
     if let Some(pid) = child.id() {
         if cfg!(windows) {
-            let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            let _ = std::process::Command::new("taskkill")
+                .args(["/T", "/F", "/PID", &pid.to_string()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
         }
         let _ = child.start_kill();
     }
@@ -473,7 +636,9 @@ impl Adapter for ProcAdapter {
     }
     async fn act(&mut self, id: &str) -> Result<(), String> {
         let limit = self.stall;
-        self.call(json!({"op": "act", "id": id}), limit).await.map(|_| ())
+        self.call(json!({"op": "act", "id": id}), limit)
+            .await
+            .map(|_| ())
     }
 }
 
@@ -484,7 +649,14 @@ pub struct VisionNav<'a> {
 }
 
 impl Navigator for VisionNav<'_> {
-    async fn choose(&self, goal: &str, pressed: &[String], image: Option<&str>, labels: &[String], seed: u64) -> Result<usize, String> {
+    async fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> Result<usize, String> {
         let image = image.ok_or("no marked screenshot for the vision novice")?;
         crate::vision::pick(self.cfg, Path::new(image), goal, pressed, labels, seed).await
     }
@@ -517,18 +689,41 @@ pub fn sample(weights: &[f64], seed: u64) -> usize {
 }
 
 impl<D: Decider> Navigator for KevNav<'_, D> {
-    async fn choose(&self, goal: &str, pressed: &[String], _image: Option<&str>, labels: &[String], seed: u64) -> Result<usize, String> {
+    async fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        _image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> Result<usize, String> {
         let spec = crate::spec::get("ux_novice_step");
         let mut weights = Vec::with_capacity(labels.len());
         let mut goal: String = goal.chars().take(300).collect();
         if !pressed.is_empty() {
-            let done: String = pressed.join(", ").chars().rev().take(150).collect::<Vec<_>>().into_iter().rev().collect();
+            let done: String = pressed
+                .join(", ")
+                .chars()
+                .rev()
+                .take(150)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
             goal.push_str(&format!(" (already pressed: {done})"));
         }
         for l in labels {
-            let state = spec.state(&[("goal", goal.clone()), ("control", l.chars().take(120).collect())])?;
+            let state = spec.state(&[
+                ("goal", goal.clone()),
+                ("control", l.chars().take(120).collect()),
+            ])?;
             let d = self.d.decide(&state, &spec.wire()).await?;
-            weights.push(d.answers.get("next_step").map(|a| a.value).ok_or("Kev gave no next_step answer")?);
+            weights.push(
+                d.answers
+                    .get("next_step")
+                    .map(|a| a.value)
+                    .ok_or("Kev gave no next_step answer")?,
+            );
         }
         Ok(sample(&weights, seed))
     }
@@ -722,22 +917,47 @@ fn path_labels(p: &[Control]) -> Vec<String> {
 }
 
 /// Rule audit of one screen. Pure: (rule, severity, key, detail).
-pub fn audit(controls: &[Control], axe: &[AxeViolation]) -> Vec<(&'static str, &'static str, String, String)> {
-    const FIELDS: [&str; 6] = ["textbox", "combobox", "checkbox", "radio", "Edit", "ComboBox"];
+pub fn audit(
+    controls: &[Control],
+    axe: &[AxeViolation],
+) -> Vec<(&'static str, &'static str, String, String)> {
+    const FIELDS: [&str; 6] = [
+        "textbox", "combobox", "checkbox", "radio", "Edit", "ComboBox",
+    ];
     let mut out = Vec::new();
     for c in controls {
         let no_text = c.text.trim().is_empty() && !FIELDS.contains(&c.role.as_str());
         if c.enabled && c.label.trim().is_empty() {
-            out.push(("unlabelled", "error", c.id.clone(), format!("enabled {} with no accessible label", c.role)));
+            out.push((
+                "unlabelled",
+                "error",
+                c.id.clone(),
+                format!("enabled {} with no accessible label", c.role),
+            ));
         }
         if no_text && c.tooltip.trim().is_empty() {
-            out.push(("icon_no_tooltip", "warn", c.id.clone(), format!("icon-only {} with no tooltip", c.role)));
+            out.push((
+                "icon_no_tooltip",
+                "warn",
+                c.id.clone(),
+                format!("icon-only {} with no tooltip", c.role),
+            ));
         }
         if !c.inline && (c.rect[2] < 24.0 || c.rect[3] < 24.0) {
-            out.push(("small_target", "warn", c.id.clone(), format!("target {}x{} px, under 24x24", c.rect[2], c.rect[3])));
+            out.push((
+                "small_target",
+                "warn",
+                c.id.clone(),
+                format!("target {}x{} px, under 24x24", c.rect[2], c.rect[3]),
+            ));
         }
         if !c.enabled && c.tooltip.trim().is_empty() {
-            out.push(("disabled_no_reason", "warn", c.id.clone(), format!("disabled {} with no tooltip saying why", c.role)));
+            out.push((
+                "disabled_no_reason",
+                "warn",
+                c.id.clone(),
+                format!("disabled {} with no tooltip saying why", c.role),
+            ));
         }
     }
     for v in axe.iter().filter(|v| v.id == "color-contrast") {
@@ -754,10 +974,13 @@ pub fn mean_step_distance(path: &[Control], viewport: [f64; 2]) -> Option<f64> {
     if path.len() < 2 || diag <= 0.0 {
         return None;
     }
-    let d: f64 = path.windows(2).map(|w| {
-        let (a, b) = (w[0].centre(), w[1].centre());
-        ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
-    }).sum();
+    let d: f64 = path
+        .windows(2)
+        .map(|w| {
+            let (a, b) = (w[0].centre(), w[1].centre());
+            ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+        })
+        .sum();
     Some(((d / (path.len() - 1) as f64 / diag) * 1000.0).round() / 1000.0)
 }
 
@@ -799,9 +1022,17 @@ impl<'s> Run<'s> {
     }
 
     fn check_goals(&mut self, o: &Obs, path: &[Control], screen: usize) {
-        let hits: Vec<usize> = self.goals().enumerate().filter(|(i, g)| self.best[*i].is_none() && g.done.holds(o)).map(|(i, _)| i).collect();
+        let hits: Vec<usize> = self
+            .goals()
+            .enumerate()
+            .filter(|(i, g)| self.best[*i].is_none() && g.done.holds(o))
+            .map(|(i, _)| i)
+            .collect();
         for i in hits {
-            self.best[i] = Some(Best { path: path.to_vec(), screen });
+            self.best[i] = Some(Best {
+                path: path.to_vec(),
+                screen,
+            });
         }
     }
 
@@ -810,7 +1041,13 @@ impl<'s> Run<'s> {
         for (rule, sev, key, detail) in audit(&o.controls, &o.axe) {
             self.rules
                 .entry((rule.to_string(), key.clone()))
-                .or_insert_with(|| RuleFinding { rule: rule.into(), severity: sev.into(), control: key, detail, screens: vec![] })
+                .or_insert_with(|| RuleFinding {
+                    rule: rule.into(),
+                    severity: sev.into(),
+                    control: key,
+                    detail,
+                    screens: vec![],
+                })
                 .screens
                 .push(id);
         }
@@ -868,12 +1105,14 @@ impl<'s> Run<'s> {
                 }
                 a.reset().await?;
                 if let Err(e) = replay(a, &path).await {
-                    self.problems.push(format!("replay to screen {s} failed: {e}"));
+                    self.problems
+                        .push(format!("replay to screen {s} failed: {e}"));
                     continue;
                 }
                 self.actions += 1;
                 if let Err(e) = a.act(&c.id).await {
-                    self.problems.push(format!("pressing {} on screen {s} failed: {e}", c.shown()));
+                    self.problems
+                        .push(format!("pressing {} on screen {s} failed: {e}", c.shown()));
                     continue;
                 }
                 let o = a.observe(json!({})).await?;
@@ -897,7 +1136,13 @@ impl<'s> Run<'s> {
 
     /// Whether any task can be tried by the novice (reachable, and not already done at home).
     pub fn wants_novice(&self) -> bool {
-        self.error.is_none() && self.spec.tasks.iter().enumerate().any(|(i, _)| self.task_best(i).is_some_and(|b| !b.path.is_empty()))
+        self.error.is_none()
+            && self
+                .spec
+                .tasks
+                .iter()
+                .enumerate()
+                .any(|(i, _)| self.task_best(i).is_some_and(|b| !b.path.is_empty()))
     }
 
     fn task_best(&self, t: usize) -> Option<&Best> {
@@ -907,8 +1152,18 @@ impl<'s> Run<'s> {
     /// Seeded novice runs for every task worth trying. `gates`: whether its failures may fail a
     /// primary task. Calibrated 2026-09-28 (README): the vision novice never failed a good-variant
     /// task; the Kev text novice failed two good variants 2 of 3 times, so it is advisory.
-    pub async fn novice<A: Adapter, N: Navigator>(&mut self, a: &mut A, nav: &N, model: &str, gates: bool) {
-        self.novice_model = if gates { model.into() } else { format!("{model}, advisory") };
+    pub async fn novice<A: Adapter, N: Navigator>(
+        &mut self,
+        a: &mut A,
+        nav: &N,
+        model: &str,
+        gates: bool,
+    ) {
+        self.novice_model = if gates {
+            model.into()
+        } else {
+            format!("{model}, advisory")
+        };
         self.novice_gates = gates;
         for t in 0..self.spec.tasks.len() {
             if !self.task_best(t).is_some_and(|b| !b.path.is_empty()) {
@@ -931,19 +1186,44 @@ impl<'s> Run<'s> {
             let ok: Vec<&NoviceRun> = runs.iter().filter(|r| r.success).collect();
             let successes = ok.len();
             let rate = (successes as f64 / runs.len().max(1) as f64 * 1000.0).round() / 1000.0;
-            let within_budget = ok.iter().filter(|r| r.steps <= self.spec.tasks[t].budget).count();
-            let mean_steps = (!ok.is_empty()).then(|| (ok.iter().map(|r| r.steps as f64).sum::<f64>() / successes as f64 * 100.0).round() / 100.0);
-            self.novice[t] = Some(NoviceResult { model: model.into(), runs, successes, success_rate: rate, within_budget, mean_steps });
+            let within_budget = ok
+                .iter()
+                .filter(|r| r.steps <= self.spec.tasks[t].budget)
+                .count();
+            let mean_steps = (!ok.is_empty()).then(|| {
+                (ok.iter().map(|r| r.steps as f64).sum::<f64>() / successes as f64 * 100.0).round()
+                    / 100.0
+            });
+            self.novice[t] = Some(NoviceResult {
+                model: model.into(),
+                runs,
+                successes,
+                success_rate: rate,
+                within_budget,
+                mean_steps,
+            });
         }
     }
 
-    async fn novice_run<A: Adapter, N: Navigator>(&mut self, a: &mut A, nav: &N, t: usize, seed: u64) -> Result<NoviceRun, String> {
+    async fn novice_run<A: Adapter, N: Navigator>(
+        &mut self,
+        a: &mut A,
+        nav: &N,
+        t: usize,
+        seed: u64,
+    ) -> Result<NoviceRun, String> {
         let task = &self.spec.tasks[t];
         let dir = self.opts.out_dir.join("novice");
         let marks = |step: usize| json!({"marks": dir.join(format!("t{t}-r{seed}-s{step}.png"))});
         a.reset().await?;
         let mut o = a.observe(marks(0)).await?;
-        let mut run = NoviceRun { seed, success: false, steps: 0, tried: vec![], screenshots: vec![] };
+        let mut run = NoviceRun {
+            seed,
+            success: false,
+            steps: 0,
+            tried: vec![],
+            screenshots: vec![],
+        };
         for step in 0..task.budget + 3 {
             run.screenshots.extend(o.marked.clone());
             let options: Vec<Control> = o.actionable().into_iter().cloned().collect();
@@ -951,11 +1231,20 @@ impl<'s> Run<'s> {
                 break;
             }
             let labels: Vec<String> = options.iter().map(Control::shown).collect();
-            let i = nav.choose(&task.goal, &run.tried, o.marked.as_deref(), &labels, seed * 1000 + step as u64).await?;
+            let i = nav
+                .choose(
+                    &task.goal,
+                    &run.tried,
+                    o.marked.as_deref(),
+                    &labels,
+                    seed * 1000 + step as u64,
+                )
+                .await?;
             run.tried.push(labels[i].clone());
             run.steps = step + 1;
             if let Err(e) = a.act(&options[i].id).await {
-                self.problems.push(format!("novice pressing {} failed: {e}", labels[i]));
+                self.problems
+                    .push(format!("novice pressing {} failed: {e}", labels[i]));
             }
             o = a.observe(marks(step + 1)).await?;
             if task.done.holds(&o) {
@@ -974,7 +1263,12 @@ impl<'s> Run<'s> {
 
     fn goal_result(&self, i: usize, name: &str) -> GoalResult {
         let b = self.best[i].as_ref();
-        GoalResult { name: name.into(), optimal_steps: b.map(|b| b.path.len()), path: b.map(|b| path_labels(&b.path)).unwrap_or_default(), screen: b.map(|b| b.screen) }
+        GoalResult {
+            name: name.into(),
+            optimal_steps: b.map(|b| b.path.len()),
+            path: b.map(|b| path_labels(&b.path)).unwrap_or_default(),
+            screen: b.map(|b| b.screen),
+        }
     }
 
     pub fn finish(mut self, novice_requested: bool) -> UxResult {
@@ -984,27 +1278,49 @@ impl<'s> Run<'s> {
         // reporting every mode and task as unreachable.
         let measured = self.error.is_none() && !self.screens.is_empty();
         let scope = match (&self.truncated, &self.error) {
-            (_, Some(e)) if !measured => format!("not measured: the run failed before exploring ({e})"),
-            (_, Some(e)) => format!("explored to depth {depth} until the run failed, so not exhaustively ({e})"),
+            (_, Some(e)) if !measured => {
+                format!("not measured: the run failed before exploring ({e})")
+            }
+            (_, Some(e)) => {
+                format!("explored to depth {depth} until the run failed, so not exhaustively ({e})")
+            }
             (Some(t), _) => format!("explored to depth {depth}, stopped early: {t}"),
             (None, _) => format!("explored exhaustively to depth {depth}"),
         };
         let mut hard = Vec::new();
-        let modes: Vec<ModeResult> = spec.modes.iter().enumerate().map(|(i, m)| {
-            let best = self.goal_result(i, &m.name);
-            let top = best.optimal_steps.is_some_and(|s| s <= 1);
-            match best.optimal_steps {
-                None if !measured => {}
-                None => hard.push(format!("mode \"{}\": no screen passes its done-check ({scope})", m.name)),
-                Some(s) if s > 1 => hard.push(format!("mode \"{}\" has no top-level entry: {s} actions from the home screen ({})", m.name, best.path.join(" > "))),
-                _ => {}
-            }
-            ModeResult { best, top_level: top }
-        }).collect();
+        let modes: Vec<ModeResult> = spec
+            .modes
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let best = self.goal_result(i, &m.name);
+                let top = best.optimal_steps.is_some_and(|s| s <= 1);
+                match best.optimal_steps {
+                    None if !measured => {}
+                    None => hard.push(format!(
+                        "mode \"{}\": no screen passes its done-check ({scope})",
+                        m.name
+                    )),
+                    Some(s) if s > 1 => hard.push(format!(
+                        "mode \"{}\" has no top-level entry: {s} actions from the home screen ({})",
+                        m.name,
+                        best.path.join(" > ")
+                    )),
+                    _ => {}
+                }
+                ModeResult {
+                    best,
+                    top_level: top,
+                }
+            })
+            .collect();
         let mut tasks = Vec::new();
         for (t, g) in spec.tasks.iter().enumerate() {
             let best = self.goal_result(spec.modes.len() + t, &g.name);
-            let path = self.task_best(t).map(|b| b.path.clone()).unwrap_or_default();
+            let path = self
+                .task_best(t)
+                .map(|b| b.path.clone())
+                .unwrap_or_default();
             let mut fails = Vec::new();
             match best.optimal_steps {
                 None if !measured => fails.push(scope.clone()),
@@ -1014,7 +1330,10 @@ impl<'s> Run<'s> {
                 _ => {}
             }
             let msd = mean_step_distance(&path, self.viewport);
-            let at = self.task_best(t).map(|b| vec![b.screen]).unwrap_or_default();
+            let at = self
+                .task_best(t)
+                .map(|b| vec![b.screen])
+                .unwrap_or_default();
             if let Some(d) = msd.filter(|d| *d > SCATTERED) {
                 self.rules.insert(("scattered".into(), g.name.clone()), RuleFinding {
                     rule: "scattered".into(),
@@ -1025,14 +1344,26 @@ impl<'s> Run<'s> {
                 });
             }
             let novice = self.novice[t].clone();
-            if g.primary && self.novice_gates && let Some(n) = &novice {
+            if g.primary
+                && self.novice_gates
+                && let Some(n) = &novice
+            {
                 let failed = n.runs.len() - n.successes;
                 if !n.runs.is_empty() && failed * 3 >= n.runs.len() * 2 {
-                    fails.push(format!("the novice failed {failed} of {} runs: the entry is not discoverable", n.runs.len()));
+                    fails.push(format!(
+                        "the novice failed {failed} of {} runs: the entry is not discoverable",
+                        n.runs.len()
+                    ));
                 }
             }
             if measured {
-                hard.extend(fails.iter().map(|f| format!("{}task \"{}\": {f}", if g.primary { "primary " } else { "" }, g.name)));
+                hard.extend(fails.iter().map(|f| {
+                    format!(
+                        "{}task \"{}\": {f}",
+                        if g.primary { "primary " } else { "" },
+                        g.name
+                    )
+                }));
             }
             tasks.push(TaskResult {
                 goal: g.goal.clone(),
@@ -1051,20 +1382,32 @@ impl<'s> Run<'s> {
             *counts.entry(r.rule.clone()).or_insert(0) += 1;
         }
         for (rule, n) in &counts {
-            let errs: Vec<&str> = rules.iter().filter(|r| &r.rule == rule && r.severity == "error").map(|r| r.control.as_str()).collect();
+            let errs: Vec<&str> = rules
+                .iter()
+                .filter(|r| &r.rule == rule && r.severity == "error")
+                .map(|r| r.control.as_str())
+                .collect();
             if !errs.is_empty() {
-                hard.push(format!("rule {rule}: {n} finding(s), e.g. {}", errs.iter().take(4).cloned().collect::<Vec<_>>().join(", ")));
+                hard.push(format!(
+                    "rule {rule}: {n} finding(s), e.g. {}",
+                    errs.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
+                ));
             }
         }
-        let screens: Vec<ScreenResult> = self.screens.iter().enumerate().map(|(id, s)| ScreenResult {
-            id,
-            depth: s.depth,
-            title: s.title.clone(),
-            url: s.url.clone(),
-            screenshot: s.screenshot.clone(),
-            controls: s.controls,
-            path: path_labels(&s.path),
-        }).collect();
+        let screens: Vec<ScreenResult> = self
+            .screens
+            .iter()
+            .enumerate()
+            .map(|(id, s)| ScreenResult {
+                id,
+                depth: s.depth,
+                title: s.title.clone(),
+                url: s.url.clone(),
+                screenshot: s.screenshot.clone(),
+                controls: s.controls,
+                path: path_labels(&s.path),
+            })
+            .collect();
         let approval = if self.error.is_some() || self.screens.is_empty() {
             None
         } else if !hard.is_empty() {
@@ -1118,8 +1461,20 @@ async fn replay<A: Adapter>(a: &mut A, path: &[Control]) -> Result<(), String> {
 /// What the `ux-critic` reviewer agent needs: the purpose, declared modes and tasks, the report,
 /// and every screenshot to open. Called once `full_result` is known.
 pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
-    let shots: Vec<&str> = r.screens.iter().filter_map(|s| s.screenshot.as_deref()).take(40).collect();
-    let novice: Vec<&str> = r.tasks.iter().filter_map(|t| t.novice.as_ref()).flat_map(|n| n.runs.iter().filter(|x| !x.success)).flat_map(|x| x.screenshots.iter().map(String::as_str)).take(20).collect();
+    let shots: Vec<&str> = r
+        .screens
+        .iter()
+        .filter_map(|s| s.screenshot.as_deref())
+        .take(40)
+        .collect();
+    let novice: Vec<&str> = r
+        .tasks
+        .iter()
+        .filter_map(|t| t.novice.as_ref())
+        .flat_map(|n| n.runs.iter().filter(|x| !x.success))
+        .flat_map(|x| x.screenshots.iter().map(String::as_str))
+        .take(20)
+        .collect();
     json!({
         "agent": "ux-critic",
         "agent_file": "~/.claude/agents/ux-critic.md",
@@ -1137,7 +1492,15 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
 }
 
 /// The `start` request for the adapter harness.
-pub fn start_request(spec: &Spec, url: Option<&str>, allow_destructive: bool, allow_remote: bool, headed: bool, stall_s: f64, out_dir: &Path) -> Value {
+pub fn start_request(
+    spec: &Spec,
+    url: Option<&str>,
+    allow_destructive: bool,
+    allow_remote: bool,
+    headed: bool,
+    stall_s: f64,
+    out_dir: &Path,
+) -> Value {
     let a = &spec.app;
     json!({
         "op": "start", "kind": a.kind, "url": url.or(a.url.as_deref()), "viewport": a.viewport.map(|[w, h]| json!({"width": w, "height": h})),
@@ -1151,5 +1514,12 @@ pub fn start_request(spec: &Spec, url: Option<&str>, allow_destructive: bool, al
 /// Default exploration depth: two beyond the largest budget, so an over-budget task is measured
 /// rather than reported unreachable; at most 6.
 pub fn default_depth(spec: &Spec) -> usize {
-    (spec.tasks.iter().map(|t| t.budget).max().unwrap_or(DEFAULT_BUDGET) + 2).min(6)
+    (spec
+        .tasks
+        .iter()
+        .map(|t| t.budget)
+        .max()
+        .unwrap_or(DEFAULT_BUDGET)
+        + 2)
+    .min(6)
 }

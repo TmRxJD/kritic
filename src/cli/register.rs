@@ -19,18 +19,28 @@ use super::ui;
 pub const SKILL_MD: &str = include_str!("../../examples/claude/skills/kritic/SKILL.md");
 pub const AGENT_MD: &str = include_str!("../../examples/claude/agents/ux-critic.md");
 pub const CLAUDE_RULE: &str = include_str!("../../examples/claude/CLAUDE.md");
+pub const CONCISE_RULE: &str = include_str!("../../examples/claude/CONCISE.md");
+pub const CONCISE_STYLE: &str =
+    include_str!("../../examples/claude/output-styles/kritic-concise.md");
+const STYLE_NAME: &str = "kritic-concise";
 pub const HERMES_PLUGIN_INIT: &str = include_str!("../../integrations/hermes/kritic/__init__.py");
 pub const HERMES_PLUGIN_YAML: &str = include_str!("../../integrations/hermes/kritic/plugin.yaml");
 
-const BEGIN: &str = "<!-- kritic:begin (managed by `kritic register`; `kritic uninstall` removes it) -->";
+const BEGIN: &str =
+    "<!-- kritic:begin (managed by `kritic register`; `kritic uninstall` removes it) -->";
 const END: &str = "<!-- kritic:end -->";
 
 fn user_home() -> PathBuf {
-    std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(PathBuf::from).unwrap_or_default()
+    crate::config::env_var("USERPROFILE")
+        .or_else(|| crate::config::env_var("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_default()
 }
 
 pub fn claude_dir() -> PathBuf {
-    std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| user_home().join(".claude"))
+    crate::config::env_var("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| user_home().join(".claude"))
 }
 
 pub fn claude_json() -> PathBuf {
@@ -38,7 +48,11 @@ pub fn claude_json() -> PathBuf {
 }
 
 pub fn hermes_home() -> PathBuf {
-    std::env::var_os("HERMES_HOME").map(PathBuf::from).unwrap_or_else(|| user_home().join(".hermes"))
+    // Hermes keeps its data in %LOCALAPPDATA%\hermes on native Windows, ~/.hermes elsewhere.
+    crate::config::env_var("HERMES_HOME").map(PathBuf::from).unwrap_or_else(|| match crate::config::env_var("LOCALAPPDATA") {
+        Some(l) if cfg!(windows) => PathBuf::from(l).join("hermes"),
+        _ => user_home().join(".hermes"),
+    })
 }
 
 pub fn claude_present() -> bool {
@@ -57,7 +71,10 @@ fn backup(home: &Path, path: &Path) {
     let dir = home.join("backups");
     let _ = std::fs::create_dir_all(&dir);
     let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let _ = std::fs::copy(path, dir.join(format!("{name}.{stamp}")));
 }
 
@@ -69,19 +86,27 @@ pub fn portable(p: &Path) -> String {
 /// Environment the MCP entry must carry: only a non-default kritic home.
 fn entry_env(home: &Path) -> Vec<(String, String)> {
     let default = user_home().join(".kritic");
-    if crate::files::dunce_canonical(home) == crate::files::dunce_canonical(&default) { vec![] } else { vec![("KRITIC_HOME".into(), portable(home))] }
+    if crate::files::dunce_canonical(home) == crate::files::dunce_canonical(&default) {
+        vec![]
+    } else {
+        vec![("KRITIC_HOME".into(), portable(home))]
+    }
 }
 
 // ------------------------------------------------------------------ Claude Code
 
 pub struct ClaudeOptions {
     pub rule: bool,
+    /// Install and select the concise output style (`output.style = "concise"`).
+    pub concise: bool,
 }
 
 pub fn register_claude(home: &Path, exe: &Path, opts: &ClaudeOptions) -> Result<(), String> {
     let env = entry_env(home);
     if let Some(claude) = crate::config::which("claude") {
-        let _ = Command::new(&claude).args(["mcp", "remove", "kritic", "-s", "user"]).output();
+        let _ = Command::new(&claude)
+            .args(["mcp", "remove", "kritic", "-s", "user"])
+            .output();
         let mut cmd = Command::new(&claude);
         cmd.args(["mcp", "add", "--scope", "user", "kritic"]);
         for (k, v) in &env {
@@ -90,24 +115,41 @@ pub fn register_claude(home: &Path, exe: &Path, opts: &ClaudeOptions) -> Result<
         cmd.arg("--").arg(exe);
         let out = cmd.output().map_err(|e| format!("claude mcp add: {e}"))?;
         if !out.status.success() {
-            return Err(format!("claude mcp add failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
+            return Err(format!(
+                "claude mcp add failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
         }
         ui::ok("MCP server registered with `claude mcp add` (user scope)");
     } else {
         let path = claude_json();
         backup(home, &path);
         let mut v: Value = if path.is_file() {
-            serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| e.to_string())?).map_err(|e| format!("{}: {e}", path.display()))?
+            serde_json::from_str(&std::fs::read_to_string(&path).map_err(|e| e.to_string())?)
+                .map_err(|e| format!("{}: {e}", path.display()))?
         } else {
             json!({})
         };
-        let env_obj: serde_json::Map<String, Value> = env.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect();
-        let servers = v.as_object_mut().ok_or("~/.claude.json is not an object")?.entry("mcpServers").or_insert_with(|| json!({}));
-        servers.as_object_mut().ok_or("mcpServers is not an object")?.insert(
-            "kritic".into(),
-            json!({"type": "stdio", "command": portable(exe), "args": [], "env": env_obj}),
-        );
-        write_atomic(&path, &(serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n"))?;
+        let env_obj: serde_json::Map<String, Value> = env
+            .iter()
+            .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+            .collect();
+        let servers = v
+            .as_object_mut()
+            .ok_or("~/.claude.json is not an object")?
+            .entry("mcpServers")
+            .or_insert_with(|| json!({}));
+        servers
+            .as_object_mut()
+            .ok_or("mcpServers is not an object")?
+            .insert(
+                "kritic".into(),
+                json!({"type": "stdio", "command": portable(exe), "args": [], "env": env_obj}),
+            );
+        write_atomic(
+            &path,
+            &(serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n"),
+        )?;
         ui::ok(&format!("MCP server added to {}", path.display()));
     }
     let skill = claude_dir().join("skills").join("kritic").join("SKILL.md");
@@ -116,16 +158,71 @@ pub fn register_claude(home: &Path, exe: &Path, opts: &ClaudeOptions) -> Result<
     let agent = claude_dir().join("agents").join("ux-critic.md");
     if agent.is_file() && std::fs::read_to_string(&agent).is_ok_and(|t| !t.contains("kritic")) {
         backup(home, &agent);
-        ui::warn(&format!("replaced an existing ux-critic agent (backup in {})", home.join("backups").display()));
+        ui::warn(&format!(
+            "replaced an existing ux-critic agent (backup in {})",
+            home.join("backups").display()
+        ));
     }
     write_file(&agent, AGENT_MD)?;
     ui::ok(&format!("agent installed: {}", agent.display()));
-    if opts.rule {
+    if opts.concise {
+        install_concise_style(home)?;
+    }
+    if opts.rule || opts.concise {
         let md = claude_dir().join("CLAUDE.md");
         backup(home, &md);
         let text = std::fs::read_to_string(&md).unwrap_or_default();
-        write_file(&md, &upsert_block(&text, CLAUDE_RULE.trim()))?;
-        ui::ok(&format!("end-of-task rule added to {}", md.display()));
+        let body = match (opts.rule, opts.concise) {
+            (true, true) => format!("{}\n\n{}", CLAUDE_RULE.trim(), CONCISE_RULE.trim()),
+            (true, false) => CLAUDE_RULE.trim().to_string(),
+            _ => CONCISE_RULE.trim().to_string(),
+        };
+        write_file(&md, &upsert_block(&text, &body))?;
+        ui::ok(&format!(
+            "{} added to {}",
+            if opts.rule {
+                "end-of-task rule"
+            } else {
+                "concise-reply rule"
+            },
+            md.display()
+        ));
+    }
+    Ok(())
+}
+
+/// The concise output style: installed as a file, and selected in settings.json unless the user
+/// already chose another style (their choice wins; the CLAUDE.md rule still applies).
+fn install_concise_style(home: &Path) -> Result<(), String> {
+    let style = claude_dir()
+        .join("output-styles")
+        .join(format!("{STYLE_NAME}.md"));
+    write_file(&style, CONCISE_STYLE)?;
+    let settings = claude_dir().join("settings.json");
+    let mut v: Value = match std::fs::read_to_string(&settings) {
+        Ok(t) => serde_json::from_str(&t).map_err(|e| format!("{}: {e}", settings.display()))?,
+        Err(_) => json!({}),
+    };
+    let obj = v.as_object_mut().ok_or("settings.json is not an object")?;
+    match obj.get("outputStyle").and_then(Value::as_str) {
+        Some(s) if s == STYLE_NAME => ui::ok(&format!("output style: {STYLE_NAME}")),
+        Some(s) if !s.eq_ignore_ascii_case("default") => {
+            ui::info(&format!(
+                "output style \"{s}\" kept (yours); the concise rule is in CLAUDE.md, or pick {STYLE_NAME} with /output-style"
+            ));
+        }
+        _ => {
+            backup(home, &settings);
+            obj.insert("outputStyle".into(), json!(STYLE_NAME));
+            write_atomic(
+                &settings,
+                &(serde_json::to_string_pretty(&v).map_err(|e| e.to_string())? + "\n"),
+            )?;
+            ui::ok(&format!(
+                "output style: {STYLE_NAME} (set in {})",
+                settings.display()
+            ));
+        }
     }
     Ok(())
 }
@@ -133,17 +230,23 @@ pub fn register_claude(home: &Path, exe: &Path, opts: &ClaudeOptions) -> Result<
 pub fn unregister_claude(home: &Path) -> Vec<String> {
     let mut done = Vec::new();
     if let Some(claude) = crate::config::which("claude")
-        && Command::new(&claude).args(["mcp", "remove", "kritic", "-s", "user"]).output().is_ok_and(|o| o.status.success())
+        && Command::new(&claude)
+            .args(["mcp", "remove", "kritic", "-s", "user"])
+            .output()
+            .is_ok_and(|o| o.status.success())
     {
         done.push("removed the MCP entry (claude mcp remove)".into());
     }
     let path = claude_json();
     if let Ok(text) = std::fs::read_to_string(&path)
         && let Ok(mut v) = serde_json::from_str::<Value>(&text)
-        && v.pointer_mut("/mcpServers").and_then(Value::as_object_mut).is_some_and(|m| m.shift_remove("kritic").is_some())
+        && v.pointer_mut("/mcpServers")
+            .and_then(Value::as_object_mut)
+            .is_some_and(|m| m.shift_remove("kritic").is_some())
     {
         backup(home, &path);
-        if serde_json::to_string_pretty(&v).is_ok_and(|t| write_atomic(&path, &(t + "\n")).is_ok()) {
+        if serde_json::to_string_pretty(&v).is_ok_and(|t| write_atomic(&path, &(t + "\n")).is_ok())
+        {
             done.push(format!("removed the MCP entry from {}", path.display()));
         }
     }
@@ -152,7 +255,9 @@ pub fn unregister_claude(home: &Path) -> Vec<String> {
         done.push(format!("removed {}", skill.display()));
     }
     let agent = claude_dir().join("agents").join("ux-critic.md");
-    if std::fs::read_to_string(&agent).is_ok_and(|t| t.contains("kritic")) && std::fs::remove_file(&agent).is_ok() {
+    if std::fs::read_to_string(&agent).is_ok_and(|t| t.contains("kritic"))
+        && std::fs::remove_file(&agent).is_ok()
+    {
         done.push(format!("removed {}", agent.display()));
     }
     let md = claude_dir().join("CLAUDE.md");
@@ -162,6 +267,29 @@ pub fn unregister_claude(home: &Path) -> Vec<String> {
         backup(home, &md);
         if write_file(&md, &remove_block(&text)).is_ok() {
             done.push(format!("removed the kritic block from {}", md.display()));
+        }
+    }
+    let style = claude_dir()
+        .join("output-styles")
+        .join(format!("{STYLE_NAME}.md"));
+    if style.is_file() && std::fs::remove_file(&style).is_ok() {
+        done.push(format!("removed {}", style.display()));
+    }
+    let settings = claude_dir().join("settings.json");
+    if let Ok(text) = std::fs::read_to_string(&settings)
+        && let Ok(mut v) = serde_json::from_str::<Value>(&text)
+        && v.get("outputStyle").and_then(Value::as_str) == Some(STYLE_NAME)
+        && let Some(obj) = v.as_object_mut()
+    {
+        backup(home, &settings);
+        obj.shift_remove("outputStyle");
+        if serde_json::to_string_pretty(&v)
+            .is_ok_and(|t| write_atomic(&settings, &(t + "\n")).is_ok())
+        {
+            done.push(format!(
+                "output style reset to default in {}",
+                settings.display()
+            ));
         }
     }
     done
@@ -175,15 +303,26 @@ pub fn upsert_block(text: &str, body: &str) -> String {
     {
         return format!("{}{block}{}", &text[..a], &text[b + END.len()..]);
     }
-    let sep = if text.is_empty() || text.ends_with("\n\n") { "" } else if text.ends_with('\n') { "\n" } else { "\n\n" };
+    let sep = if text.is_empty() || text.ends_with("\n\n") {
+        ""
+    } else if text.ends_with('\n') {
+        "\n"
+    } else {
+        "\n\n"
+    };
     format!("{text}{sep}{block}\n")
 }
 
 pub fn remove_block(text: &str) -> String {
     match (text.find(BEGIN), text.find(END)) {
         (Some(a), Some(b)) if b > a => {
-            let rest = text[b + END.len()..].strip_prefix('\n').unwrap_or(&text[b + END.len()..]);
-            format!("{}{rest}", text[..a].trim_end_matches('\n').to_string() + if a > 0 { "\n" } else { "" })
+            let rest = text[b + END.len()..]
+                .strip_prefix('\n')
+                .unwrap_or(&text[b + END.len()..]);
+            format!(
+                "{}{rest}",
+                text[..a].trim_end_matches('\n').to_string() + if a > 0 { "\n" } else { "" }
+            )
         }
         _ => text.to_string(),
     }
@@ -194,6 +333,8 @@ pub fn remove_block(text: &str) -> String {
 pub struct HermesOptions {
     /// Make kritic the active context engine (`context.engine: kritic`).
     pub context_engine: bool,
+    /// Add the concise-reply rule to every turn (`output.style = "concise"`).
+    pub concise: bool,
 }
 
 pub fn register_hermes(home: &Path, exe: &Path, opts: &HermesOptions) -> Result<(), String> {
@@ -202,7 +343,10 @@ pub fn register_hermes(home: &Path, exe: &Path, opts: &HermesOptions) -> Result<
     std::fs::create_dir_all(&hh).map_err(|e| e.to_string())?;
     backup(home, &cfg);
     let mut text = std::fs::read_to_string(&cfg).unwrap_or_default();
-    let mut entry = vec![format!("command: \"{}\"", portable(exe)), "args: []".to_string()];
+    let mut entry = vec![
+        format!("command: \"{}\"", portable(exe)),
+        "args: []".to_string(),
+    ];
     let env = entry_env(home);
     if !env.is_empty() {
         entry.push("env:".into());
@@ -219,7 +363,17 @@ pub fn register_hermes(home: &Path, exe: &Path, opts: &HermesOptions) -> Result<
     write_file(&plugin.join("plugin.yaml"), HERMES_PLUGIN_YAML)?;
     // The plugin runs `kritic context ...`; tell it where this binary is.
     write_file(&plugin.join("kritic_exe.txt"), &portable(exe))?;
-    ui::ok(&format!("context engine plugin installed: {}", plugin.display()));
+    let concise = plugin.join("concise.md");
+    if opts.concise {
+        write_file(&concise, CONCISE_RULE)?;
+        ui::ok("concise-reply rule added to every Hermes turn (output.style = \"concise\")");
+    } else {
+        let _ = std::fs::remove_file(&concise);
+    }
+    ui::ok(&format!(
+        "context engine plugin installed: {}",
+        plugin.display()
+    ));
     if opts.context_engine {
         ui::ok("Hermes now uses kritic as its context engine (context.engine: kritic)");
     } else {
@@ -265,20 +419,40 @@ fn is_content(line: &str) -> bool {
 
 /// The line range of top-level `section:` and its body (until the next top-level key).
 fn section_range(lines: &[&str], section: &str) -> Option<(usize, usize)> {
-    let head = lines.iter().position(|l| indent_of(l) == 0 && l.trim_end().split('#').next().unwrap_or("").trim_end() == format!("{section}:"))?;
-    let end = (head + 1..lines.len()).find(|&i| is_content(lines[i]) && indent_of(lines[i]) == 0).unwrap_or(lines.len());
+    let head = lines.iter().position(|l| {
+        indent_of(l) == 0
+            && l.trim_end().split('#').next().unwrap_or("").trim_end() == format!("{section}:")
+    })?;
+    let end = (head + 1..lines.len())
+        .find(|&i| is_content(lines[i]) && indent_of(lines[i]) == 0)
+        .unwrap_or(lines.len());
     Some((head, end))
 }
 
 /// Indentation of the section's children (2 when the section is empty).
 fn child_indent(lines: &[&str], head: usize, end: usize) -> usize {
-    (head + 1..end).map(|i| lines[i]).find(|l| is_content(l)).map(indent_of).filter(|&n| n > 0).unwrap_or(2)
+    (head + 1..end)
+        .map(|i| lines[i])
+        .find(|l| is_content(l))
+        .map(indent_of)
+        .filter(|&n| n > 0)
+        .unwrap_or(2)
 }
 
 /// Lines of child `key` inside the section: its header and every deeper line after it.
-fn child_range(lines: &[&str], head: usize, end: usize, ind: usize, key: &str) -> Option<(usize, usize)> {
-    let start = (head + 1..end).find(|&i| indent_of(lines[i]) == ind && lines[i].trim_start().starts_with(&format!("{key}:")))?;
-    let stop = (start + 1..end).find(|&i| is_content(lines[i]) && indent_of(lines[i]) <= ind).unwrap_or(end);
+fn child_range(
+    lines: &[&str],
+    head: usize,
+    end: usize,
+    ind: usize,
+    key: &str,
+) -> Option<(usize, usize)> {
+    let start = (head + 1..end).find(|&i| {
+        indent_of(lines[i]) == ind && lines[i].trim_start().starts_with(&format!("{key}:"))
+    })?;
+    let stop = (start + 1..end)
+        .find(|&i| is_content(lines[i]) && indent_of(lines[i]) <= ind)
+        .unwrap_or(end);
     Some((start, stop))
 }
 
@@ -292,11 +466,21 @@ fn join(lines: &[String], trailing_newline: bool) -> String {
 
 /// Set `section.key` to a mapping given as `body` lines (relative indentation), replacing an
 /// existing `key` block. An inline section value (`section: {}`) is refused rather than guessed at.
-pub fn yaml_upsert_child(text: &str, section: &str, key: &str, body: &[String]) -> Result<String, String> {
+pub fn yaml_upsert_child(
+    text: &str,
+    section: &str,
+    key: &str,
+    body: &[String],
+) -> Result<String, String> {
     let lines: Vec<&str> = text.lines().collect();
     let Some((head, end)) = section_range(&lines, section) else {
-        if lines.iter().any(|l| indent_of(l) == 0 && l.starts_with(&format!("{section}:"))) {
-            return Err(format!("`{section}:` is written inline in config.yaml; add kritic under it by hand"));
+        if lines
+            .iter()
+            .any(|l| indent_of(l) == 0 && l.starts_with(&format!("{section}:")))
+        {
+            return Err(format!(
+                "`{section}:` is written inline in config.yaml; add kritic under it by hand"
+            ));
         }
         let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         if out.last().is_some_and(|l| !l.trim().is_empty()) {
@@ -308,7 +492,9 @@ pub fn yaml_upsert_child(text: &str, section: &str, key: &str, body: &[String]) 
         return Ok(join(&out, true));
     };
     let ind = child_indent(&lines, head, end);
-    let block: Vec<String> = std::iter::once(format!("{}{key}:", " ".repeat(ind))).chain(body.iter().map(|b| format!("{}{b}", " ".repeat(ind * 2)))).collect();
+    let block: Vec<String> = std::iter::once(format!("{}{key}:", " ".repeat(ind)))
+        .chain(body.iter().map(|b| format!("{}{b}", " ".repeat(ind * 2))))
+        .collect();
     let mut out: Vec<String> = Vec::new();
     match child_range(&lines, head, end, ind, key) {
         Some((s, e)) => {
@@ -327,19 +513,37 @@ pub fn yaml_upsert_child(text: &str, section: &str, key: &str, body: &[String]) 
 
 pub fn yaml_remove_child(text: &str, section: &str, key: &str) -> String {
     let lines: Vec<&str> = text.lines().collect();
-    let Some((head, end)) = section_range(&lines, section) else { return text.to_string() };
+    let Some((head, end)) = section_range(&lines, section) else {
+        return text.to_string();
+    };
     let ind = child_indent(&lines, head, end);
-    let Some((s, e)) = child_range(&lines, head, end, ind, key) else { return text.to_string() };
-    let out: Vec<String> = lines[..s].iter().chain(&lines[e..]).map(|l| l.to_string()).collect();
+    let Some((s, e)) = child_range(&lines, head, end, ind, key) else {
+        return text.to_string();
+    };
+    let out: Vec<String> = lines[..s]
+        .iter()
+        .chain(&lines[e..])
+        .map(|l| l.to_string())
+        .collect();
     join(&out, text.ends_with('\n'))
 }
 
 /// Set a scalar `section.key: value`.
-pub fn yaml_upsert_scalar(text: &str, section: &str, key: &str, value: &str) -> Result<String, String> {
+pub fn yaml_upsert_scalar(
+    text: &str,
+    section: &str,
+    key: &str,
+    value: &str,
+) -> Result<String, String> {
     let lines: Vec<&str> = text.lines().collect();
     let Some((head, end)) = section_range(&lines, section) else {
-        if lines.iter().any(|l| indent_of(l) == 0 && l.starts_with(&format!("{section}:"))) {
-            return Err(format!("`{section}:` is written inline in config.yaml; set {section}.{key} by hand"));
+        if lines
+            .iter()
+            .any(|l| indent_of(l) == 0 && l.starts_with(&format!("{section}:")))
+        {
+            return Err(format!(
+                "`{section}:` is written inline in config.yaml; set {section}.{key} by hand"
+            ));
         }
         let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
         if out.last().is_some_and(|l| !l.trim().is_empty()) {

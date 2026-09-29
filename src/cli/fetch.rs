@@ -51,14 +51,25 @@ pub async fn download(http: &reqwest::Client, remote: &Remote, dest: &Path) -> R
         match &remote.sha256 {
             Some(want) if sha256_file(dest).map_err(|e| e.to_string())? == *want => return Ok(()),
             Some(_) => {}
-            None if remote.size.is_none_or(|s| dest.metadata().map(|m| m.len() == s).unwrap_or(false)) => return Ok(()),
+            None if remote
+                .size
+                .is_none_or(|s| dest.metadata().map(|m| m.len() == s).unwrap_or(false)) =>
+            {
+                return Ok(());
+            }
             None => {}
         }
     }
     if let Some(dir) = dest.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
     }
-    let part = dest.with_extension(format!("{}part", dest.extension().map(|e| format!("{}.", e.to_string_lossy())).unwrap_or_default()));
+    let part = dest.with_extension(format!(
+        "{}part",
+        dest.extension()
+            .map(|e| format!("{}.", e.to_string_lossy()))
+            .unwrap_or_default()
+    ));
     let mut have = part.metadata().map(|m| m.len()).unwrap_or(0);
     if remote.size.is_some_and(|s| have > s) {
         have = 0;
@@ -67,17 +78,25 @@ pub async fn download(http: &reqwest::Client, remote: &Remote, dest: &Path) -> R
     if have > 0 {
         req = req.header(reqwest::header::RANGE, format!("bytes={have}-"));
     }
-    let resp = req.send().await.map_err(|e| format!("{}: {e}", remote.name))?;
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("{}: {e}", remote.name))?;
     let status = resp.status();
     if !status.is_success() {
-        return Err(format!("{}: HTTP {status} from {}", remote.name, remote.url));
+        return Err(format!(
+            "{}: HTTP {status} from {}",
+            remote.name, remote.url
+        ));
     }
     // A server that ignores Range sends the whole file again.
     let resumed = status == reqwest::StatusCode::PARTIAL_CONTENT;
     if !resumed {
         have = 0;
     }
-    let total = remote.size.or_else(|| resp.content_length().map(|l| l + have));
+    let total = remote
+        .size
+        .or_else(|| resp.content_length().map(|l| l + have));
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -90,15 +109,42 @@ pub async fn download(http: &reqwest::Client, remote: &Remote, dest: &Path) -> R
     let t0 = Instant::now();
     let mut last = Instant::now();
     let tty = std::io::stderr().is_terminal();
+    // Logs (no terminal) get one line per 25% of a known size, else one per minute.
+    let mut next_quarter = 1u64;
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("{}: download interrupted ({e}); run setup again to resume", remote.name))?;
-        file.write_all(&chunk).map_err(|e| format!("cannot write {}: {e}", part.display()))?;
+        let chunk = chunk.map_err(|e| {
+            format!(
+                "{}: download interrupted ({e}); run setup again to resume",
+                remote.name
+            )
+        })?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("cannot write {}: {e}", part.display()))?;
         got += chunk.len() as u64;
-        if last.elapsed() >= Duration::from_millis(if tty { 250 } else { 5000 }) {
+        let due = if tty {
+            last.elapsed() >= Duration::from_millis(250)
+        } else if let Some(t) = total.filter(|t| *t > 0) {
+            let q = got * 4 / t;
+            let hit = q >= next_quarter && q < 4;
+            if hit {
+                next_quarter = q + 1;
+            }
+            hit
+        } else {
+            last.elapsed() >= Duration::from_secs(60)
+        };
+        if due {
             last = Instant::now();
             let rate = (got - have) as f64 / t0.elapsed().as_secs_f64().max(0.001);
-            let of = total.map(|t| format!(" / {}", super::ui::bytes(t))).unwrap_or_default();
-            let line = format!("     {}  {}{of}  {}/s", remote.name, super::ui::bytes(got), super::ui::bytes(rate as u64));
+            let of = total
+                .map(|t| format!(" / {}", super::ui::bytes(t)))
+                .unwrap_or_default();
+            let line = format!(
+                "     {}  {}{of}  {}/s",
+                remote.name,
+                super::ui::bytes(got),
+                super::ui::bytes(rate as u64)
+            );
             if tty {
                 eprint!("\r{line:<78}");
             } else {
@@ -115,15 +161,23 @@ pub async fn download(http: &reqwest::Client, remote: &Remote, dest: &Path) -> R
         let got = sha256_file(&part).map_err(|e| e.to_string())?;
         if got != *want {
             let _ = std::fs::remove_file(&part);
-            return Err(format!("{}: checksum mismatch (expected {want}, got {got}); the partial file was removed, run setup again", remote.name));
+            return Err(format!(
+                "{}: checksum mismatch (expected {want}, got {got}); the partial file was removed, run setup again",
+                remote.name
+            ));
         }
     }
-    std::fs::rename(&part, dest).map_err(|e| format!("cannot move {} into place: {e}", dest.display()))?;
+    std::fs::rename(&part, dest)
+        .map_err(|e| format!("cannot move {} into place: {e}", dest.display()))?;
     Ok(())
 }
 
 /// Extract entries of a .zip whose names `pick` maps to a relative output path.
-pub fn extract_zip(archive: &Path, out: &Path, pick: impl Fn(&str) -> Option<PathBuf>) -> Result<Vec<PathBuf>, String> {
+pub fn extract_zip(
+    archive: &Path,
+    out: &Path,
+    pick: impl Fn(&str) -> Option<PathBuf>,
+) -> Result<Vec<PathBuf>, String> {
     let f = std::fs::File::open(archive).map_err(|e| e.to_string())?;
     let mut z = zip::ZipArchive::new(f).map_err(|e| format!("{}: {e}", archive.display()))?;
     let mut written = Vec::new();
@@ -132,12 +186,15 @@ pub fn extract_zip(archive: &Path, out: &Path, pick: impl Fn(&str) -> Option<Pat
         if entry.is_dir() {
             continue;
         }
-        let Some(rel) = pick(entry.name()) else { continue };
+        let Some(rel) = pick(entry.name()) else {
+            continue;
+        };
         let target = safe_join(out, &rel)?;
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
-        let mut w = std::fs::File::create(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+        let mut w =
+            std::fs::File::create(&target).map_err(|e| format!("{}: {e}", target.display()))?;
         std::io::copy(&mut entry, &mut w).map_err(|e| e.to_string())?;
         written.push(target);
     }
@@ -159,7 +216,9 @@ pub fn extract_tar_gz(archive: &Path, out: &Path) -> Result<Vec<PathBuf>, String
         if let Some(d) = target.parent() {
             std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
         }
-        entry.unpack(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+        entry
+            .unpack(&target)
+            .map_err(|e| format!("{}: {e}", target.display()))?;
         written.push(target);
     }
     Ok(written)
@@ -168,14 +227,25 @@ pub fn extract_tar_gz(archive: &Path, out: &Path) -> Result<Vec<PathBuf>, String
 /// Join without letting an archive entry escape `out` (`..`, absolute paths).
 fn safe_join(out: &Path, rel: &Path) -> Result<PathBuf, String> {
     use std::path::Component;
-    if rel.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
-        return Err(format!("refusing archive entry outside the target folder: {}", rel.display()));
+    if rel
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return Err(format!(
+            "refusing archive entry outside the target folder: {}",
+            rel.display()
+        ));
     }
     Ok(out.join(rel))
 }
 
-async fn get_json(http: &reqwest::Client, url: &str) -> Result<Value, String> {
-    let r = http.get(url).header("accept", "application/json").send().await.map_err(|e| format!("{url}: {e}"))?;
+pub async fn get_json(http: &reqwest::Client, url: &str) -> Result<Value, String> {
+    let r = http
+        .get(url)
+        .header("accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("{url}: {e}"))?;
     let status = r.status();
     if !status.is_success() {
         return Err(format!("{url}: HTTP {status}"));
@@ -184,25 +254,53 @@ async fn get_json(http: &reqwest::Client, url: &str) -> Result<Value, String> {
 }
 
 /// The latest GitHub release's asset `name` (by exact name or predicate), with its published digest.
-pub async fn github_asset(http: &reqwest::Client, repo: &str, pick: impl Fn(&str) -> bool) -> Result<Remote, String> {
-    let v = get_json(http, &format!("https://api.github.com/repos/{repo}/releases/latest")).await?;
-    let assets = v["assets"].as_array().ok_or_else(|| format!("{repo}: release has no assets"))?;
+pub async fn github_asset(
+    http: &reqwest::Client,
+    repo: &str,
+    pick: impl Fn(&str) -> bool,
+) -> Result<Remote, String> {
+    let v = get_json(
+        http,
+        &format!("https://api.github.com/repos/{repo}/releases/latest"),
+    )
+    .await?;
+    let assets = v["assets"]
+        .as_array()
+        .ok_or_else(|| format!("{repo}: release has no assets"))?;
     let a = assets
         .iter()
         .find(|a| a["name"].as_str().is_some_and(&pick))
-        .ok_or_else(|| format!("{repo} {}: no matching asset for this platform", v["tag_name"].as_str().unwrap_or("?")))?;
+        .ok_or_else(|| {
+            format!(
+                "{repo} {}: no matching asset for this platform",
+                v["tag_name"].as_str().unwrap_or("?")
+            )
+        })?;
     Ok(Remote {
         name: a["name"].as_str().unwrap_or_default().to_string(),
-        url: a["browser_download_url"].as_str().unwrap_or_default().to_string(),
-        sha256: a["digest"].as_str().and_then(|d| d.strip_prefix("sha256:")).map(String::from),
+        url: a["browser_download_url"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        sha256: a["digest"]
+            .as_str()
+            .and_then(|d| d.strip_prefix("sha256:"))
+            .map(String::from),
         size: a["size"].as_u64(),
     })
 }
 
 /// A file in a Hugging Face model repo, with the SHA-256 from its LFS pointer.
 pub async fn hf_file(http: &reqwest::Client, repo: &str, file: &str) -> Result<Remote, String> {
-    let v = get_json(http, &format!("https://huggingface.co/api/models/{repo}/tree/main")).await?;
-    let entry = v.as_array().and_then(|a| a.iter().find(|e| e["path"] == file)).ok_or_else(|| format!("{repo}: no file {file}"))?;
+    let v = get_json(
+        http,
+        &format!("https://huggingface.co/api/models/{repo}/tree/main"),
+    )
+    .await?;
+    let entry = v
+        .as_array()
+        .and_then(|a| a.iter().find(|e| e["path"] == file))
+        .ok_or_else(|| format!("{repo}: no file {file}"))?;
     Ok(Remote {
         name: file.to_string(),
         url: format!("https://huggingface.co/{repo}/resolve/main/{file}"),
@@ -212,13 +310,33 @@ pub async fn hf_file(http: &reqwest::Client, repo: &str, file: &str) -> Result<R
 }
 
 /// The newest wheel of `package` whose version starts with `version_prefix` for `platform_tag`.
-pub async fn pypi_wheel(http: &reqwest::Client, package: &str, version_prefix: &str, platform_tag: &str) -> Result<Remote, String> {
+pub async fn pypi_wheel(
+    http: &reqwest::Client,
+    package: &str,
+    version_prefix: &str,
+    platform_tag: &str,
+) -> Result<Remote, String> {
     let v = get_json(http, &format!("https://pypi.org/pypi/{package}/json")).await?;
-    let releases = v["releases"].as_object().ok_or_else(|| format!("{package}: no releases"))?;
-    let mut versions: Vec<&String> = releases.keys().filter(|k| k.starts_with(version_prefix)).collect();
-    versions.sort_by_key(|k| k.split('.').map(|p| p.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>());
+    let releases = v["releases"]
+        .as_object()
+        .ok_or_else(|| format!("{package}: no releases"))?;
+    let mut versions: Vec<&String> = releases
+        .keys()
+        .filter(|k| k.starts_with(version_prefix))
+        .collect();
+    versions.sort_by_key(|k| {
+        k.split('.')
+            .map(|p| p.parse::<u64>().unwrap_or(0))
+            .collect::<Vec<_>>()
+    });
     for ver in versions.into_iter().rev() {
-        if let Some(f) = releases[ver].as_array().and_then(|files| files.iter().find(|f| f["filename"].as_str().is_some_and(|n| n.ends_with(".whl") && n.contains(platform_tag)))) {
+        if let Some(f) = releases[ver].as_array().and_then(|files| {
+            files.iter().find(|f| {
+                f["filename"]
+                    .as_str()
+                    .is_some_and(|n| n.ends_with(".whl") && n.contains(platform_tag))
+            })
+        }) {
             return Ok(Remote {
                 name: f["filename"].as_str().unwrap_or_default().to_string(),
                 url: f["url"].as_str().unwrap_or_default().to_string(),
@@ -227,5 +345,7 @@ pub async fn pypi_wheel(http: &reqwest::Client, package: &str, version_prefix: &
             });
         }
     }
-    Err(format!("{package} {version_prefix}*: no {platform_tag} wheel"))
+    Err(format!(
+        "{package} {version_prefix}*: no {platform_tag} wheel"
+    ))
 }

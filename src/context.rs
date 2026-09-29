@@ -31,7 +31,10 @@ use crate::kev::Decider;
 /// Rough tokens for a message: ~4 characters per token over its content and tool-call arguments.
 pub fn est_tokens(m: &Value) -> usize {
     let content = text_of(m).len();
-    let calls = m.get("tool_calls").map(|c| c.to_string().len()).unwrap_or(0);
+    let calls = m
+        .get("tool_calls")
+        .map(|c| c.to_string().len())
+        .unwrap_or(0);
     (content + calls) / 4 + 4
 }
 
@@ -43,7 +46,11 @@ pub fn total_tokens(messages: &[Value]) -> usize {
 pub fn text_of(m: &Value) -> String {
     match m.get("content") {
         Some(Value::String(s)) => s.clone(),
-        Some(Value::Array(parts)) => parts.iter().filter_map(|p| p.get("text").and_then(Value::as_str)).collect::<Vec<_>>().join("\n"),
+        Some(Value::Array(parts)) => parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n"),
         _ => String::new(),
     }
 }
@@ -60,12 +67,28 @@ pub fn archive_id(role: &str, content: &str) -> String {
     h.update([0]);
     h.update(content.as_bytes());
     let d = h.finalize();
-    format!("kr-{}", d.iter().take(6).map(|b| format!("{b:02x}")).collect::<String>())
+    format!(
+        "kr-{}",
+        d.iter()
+            .take(6)
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    )
 }
 
 fn stub(id: &str, role: &str, content: &str, why: &str) -> String {
-    let preview: String = content.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(160).collect();
-    let more = if content.chars().count() > 160 { "…" } else { "" };
+    let preview: String = content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(160)
+        .collect();
+    let more = if content.chars().count() > 160 {
+        "…"
+    } else {
+        ""
+    };
     format!(
         "{STUB_PREFIX}this {role} message ({} tokens, {why}) as {id}. Opening: \"{preview}{more}\". Call kritic_recall with id \"{id}\" to read it in full.]",
         content.len() / 4
@@ -95,13 +118,35 @@ pub struct Archive {
 
 impl Archive {
     pub fn for_session(home: &Path, session: &str) -> Self {
-        let safe: String = session.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).take(96).collect();
-        let safe = if safe.is_empty() { "default".to_string() } else { safe };
-        Archive { path: home.join("context").join(safe).join("archive.jsonl") }
+        let safe: String = session
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .take(96)
+            .collect();
+        let safe = if safe.is_empty() {
+            "default".to_string()
+        } else {
+            safe
+        };
+        Archive {
+            path: home.join("context").join(safe).join("archive.jsonl"),
+        }
     }
 
     pub fn load(&self) -> Vec<Archived> {
-        std::fs::read_to_string(&self.path).map(|t| t.lines().filter_map(|l| serde_json::from_str(l).ok()).collect()).unwrap_or_default()
+        std::fs::read_to_string(&self.path)
+            .map(|t| {
+                t.lines()
+                    .filter_map(|l| serde_json::from_str(l).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn append(&self, items: &[Archived]) -> Result<(), String> {
@@ -110,17 +155,30 @@ impl Archive {
         }
         // Ids are content hashes: one entry per id, across calls and within this batch.
         let mut known: HashSet<String> = self.load().into_iter().map(|a| a.id).collect();
-        let fresh: Vec<&Archived> = items.iter().filter(|a| known.insert(a.id.clone())).collect();
+        let fresh: Vec<&Archived> = items
+            .iter()
+            .filter(|a| known.insert(a.id.clone()))
+            .collect();
         if fresh.is_empty() {
             return Ok(());
         }
         if let Some(d) = self.path.parent() {
-            std::fs::create_dir_all(d).map_err(|e| format!("cannot create {}: {e}", d.display()))?;
+            std::fs::create_dir_all(d)
+                .map_err(|e| format!("cannot create {}: {e}", d.display()))?;
         }
         use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&self.path).map_err(|e| format!("cannot open {}: {e}", self.path.display()))?;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|e| format!("cannot open {}: {e}", self.path.display()))?;
         for a in fresh {
-            writeln!(f, "{}", serde_json::to_string(a).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            writeln!(
+                f,
+                "{}",
+                serde_json::to_string(a).map_err(|e| e.to_string())?
+            )
+            .map_err(|e| e.to_string())?;
         }
         Ok(())
     }
@@ -204,7 +262,12 @@ pub struct ArchivedRef {
 
 /// The latest user request: what kept context has to serve.
 fn current_task(messages: &[Value], focus: Option<&str>) -> String {
-    let last_user = messages.iter().rev().find(|m| m["role"] == "user" && !is_stub(m)).map(text_of).unwrap_or_default();
+    let last_user = messages
+        .iter()
+        .rev()
+        .find(|m| m["role"] == "user" && !is_stub(m))
+        .map(text_of)
+        .unwrap_or_default();
     let mut q: String = last_user.chars().take(700).collect();
     if let Some(f) = focus.filter(|f| !f.trim().is_empty()) {
         q = format!("{q}\nFocus: {}", f.chars().take(280).collect::<String>());
@@ -212,10 +275,18 @@ fn current_task(messages: &[Value], focus: Option<&str>) -> String {
     q
 }
 
-pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input: &CompressInput) -> CompressOutput {
+pub async fn compress<D: Decider>(
+    decider: Option<&D>,
+    archive: &Archive,
+    input: &CompressInput,
+) -> CompressOutput {
     let mut messages = input.messages.clone();
     let before = total_tokens(&messages);
-    let mut out = CompressOutput { tokens_before: before, ranking: "none needed".into(), ..Default::default() };
+    let mut out = CompressOutput {
+        tokens_before: before,
+        ranking: "none needed".into(),
+        ..Default::default()
+    };
     let n = messages.len();
     // Protected: system messages, the first N others, and the last N messages.
     let mut protected = vec![false; n];
@@ -228,19 +299,36 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
             head_left -= 1;
         }
     }
-    for p in protected.iter_mut().skip(n.saturating_sub(input.protect_last_n)) {
+    for p in protected
+        .iter_mut()
+        .skip(n.saturating_sub(input.protect_last_n))
+    {
         *p = true;
     }
     // Multimodal messages (images, audio parts) are left alone: a text stub can't stand in for them.
     let text_only = |m: &Value| match m.get("content") {
-        Some(Value::Array(parts)) => parts.iter().all(|p| p.get("type").and_then(Value::as_str).is_none_or(|t| t == "text")),
+        Some(Value::Array(parts)) => parts.iter().all(|p| {
+            p.get("type")
+                .and_then(Value::as_str)
+                .is_none_or(|t| t == "text")
+        }),
         _ => true,
     };
-    let candidates: Vec<usize> =
-        (0..n).filter(|&i| !protected[i] && !is_stub(&messages[i]) && !text_of(&messages[i]).is_empty() && text_only(&messages[i])).collect();
+    let candidates: Vec<usize> = (0..n)
+        .filter(|&i| {
+            !protected[i]
+                && !is_stub(&messages[i])
+                && !text_of(&messages[i]).is_empty()
+                && text_only(&messages[i])
+        })
+        .collect();
     let now = chrono::Local::now().to_rfc3339();
     let mut archived: Vec<Archived> = Vec::new();
-    let archive_one = |messages: &mut Vec<Value>, i: usize, why: &str, archived: &mut Vec<Archived>, refs: &mut Vec<ArchivedRef>| {
+    let archive_one = |messages: &mut Vec<Value>,
+                       i: usize,
+                       why: &str,
+                       archived: &mut Vec<Archived>,
+                       refs: &mut Vec<ArchivedRef>| {
         let m = &messages[i];
         let role = m["role"].as_str().unwrap_or("message").to_string();
         let content = text_of(m);
@@ -248,14 +336,25 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
         archived.push(Archived {
             id: id.clone(),
             role: role.clone(),
-            message_uid: m.get("message_uid").and_then(Value::as_str).map(String::from),
-            tool_call_id: m.get("tool_call_id").and_then(Value::as_str).map(String::from),
+            message_uid: m
+                .get("message_uid")
+                .and_then(Value::as_str)
+                .map(String::from),
+            tool_call_id: m
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .map(String::from),
             tokens: content.len() / 4,
             content: content.clone(),
             why: why.to_string(),
             at: now.clone(),
         });
-        refs.push(ArchivedRef { id: id.clone(), index: i, tokens: content.len() / 4, why: why.to_string() });
+        refs.push(ArchivedRef {
+            id: id.clone(),
+            index: i,
+            tokens: content.len() / 4,
+            why: why.to_string(),
+        });
         messages[i]["content"] = Value::String(stub(&id, &role, &content, why));
     };
 
@@ -269,18 +368,37 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
         if let std::collections::hash_map::Entry::Vacant(e) = seen.entry(key) {
             e.insert(i);
         } else {
-            archive_one(&mut messages, i, "duplicate of a later tool result", &mut archived, &mut out.archived);
+            archive_one(
+                &mut messages,
+                i,
+                "duplicate of a later tool result",
+                &mut archived,
+                &mut out.archived,
+            );
         }
     }
     // 2. Oversized tool results.
     for &i in &candidates {
-        if messages[i]["role"] == "tool" && !is_stub(&messages[i]) && text_of(&messages[i]).len() > input.big_chars {
-            archive_one(&mut messages, i, "large tool result", &mut archived, &mut out.archived);
+        if messages[i]["role"] == "tool"
+            && !is_stub(&messages[i])
+            && text_of(&messages[i]).len() > input.big_chars
+        {
+            archive_one(
+                &mut messages,
+                i,
+                "large tool result",
+                &mut archived,
+                &mut out.archived,
+            );
         }
     }
     // 3. Least relevant middle messages until under the target.
     if input.mode == "compress" && total_tokens(&messages) > input.target_tokens {
-        let open: Vec<usize> = candidates.iter().copied().filter(|&i| !is_stub(&messages[i])).collect();
+        let open: Vec<usize> = candidates
+            .iter()
+            .copied()
+            .filter(|&i| !is_stub(&messages[i]))
+            .collect();
         let (order, ranking, notes) = rank(decider, &messages, &open, input).await;
         out.ranking = ranking;
         out.notes.extend(notes);
@@ -288,7 +406,13 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
             if total_tokens(&messages) <= input.target_tokens {
                 break;
             }
-            archive_one(&mut messages, i, "least relevant to the current task", &mut archived, &mut out.archived);
+            archive_one(
+                &mut messages,
+                i,
+                "least relevant to the current task",
+                &mut archived,
+                &mut out.archived,
+            );
         }
         if total_tokens(&messages) > input.target_tokens {
             out.notes.push(format!(
@@ -301,7 +425,8 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
     }
     if let Err(e) = archive.append(&archived) {
         // Without the archive a stub would point at nothing: keep the originals instead.
-        out.notes.push(format!("archive not written ({e}); nothing was archived"));
+        out.notes
+            .push(format!("archive not written ({e}); nothing was archived"));
         out.messages = input.messages.clone();
         out.archived.clear();
         out.tokens_after = before;
@@ -316,10 +441,17 @@ pub async fn compress<D: Decider>(decider: Option<&D>, archive: &Archive, input:
 /// Archive order: least relevant first. Kev ranks the largest `rank_max` candidates (a message's
 /// opening against the current task); the rest, and everything when Kev is unavailable, go
 /// oldest first. Ties go to the larger message: it frees more.
-async fn rank<D: Decider>(decider: Option<&D>, messages: &[Value], open: &[usize], input: &CompressInput) -> (Vec<usize>, String, Vec<String>) {
+async fn rank<D: Decider>(
+    decider: Option<&D>,
+    messages: &[Value],
+    open: &[usize],
+    input: &CompressInput,
+) -> (Vec<usize>, String, Vec<String>) {
     let mut notes = Vec::new();
     let oldest_first = || open.to_vec();
-    let Some(d) = decider.filter(|_| input.use_kev) else { return (oldest_first(), "recency".into(), notes) };
+    let Some(d) = decider.filter(|_| input.use_kev) else {
+        return (oldest_first(), "recency".into(), notes);
+    };
     let task = current_task(messages, input.focus.as_deref());
     if task.trim().is_empty() {
         notes.push("no user request to rank against; oldest first".into());
@@ -333,12 +465,26 @@ async fn rank<D: Decider>(decider: Option<&D>, messages: &[Value], open: &[usize
     let mut score: BTreeMap<usize, f64> = BTreeMap::new();
     for &i in by_size.iter().take(input.rank_max) {
         if Instant::now() >= deadline {
-            notes.push(format!("ranking stopped at the {}s deadline after {} messages", input.rank_deadline_s, score.len()));
+            notes.push(format!(
+                "ranking stopped at the {}s deadline after {} messages",
+                input.rank_deadline_s,
+                score.len()
+            ));
             break;
         }
         let chunk: String = text_of(&messages[i]).chars().take(1400).collect();
-        let Ok(state) = spec.state(&[("query", task.chars().take(1000).collect()), ("chunk", chunk)]) else { continue };
-        match tokio::time::timeout(deadline.saturating_duration_since(Instant::now()), d.decide(&state, &q)).await {
+        let Ok(state) = spec.state(&[
+            ("query", task.chars().take(1000).collect()),
+            ("chunk", chunk),
+        ]) else {
+            continue;
+        };
+        match tokio::time::timeout(
+            deadline.saturating_duration_since(Instant::now()),
+            d.decide(&state, &q),
+        )
+        .await
+        {
             Ok(Ok(dec)) => {
                 if let Some(a) = dec.answers.get("relevant") {
                     score.insert(i, a.value);
@@ -349,7 +495,10 @@ async fn rank<D: Decider>(decider: Option<&D>, messages: &[Value], open: &[usize
                 return (oldest_first(), "recency".into(), notes);
             }
             Err(_) => {
-                notes.push(format!("ranking stopped at the {}s deadline", input.rank_deadline_s));
+                notes.push(format!(
+                    "ranking stopped at the {}s deadline",
+                    input.rank_deadline_s
+                ));
                 break;
             }
         }
@@ -359,9 +508,17 @@ async fn rank<D: Decider>(decider: Option<&D>, messages: &[Value], open: &[usize
     }
     // Scored messages by relevance (lowest first), then the unscored ones oldest first.
     let mut scored: Vec<usize> = score.keys().copied().collect();
-    scored.sort_by(|a, b| score[a].total_cmp(&score[b]).then(est_tokens(&messages[*b]).cmp(&est_tokens(&messages[*a]))));
+    scored.sort_by(|a, b| {
+        score[a]
+            .total_cmp(&score[b])
+            .then(est_tokens(&messages[*b]).cmp(&est_tokens(&messages[*a])))
+    });
     let rest = open.iter().copied().filter(|i| !score.contains_key(i));
-    (scored.into_iter().chain(rest).collect(), "kev".into(), notes)
+    (
+        scored.into_iter().chain(rest).collect(),
+        "kev".into(),
+        notes,
+    )
 }
 
 // ------------------------------------------------------------------ recall
@@ -377,14 +534,22 @@ pub struct RecallOutput {
 
 /// Archived messages by id, or every archived message containing `query` (case-insensitive),
 /// newest first, within `max_chars` of content.
-pub fn recall(archive: &Archive, id: Option<&str>, query: Option<&str>, max_chars: usize) -> RecallOutput {
+pub fn recall(
+    archive: &Archive,
+    id: Option<&str>,
+    query: Option<&str>,
+    max_chars: usize,
+) -> RecallOutput {
     let all = archive.load();
     let mut out = RecallOutput::default();
     let mut found: Vec<Archived> = match (id, query) {
         (Some(id), _) => all.into_iter().filter(|a| a.id == id).collect(),
         (None, Some(q)) if !q.trim().is_empty() => {
             let q = q.to_lowercase();
-            all.into_iter().rev().filter(|a| a.content.to_lowercase().contains(&q)).collect()
+            all.into_iter()
+                .rev()
+                .filter(|a| a.content.to_lowercase().contains(&q))
+                .collect()
         }
         _ => {
             out.error = Some("give an id (from an archive stub) or a query".into());
@@ -401,7 +566,13 @@ pub fn recall(archive: &Archive, id: Option<&str>, query: Option<&str>, max_char
     let mut left = max_chars;
     for a in &mut found {
         if a.content.len() > left {
-            let keep = a.content.char_indices().take_while(|(i, _)| *i < left).map(|(i, c)| i + c.len_utf8()).last().unwrap_or(0);
+            let keep = a
+                .content
+                .char_indices()
+                .take_while(|(i, _)| *i < left)
+                .map(|(i, c)| i + c.len_utf8())
+                .last()
+                .unwrap_or(0);
             out.truncated_chars += a.content.len() - keep;
             a.content.truncate(keep);
         }

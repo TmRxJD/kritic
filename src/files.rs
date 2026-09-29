@@ -9,12 +9,47 @@ pub const MAX_FILE_BYTES: u64 = 400_000;
 pub const MAX_FILES: usize = 80;
 
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", "dist", "build", ".turbo", "coverage", ".git", "graphify-out", ".venv", "__pycache__",
-    "target", ".next", ".svelte-kit",
+    "node_modules",
+    "dist",
+    "build",
+    ".turbo",
+    "coverage",
+    ".git",
+    "graphify-out",
+    ".venv",
+    "__pycache__",
+    "target",
+    ".next",
+    ".svelte-kit",
 ];
 const BINARY_EXT: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "ico", "pdf", "zip", "gz", "exe", "dll", "so", "dylib", "bin", "gguf",
-    "safetensors", "pt", "onnx", "mp3", "mp4", "wav", "ogg", "egg", "woff", "woff2", "ttf", "lock",
+    "png",
+    "jpg",
+    "jpeg",
+    "gif",
+    "webp",
+    "ico",
+    "pdf",
+    "zip",
+    "gz",
+    "exe",
+    "dll",
+    "so",
+    "dylib",
+    "bin",
+    "gguf",
+    "safetensors",
+    "pt",
+    "onnx",
+    "mp3",
+    "mp4",
+    "wav",
+    "ogg",
+    "egg",
+    "woff",
+    "woff2",
+    "ttf",
+    "lock",
 ];
 
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
@@ -24,7 +59,12 @@ pub struct Skipped {
 }
 
 pub fn kind_for_path(p: &Path) -> &'static str {
-    match p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+    match p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("json") => "json",
         Some("yaml" | "yml") => "yaml",
         Some("toml") => "toml",
@@ -32,8 +72,9 @@ pub fn kind_for_path(p: &Path) -> &'static str {
         Some("md") => "markdown",
         Some("dat" | "beatmap") => "map",
         Some(
-            "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "gleam" | "rs" | "go" | "cs" | "svelte" | "vue" | "sh"
-            | "ps1" | "sql" | "css" | "html" | "c" | "cpp" | "h" | "hpp" | "java" | "kt" | "swift" | "lua",
+            "ts" | "tsx" | "js" | "jsx" | "mjs" | "cjs" | "gleam" | "rs" | "go" | "cs" | "svelte"
+            | "vue" | "sh" | "ps1" | "sql" | "css" | "html" | "c" | "cpp" | "h" | "hpp" | "java"
+            | "kt" | "swift" | "lua",
         ) => "code",
         _ => "text",
     }
@@ -41,7 +82,9 @@ pub fn kind_for_path(p: &Path) -> &'static str {
 
 /// Resolve paths (relative ones against `base`) and drop anything the critic shouldn't read.
 pub fn resolve_paths(paths: &[String], base: Option<&str>) -> (Vec<PathBuf>, Vec<Skipped>) {
-    let base = base.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let base = base
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     let mut usable = Vec::new();
     let mut skipped = Vec::new();
     let mut seen = HashSet::new();
@@ -56,7 +99,10 @@ pub fn resolve_paths(paths: &[String], base: Option<&str>) -> (Vec<PathBuf>, Vec
             Some("not found")
         } else if p.is_dir() {
             Some("is a directory (pass files)")
-        } else if p.components().any(|c| SKIP_DIRS.contains(&c.as_os_str().to_string_lossy().as_ref())) {
+        } else if p
+            .components()
+            .any(|c| SKIP_DIRS.contains(&c.as_os_str().to_string_lossy().as_ref()))
+        {
             Some("in ignored directory")
         } else if p
             .extension()
@@ -64,7 +110,11 @@ pub fn resolve_paths(paths: &[String], base: Option<&str>) -> (Vec<PathBuf>, Vec
             .is_some_and(|e| BINARY_EXT.contains(&e.to_ascii_lowercase().as_str()))
         {
             Some("binary/lockfile")
-        } else if p.metadata().map(|m| m.len() > MAX_FILE_BYTES).unwrap_or(false) {
+        } else if p
+            .metadata()
+            .map(|m| m.len() > MAX_FILE_BYTES)
+            .unwrap_or(false)
+        {
             Some("larger than 400 KB")
         } else if usable.len() >= MAX_FILES {
             Some("over 80 file limit")
@@ -72,7 +122,10 @@ pub fn resolve_paths(paths: &[String], base: Option<&str>) -> (Vec<PathBuf>, Vec
             None
         };
         match reason {
-            Some(r) => skipped.push(Skipped { path: p.display().to_string(), reason: r.into() }),
+            Some(r) => skipped.push(Skipped {
+                path: p.display().to_string(),
+                reason: r.into(),
+            }),
             None => usable.push(p),
         }
     }

@@ -40,6 +40,53 @@ pub enum Cmd {
     Serve,
     /// Hermes context-engine backend (used by the kritic Hermes plugin)
     Context(context::ContextArgs),
+    /// Save the AI Gateway key for cloud Jev (hidden prompt, or piped on stdin)
+    Key(KeyArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct KeyArgs {
+    /// Delete the saved key
+    #[arg(long)]
+    pub remove: bool,
+}
+
+pub fn key(args: KeyArgs) -> Result<(), String> {
+    let cfg = crate::config::Config::load();
+    let path = &cfg.cloud_key_file;
+    if args.remove {
+        match std::fs::remove_file(path) {
+            Ok(()) => ui::ok(&format!("removed {}", path.display())),
+            Err(_) => ui::info(&format!("no key file at {}", path.display())),
+        }
+        return Ok(());
+    }
+    let key = if ui::interactive() {
+        ui::secret("AI Gateway API key (input hidden)")
+    } else {
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut s).map_err(|e| e.to_string())?;
+        Some(s.trim().to_string()).filter(|s| !s.is_empty())
+    }
+    .ok_or("no key given")?;
+    if key.chars().any(char::is_whitespace) {
+        return Err("that doesn't look like a key (it contains whitespace)".into());
+    }
+    setup::write_key(path, &key)?;
+    ui::ok(&format!(
+        "key saved to {} (never printed, never in kritic.toml)",
+        path.display()
+    ));
+    match cfg.backend.as_str() {
+        "cloud" => ui::info("kev.backend = cloud: Kev questions go to cloud Jev"),
+        "auto" => ui::info(
+            "kev.backend = auto: cloud Jev is used only when local Kev isn't installed; set KRITIC_KEV_BACKEND=cloud to force it",
+        ),
+        other => ui::info(&format!(
+            "kev.backend = {other}: the key is unused until the backend is cloud or auto"
+        )),
+    }
+    Ok(())
 }
 
 #[derive(Args, Debug)]
@@ -71,15 +118,35 @@ pub struct UninstallArgs {
 pub fn register(args: RegisterArgs) -> Result<(), String> {
     let home = crate::config::kritic_home();
     let exe = doctor::exe_path();
-    let (claude, hermes) = if !args.claude && !args.hermes { (register::claude_present(), register::hermes_present()) } else { (args.claude, args.hermes) };
+    let (claude, hermes) = if !args.claude && !args.hermes {
+        (register::claude_present(), register::hermes_present())
+    } else {
+        (args.claude, args.hermes)
+    };
     if !claude && !hermes {
-        return Err("no agent found: install Claude Code or Hermes, or pass --claude / --hermes".into());
+        return Err(
+            "no agent found: install Claude Code or Hermes, or pass --claude / --hermes".into(),
+        );
     }
     if claude {
-        register::register_claude(&home, &exe, &register::ClaudeOptions { rule: !args.no_rule })?;
+        register::register_claude(
+            &home,
+            &exe,
+            &register::ClaudeOptions {
+                rule: !args.no_rule,
+                concise: crate::config::Config::load().output_style == "concise",
+            },
+        )?;
     }
     if hermes {
-        register::register_hermes(&home, &exe, &register::HermesOptions { context_engine: args.hermes_context })?;
+        register::register_hermes(
+            &home,
+            &exe,
+            &register::HermesOptions {
+                context_engine: args.hermes_context,
+                concise: crate::config::Config::load().output_style == "concise",
+            },
+        )?;
     }
     eprintln!("Start a new agent session to pick kritic up.");
     Ok(())
@@ -96,7 +163,14 @@ pub fn uninstall(args: UninstallArgs) -> Result<(), String> {
         ui::skip("kritic was not registered anywhere");
     }
     if args.purge {
-        if ui::confirm(&format!("Delete {} (models, config, logs, archives)?", home.display()), args.yes, args.yes) {
+        if ui::confirm(
+            &format!(
+                "Delete {} (models, config, logs, archives)?",
+                home.display()
+            ),
+            args.yes,
+            args.yes,
+        ) {
             std::fs::remove_dir_all(&home).map_err(|e| format!("cannot delete {}: {e} (a running kritic may hold a file; close agent sessions first)", home.display()))?;
             ui::ok(&format!("deleted {}", home.display()));
         } else {

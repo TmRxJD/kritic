@@ -26,7 +26,12 @@ pub async fn lock_across_processes(cfg: &Config, tool: &str) -> Result<GpuFileLo
     std::fs::create_dir_all(&cfg.runs_dir).map_err(|e| e.to_string())?;
     let path = cfg.runs_dir.join("gpu.lock");
     let owner = cfg.runs_dir.join("gpu.owner");
-    let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&path).map_err(|e| e.to_string())?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
     let deadline = std::time::Instant::now() + Duration::from_secs(cfg.gpu_wait_s);
     let mut announced = false;
     loop {
@@ -38,11 +43,18 @@ pub async fn lock_across_processes(cfg: &Config, tool: &str) -> Result<GpuFileLo
             Err(std::fs::TryLockError::WouldBlock) => {
                 if !announced {
                     let holder = std::fs::read_to_string(&owner).unwrap_or_default();
-                    crate::events::ready("gpu", "waiting", &format!("held by another session: {holder}"));
+                    crate::events::ready(
+                        "gpu",
+                        "waiting",
+                        &format!("held by another session: {holder}"),
+                    );
                     announced = true;
                 }
                 if std::time::Instant::now() > deadline {
-                    return Err(format!("GPU busy in another session for over {}s", cfg.gpu_wait_s));
+                    return Err(format!(
+                        "GPU busy in another session for over {}s",
+                        cfg.gpu_wait_s
+                    ));
                 }
                 tokio::time::sleep(Duration::from_millis(500)).await;
             }
@@ -65,11 +77,21 @@ pub async fn unload_vision(cfg: &Config) {
 
 /// Stop laya so the vision model gets the GPU. Returns whether a process was stopped.
 pub async fn stop_laya(cfg: &Config) -> bool {
-    let exe = cfg.laya_exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "laya.exe".into());
+    let exe = cfg
+        .laya_exe
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "laya.exe".into());
     let out = if cfg!(windows) {
-        tokio::process::Command::new("taskkill").args(["/F", "/IM", &exe]).output().await
+        tokio::process::Command::new("taskkill")
+            .args(["/F", "/IM", &exe])
+            .output()
+            .await
     } else {
-        tokio::process::Command::new("pkill").args(["-f", &exe]).output().await
+        tokio::process::Command::new("pkill")
+            .args(["-f", &exe])
+            .output()
+            .await
     };
     let stopped = out.map(|o| o.status.success()).unwrap_or(false);
     if stopped {

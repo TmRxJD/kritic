@@ -6,19 +6,30 @@ use kritic::config::{Config, DEFAULT_DISABLED, KEYS};
 #[test]
 fn example_documents_every_key_and_file_env_precedence_holds() {
     // examples/kritic.toml documents every key under its section, with its env variable.
-    let example = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/examples/kritic.toml")).unwrap();
+    let example =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/examples/kritic.toml"))
+            .unwrap();
     for (key, env) in KEYS {
         let (section, name) = key.split_once('.').unwrap();
-        let at = example.find(&format!("[{section}]")).unwrap_or_else(|| panic!("section [{section}] missing"));
+        let at = example
+            .find(&format!("[{section}]"))
+            .unwrap_or_else(|| panic!("section [{section}] missing"));
         let body = &example[at..];
         let body = &body[..body[1..].find("\n[").map_or(body.len(), |i| i + 1)];
-        assert!(body.contains(&format!("# {name} = ")), "{key} not documented in examples/kritic.toml");
+        assert!(
+            body.contains(&format!("# {name} = ")),
+            "{key} not documented in examples/kritic.toml"
+        );
         assert!(body.contains(env), "{env} not documented for {key}");
     }
 
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("kritic.toml");
-    std::fs::write(&file, "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\nbogus = 1\n\n[tools]\ndisabled = []\n").unwrap();
+    std::fs::write(
+        &file,
+        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\nbogus = 1\n\n[tools]\ndisabled = []\n",
+    )
+    .unwrap();
     // SAFETY: no other test in this binary reads the environment.
     unsafe {
         for (_, env) in KEYS {
@@ -36,7 +47,11 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert!(c.disabled_tools.is_empty(), "file list");
     assert_eq!(c.config_errors.len(), 1, "{:?}", c.config_errors);
     assert!(c.config_errors[0].contains("kev.bogus"));
-    assert_eq!(c.runs_dir, dir.path().join("runs"), "paths default under KRITIC_HOME");
+    assert_eq!(
+        c.runs_dir,
+        dir.path().join("runs"),
+        "paths default under KRITIC_HOME"
+    );
 
     // No file: defaults, map_eval disabled; env list is comma-separated.
     unsafe {
@@ -49,6 +64,16 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };
     assert_eq!(Config::load().disabled_tools, DEFAULT_DISABLED);
 
+    // Set-but-empty means unset; a relative home is made absolute.
+    unsafe { std::env::set_var("KRITIC_HOME", "") };
+    assert!(
+        kritic::config::kritic_home().ends_with(".kritic")
+            && kritic::config::kritic_home().is_absolute()
+    );
+    unsafe { std::env::set_var("KRITIC_HOME", "relative-home") };
+    assert!(kritic::config::kritic_home().is_absolute());
+    unsafe { std::env::set_var("KRITIC_HOME", dir.path().join("empty")) };
+
     // An explicit KRITIC_CONFIG that doesn't exist is an error, not silently ignored.
     unsafe { std::env::set_var("KRITIC_CONFIG", dir.path().join("missing.toml")) };
     assert_eq!(Config::load().config_errors.len(), 1);
@@ -57,7 +82,9 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
 #[test]
 fn example_ux_specs_validate() {
     for name in ["web.ux.toml", "unity.ux.toml"] {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/ux").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("examples/ux")
+            .join(name);
         kritic::ux::load_spec(&path).unwrap_or_else(|e| panic!("{name}: {e:?}"));
     }
 }
@@ -67,5 +94,8 @@ fn example_plugin_manifest_is_discovered() {
     let base = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/plugin-repo");
     let (plugins, errors) = kritic::plugins::discover(&base);
     assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(plugins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), ["todo-budget"]);
+    assert_eq!(
+        plugins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+        ["todo-budget"]
+    );
 }

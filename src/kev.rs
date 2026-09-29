@@ -33,7 +33,12 @@ impl Question {
         }
     }
     fn est_chars(&self) -> usize {
-        self.instructions.len() + self.criteria.as_ref().map(|c| c.to_string().len()).unwrap_or(0)
+        self.instructions.len()
+            + self
+                .criteria
+                .as_ref()
+                .map(|c| c.to_string().len())
+                .unwrap_or(0)
     }
 }
 
@@ -111,23 +116,42 @@ pub fn cloud_answer(q: &Question, raw: &Value) -> Value {
     match raw.get("type").and_then(Value::as_str) {
         Some("boolean") => {
             let p = raw.get("probability").and_then(Value::as_f64);
-            let conf = raw.get("confidence").and_then(Value::as_f64).or(p.map(|p| p.max(1.0 - p)));
+            let conf = raw
+                .get("confidence")
+                .and_then(Value::as_f64)
+                .or(p.map(|p| p.max(1.0 - p)));
             json!({"type": "noul", "noul": p, "confidence": conf})
         }
         Some("choice") => {
-            let chosen = raw.get("choice").and_then(Value::as_str).and_then(|c| probs.and_then(|p| p.get(c))).and_then(Value::as_f64);
+            let chosen = raw
+                .get("choice")
+                .and_then(Value::as_str)
+                .and_then(|c| probs.and_then(|p| p.get(c)))
+                .and_then(Value::as_f64);
             let conf = raw.get("confidence").and_then(Value::as_f64).or(chosen);
             json!({"type": "choice", "choice": raw.get("choice"), "probabilities": raw.get("probabilities"), "confidence": conf})
         }
         Some("score") => {
             // Score as a 0-based rung index: the expected index over the rung probabilities when
             // they name the rungs, else the reported score (shifted if it is 1-based).
-            let rungs: Vec<String> = q.criteria.as_ref().and_then(Value::as_array).map(|a| a.iter().filter_map(|r| r.as_str().map(String::from)).collect()).unwrap_or_default();
+            let rungs: Vec<String> = q
+                .criteria
+                .as_ref()
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|r| r.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
             let expected = probs.and_then(|p| {
                 let mut sum = 0.0;
                 let mut mass = 0.0;
                 for (i, rung) in rungs.iter().enumerate() {
-                    let pr = p.get(rung).or_else(|| p.get(&i.to_string())).and_then(Value::as_f64)?;
+                    let pr = p
+                        .get(rung)
+                        .or_else(|| p.get(&i.to_string()))
+                        .and_then(Value::as_f64)?;
                     sum += i as f64 * pr;
                     mass += pr;
                 }
@@ -135,7 +159,8 @@ pub fn cloud_answer(q: &Question, raw: &Value) -> Value {
             });
             let reported = raw.get("score").and_then(Value::as_f64);
             let n = rungs.len() as f64;
-            let score = expected.or(reported.map(|s| if s > n - 1.0 && s <= n { s - 1.0 } else { s }));
+            let score =
+                expected.or(reported.map(|s| if s > n - 1.0 && s <= n { s - 1.0 } else { s }));
             let conf = raw.get("confidence").and_then(Value::as_f64).or(top);
             json!({"type": "score", "score": score, "probabilities": raw.get("probabilities"), "confidence": conf})
         }
@@ -176,39 +201,80 @@ pub fn group_questions(
 /// Validate one laya answer against the question asked.
 pub fn parse_answer(id: &str, q: &Question, raw: &Value) -> Result<Answer, String> {
     let bad = |why: &str| format!("kev answer `{id}` invalid: {why}");
-    let ty = raw.get("type").and_then(Value::as_str).ok_or_else(|| bad("missing type"))?;
+    let ty = raw
+        .get("type")
+        .and_then(Value::as_str)
+        .ok_or_else(|| bad("missing type"))?;
     if ty != q.kind {
         return Err(bad(&format!("type {ty} != asked {}", q.kind)));
     }
-    let confidence = raw.get("confidence").and_then(Value::as_f64).ok_or_else(|| bad("missing confidence"))?;
-    let probs = raw.get("probabilities").and_then(Value::as_object).map(|o| {
-        o.iter().filter_map(|(k, v)| v.as_f64().map(|f| (k.clone(), f))).collect::<BTreeMap<_, _>>()
-    });
+    let confidence = raw
+        .get("confidence")
+        .and_then(Value::as_f64)
+        .ok_or_else(|| bad("missing confidence"))?;
+    let probs = raw
+        .get("probabilities")
+        .and_then(Value::as_object)
+        .map(|o| {
+            o.iter()
+                .filter_map(|(k, v)| v.as_f64().map(|f| (k.clone(), f)))
+                .collect::<BTreeMap<_, _>>()
+        });
     let in01 = |v: f64| (0.0..=1.0).contains(&v);
     match q.kind {
         "noul" => {
-            let v = raw.get("noul").and_then(Value::as_f64).ok_or_else(|| bad("missing noul"))?;
+            let v = raw
+                .get("noul")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| bad("missing noul"))?;
             if !in01(v) {
                 return Err(bad("noul out of [0,1]"));
             }
-            Ok(Answer { value: v, choice: None, probabilities: None, confidence })
+            Ok(Answer {
+                value: v,
+                choice: None,
+                probabilities: None,
+                confidence,
+            })
         }
         "choice" => {
-            let c = raw.get("choice").and_then(Value::as_str).ok_or_else(|| bad("missing choice"))?;
+            let c = raw
+                .get("choice")
+                .and_then(Value::as_str)
+                .ok_or_else(|| bad("missing choice"))?;
             let probs = probs.ok_or_else(|| bad("missing probabilities"))?;
-            let asked = q.criteria.as_ref().and_then(Value::as_object).ok_or_else(|| bad("question has no options"))?;
+            let asked = q
+                .criteria
+                .as_ref()
+                .and_then(Value::as_object)
+                .ok_or_else(|| bad("question has no options"))?;
             if !asked.contains_key(c) {
                 return Err(bad(&format!("choice `{c}` was not an option")));
             }
-            let p = *probs.get(c).ok_or_else(|| bad("chosen option has no probability"))?;
-            Ok(Answer { value: p, choice: Some(c.to_string()), probabilities: Some(probs), confidence })
+            let p = *probs
+                .get(c)
+                .ok_or_else(|| bad("chosen option has no probability"))?;
+            Ok(Answer {
+                value: p,
+                choice: Some(c.to_string()),
+                probabilities: Some(probs),
+                confidence,
+            })
         }
         "score" => {
-            let v = raw.get("score").and_then(Value::as_f64).ok_or_else(|| bad("missing score"))?;
+            let v = raw
+                .get("score")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| bad("missing score"))?;
             if v < 0.0 || v > (q.levels().saturating_sub(1)) as f64 + 1e-6 {
                 return Err(bad("score out of range"));
             }
-            Ok(Answer { value: v, choice: None, probabilities: probs, confidence })
+            Ok(Answer {
+                value: v,
+                choice: None,
+                probabilities: probs,
+                confidence,
+            })
         }
         other => Err(bad(&format!("unknown type {other}"))),
     }
@@ -221,12 +287,18 @@ impl KevClient {
             .timeout(Duration::from_secs(cfg.kev_request_s))
             .build()
             .expect("reqwest client");
-        KevClient { cfg, http, start_lock: tokio::sync::Mutex::new(()), backend: tokio::sync::Mutex::new(None) }
+        KevClient {
+            cfg,
+            http,
+            start_lock: tokio::sync::Mutex::new(()),
+            backend: tokio::sync::Mutex::new(None),
+        }
     }
 
     /// Whether a local Kev is installed (laya answering, or its binary and weights present).
     pub async fn local_available(&self) -> bool {
-        self.health().await.is_some() || (self.cfg.laya_exe.is_file() && self.cfg.kev_gguf.is_file())
+        self.health().await.is_some()
+            || (self.cfg.laya_exe.is_file() && self.cfg.kev_gguf.is_file())
     }
 
     /// Resolve `kev.backend` once. `auto` prefers the local model: code is sent to the cloud only
@@ -238,7 +310,7 @@ impl KevClient {
         }
         let cloud = || {
             self.cfg.cloud_key().map(|key| Backend::Cloud { key }).ok_or_else(|| {
-                format!("cloud Jev needs a gateway key: set AI_GATEWAY_API_KEY or write it to {} (`kritic setup --backend cloud`)", self.cfg.cloud_key_file.display())
+                format!("cloud Jev needs a gateway key: run `kritic key` (saves it to {}) or set AI_GATEWAY_API_KEY", self.cfg.cloud_key_file.display())
             })
         };
         let b = match self.cfg.backend.as_str() {
@@ -267,31 +339,76 @@ impl KevClient {
     }
 
     /// One request to the evaluate API. Answers come back translated to laya's shape.
-    async fn cloud_exchange(&self, key: &str, state: &Value, questions: &BTreeMap<String, Question>) -> Result<(Value, u64), String> {
-        let wire: serde_json::Map<String, Value> = questions.iter().map(|(id, q)| (id.clone(), cloud_question(q))).collect();
+    async fn cloud_exchange(
+        &self,
+        key: &str,
+        state: &Value,
+        questions: &BTreeMap<String, Question>,
+    ) -> Result<(Value, u64), String> {
+        let wire: serde_json::Map<String, Value> = questions
+            .iter()
+            .map(|(id, q)| (id.clone(), cloud_question(q)))
+            .collect();
         let body = json!({"model": self.cfg.cloud_model, "state": state, "questions": wire});
         let t0 = Instant::now();
-        let send = self.http.post(&self.cfg.cloud_url).bearer_auth(key).json(&body).send();
+        let send = self
+            .http
+            .post(&self.cfg.cloud_url)
+            .bearer_auth(key)
+            .json(&body)
+            .send();
         let r = tokio::time::timeout(Duration::from_secs(self.cfg.kev_request_s), send)
             .await
-            .map_err(|_| format!("cloud Jev did not answer within {}s", self.cfg.kev_request_s))?
+            .map_err(|_| {
+                format!(
+                    "cloud Jev did not answer within {}s",
+                    self.cfg.kev_request_s
+                )
+            })?
             .map_err(|e| format!("cloud Jev request failed: {e}"))?;
         let status = r.status();
-        let v: Value = r.json().await.map_err(|e| format!("cloud Jev returned non-JSON ({status}): {e}"))?;
+        let v: Value = r
+            .json()
+            .await
+            .map_err(|e| format!("cloud Jev returned non-JSON ({status}): {e}"))?;
         if !status.is_success() {
-            let msg = v.pointer("/error/message").and_then(Value::as_str).unwrap_or("unknown error");
-            let hint = if status == 401 || status == 403 { " (check the gateway key)" } else { "" };
+            let msg = v
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown error");
+            let hint = if status == 401 || status == 403 {
+                " (check the gateway key)"
+            } else {
+                ""
+            };
             return Err(format!("cloud Jev HTTP {status}: {msg}{hint}"));
         }
-        let answers = v.get("answers").and_then(Value::as_object).ok_or("cloud Jev response has no answers")?;
-        let translated: serde_json::Map<String, Value> =
-            questions.iter().filter_map(|(id, q)| answers.get(id).map(|a| (id.clone(), cloud_answer(q, a)))).collect();
-        let tokens = v.pointer("/usage/inputTokens").and_then(Value::as_u64).unwrap_or(0);
-        Ok((json!({"answers": translated, "usage": {"input_tokens": tokens}}), t0.elapsed().as_millis() as u64))
+        let answers = v
+            .get("answers")
+            .and_then(Value::as_object)
+            .ok_or("cloud Jev response has no answers")?;
+        let translated: serde_json::Map<String, Value> = questions
+            .iter()
+            .filter_map(|(id, q)| answers.get(id).map(|a| (id.clone(), cloud_answer(q, a))))
+            .collect();
+        let tokens = v
+            .pointer("/usage/inputTokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        Ok((
+            json!({"answers": translated, "usage": {"input_tokens": tokens}}),
+            t0.elapsed().as_millis() as u64,
+        ))
     }
 
     pub async fn health(&self) -> Option<Value> {
-        let r = self.http.get(format!("{}/health", self.cfg.laya_url)).timeout(Duration::from_secs(3)).send().await.ok()?;
+        let r = self
+            .http
+            .get(format!("{}/health", self.cfg.laya_url))
+            .timeout(Duration::from_secs(3))
+            .send()
+            .await
+            .ok()?;
         if !r.status().is_success() {
             return None;
         }
@@ -321,22 +438,36 @@ impl KevClient {
         crate::events::ready("laya", "starting", "loading Kev-4B");
         let exe = &self.cfg.laya_exe;
         if !exe.exists() {
-            return Err(format!("laya unreachable at {} and {} not found (set KRITIC_LAYA_EXE)", self.cfg.laya_url, exe.display()));
+            return Err(format!(
+                "laya unreachable at {} and {} not found (set KRITIC_LAYA_EXE)",
+                self.cfg.laya_url,
+                exe.display()
+            ));
         }
         if !self.cfg.kev_gguf.exists() {
-            return Err(format!("Kev GGUF not found at {} (set KRITIC_KEV_GGUF)", self.cfg.kev_gguf.display()));
+            return Err(format!(
+                "Kev GGUF not found at {} (set KRITIC_KEV_GGUF)",
+                self.cfg.kev_gguf.display()
+            ));
         }
         let _ = std::fs::create_dir_all(&self.cfg.cuda_cache);
         let log = self.cfg.log_path.with_file_name("laya.log");
         if let Some(dir) = log.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        let out = std::fs::File::create(&log).map_err(|e| format!("cannot create {}: {e}", log.display()))?;
+        let out = std::fs::File::create(&log)
+            .map_err(|e| format!("cannot create {}: {e}", log.display()))?;
         let err = out.try_clone().map_err(|e| e.to_string())?;
         let mut cmd = std::process::Command::new(exe);
         cmd.args(["serve"])
             .arg(&self.cfg.kev_gguf)
-            .args(["--port", &self.cfg.laya_port.to_string(), "--device", "auto", "--cuda-graph"])
+            .args([
+                "--port",
+                &self.cfg.laya_port.to_string(),
+                "--device",
+                "auto",
+                "--cuda-graph",
+            ])
             .current_dir(exe.parent().unwrap_or(std::path::Path::new(".")))
             // Persist the sm_89 PTX -> sm_120 JIT so restarts skip the ~40s compile.
             .env("CUDA_CACHE_PATH", &self.cfg.cuda_cache)
@@ -352,7 +483,8 @@ impl KevClient {
             const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             cmd.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
         }
-        cmd.spawn().map_err(|e| format!("failed to start laya: {e}"))?;
+        cmd.spawn()
+            .map_err(|e| format!("failed to start laya: {e}"))?;
         let deadline = Instant::now() + Duration::from_secs(120);
         while Instant::now() < deadline {
             if self.health().await.is_some() {
@@ -360,7 +492,10 @@ impl KevClient {
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
-        Err(format!("started laya but it did not answer within 120s (see {})", log.display()))
+        Err(format!(
+            "started laya but it did not answer within 120s (see {})",
+            log.display()
+        ))
     }
 
     /// One Kev request with a hard deadline. reqwest's own timeout once failed to end a request laya
@@ -368,19 +503,34 @@ impl KevClient {
     /// also bounded here. A stalled laya is stopped: its health check still answers while a
     /// request is stuck, so leaving it running would stall the next call too. The next call
     /// starts a fresh one (~13 s with the CUDA cache).
-    async fn post(&self, state: &Value, questions: &BTreeMap<String, Question>) -> Result<(Value, u64), String> {
+    async fn post(
+        &self,
+        state: &Value,
+        questions: &BTreeMap<String, Question>,
+    ) -> Result<(Value, u64), String> {
         let limit = Duration::from_secs(self.cfg.kev_request_s);
         match tokio::time::timeout(limit, self.exchange(state, questions)).await {
             Ok(result) => result,
             Err(_) => {
-                crate::events::ready("laya", "stalled", &format!("no answer in {}s; restarting it", limit.as_secs()));
+                crate::events::ready(
+                    "laya",
+                    "stalled",
+                    &format!("no answer in {}s; restarting it", limit.as_secs()),
+                );
                 crate::gpu::stop_laya(&self.cfg).await;
-                Err(format!("kev request stalled: laya did not answer within {}s (stopped it; the next call restarts it)", limit.as_secs()))
+                Err(format!(
+                    "kev request stalled: laya did not answer within {}s (stopped it; the next call restarts it)",
+                    limit.as_secs()
+                ))
             }
         }
     }
 
-    async fn exchange(&self, state: &Value, questions: &BTreeMap<String, Question>) -> Result<(Value, u64), String> {
+    async fn exchange(
+        &self,
+        state: &Value,
+        questions: &BTreeMap<String, Question>,
+    ) -> Result<(Value, u64), String> {
         let body = json!({"model": self.cfg.model, "state": state, "questions": questions});
         let t0 = Instant::now();
         let r = self
@@ -389,11 +539,23 @@ impl KevClient {
             .json(&body)
             .send()
             .await
-            .map_err(|e| if e.is_timeout() { format!("kev request timed out ({}s)", self.cfg.kev_request_s) } else { format!("laya request failed: {e}") })?;
+            .map_err(|e| {
+                if e.is_timeout() {
+                    format!("kev request timed out ({}s)", self.cfg.kev_request_s)
+                } else {
+                    format!("laya request failed: {e}")
+                }
+            })?;
         let status = r.status();
-        let v: Value = r.json().await.map_err(|e| format!("laya returned non-JSON ({status}): {e}"))?;
+        let v: Value = r
+            .json()
+            .await
+            .map_err(|e| format!("laya returned non-JSON ({status}): {e}"))?;
         if !status.is_success() {
-            let msg = v.pointer("/error/message").and_then(Value::as_str).unwrap_or("unknown error");
+            let msg = v
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown error");
             return Err(format!("laya HTTP {status}: {msg}"));
         }
         Ok((v, t0.elapsed().as_millis() as u64))
@@ -401,7 +563,11 @@ impl KevClient {
 }
 
 impl Decider for KevClient {
-    async fn decide(&self, state: &Value, questions: &BTreeMap<String, Question>) -> Result<Decision, String> {
+    async fn decide(
+        &self,
+        state: &Value,
+        questions: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
         let backend = self.resolve_backend().await?;
         if backend == Backend::Local {
             self.ensure_up().await?;
@@ -419,20 +585,33 @@ impl Decider for KevClient {
                 Backend::Cloud { key } => self.cloud_exchange(key, state, &group).await?,
             };
             out.latency_ms += ms;
-            let tokens = v.pointer("/usage/input_tokens").and_then(Value::as_u64).unwrap_or(0);
+            let tokens = v
+                .pointer("/usage/input_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
             out.input_tokens += tokens;
             crate::usage::log_model_usage(
                 &self.cfg,
                 json!({"model": model, "backend": backend.label(), "input_tokens": tokens, "output_tokens": 0, "latency_ms": ms, "rows": group.len()}),
             );
-            let answers = v.get("answers").and_then(Value::as_object).ok_or("laya response has no answers")?;
+            let answers = v
+                .get("answers")
+                .and_then(Value::as_object)
+                .ok_or("laya response has no answers")?;
             for (id, q) in &group {
-                let raw = answers.get(id).ok_or_else(|| format!("kev did not answer `{id}`"))?;
+                let raw = answers
+                    .get(id)
+                    .ok_or_else(|| format!("kev did not answer `{id}`"))?;
                 out.answers.insert(id.clone(), parse_answer(id, q, raw)?);
             }
-            let tokens = v.pointer("/usage/input_tokens").and_then(Value::as_u64).unwrap_or(0) as usize;
+            let tokens = v
+                .pointer("/usage/input_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
             // laya cuts rows silently at max_seq_tokens; the cloud model's window is not ours to know.
-            if backend == Backend::Local && tokens / group.len().max(1) >= self.cfg.max_seq_tokens.saturating_sub(8) {
+            if backend == Backend::Local
+                && tokens / group.len().max(1) >= self.cfg.max_seq_tokens.saturating_sub(8)
+            {
                 out.truncated = true;
             }
         }

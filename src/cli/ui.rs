@@ -20,11 +20,19 @@ pub fn interactive() -> bool {
 }
 
 fn color(code: &str, s: &str) -> String {
-    if std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none() { format!("\x1b[{code}m{s}\x1b[0m") } else { s.to_string() }
+    if std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
+        format!("\x1b[{code}m{s}\x1b[0m")
+    } else {
+        s.to_string()
+    }
 }
 
 pub fn heading(n: usize, total: usize, title: &str) {
-    eprintln!("\n{} {}", color("1;36", &format!("[{n}/{total}]")), color("1", title));
+    eprintln!(
+        "\n{} {}",
+        color("1;36", &format!("[{n}/{total}]")),
+        color("1", title)
+    );
 }
 
 pub fn ok(msg: &str) {
@@ -69,7 +77,12 @@ pub fn confirm(question: &str, default: bool, assume: bool) -> bool {
 
 /// Pick one of `options` (value, description). Returns the default without asking when
 /// non-interactive.
-pub fn choose<'a>(question: &str, options: &[(&'a str, &str)], default: &'a str, assume: bool) -> &'a str {
+pub fn choose<'a>(
+    question: &str,
+    options: &[(&'a str, &str)],
+    default: &'a str,
+    assume: bool,
+) -> &'a str {
     if assume || !interactive() {
         return default;
     }
@@ -91,7 +104,11 @@ pub fn choose<'a>(question: &str, options: &[(&'a str, &str)], default: &'a str,
     {
         return options[i - 1].0;
     }
-    options.iter().find(|(v, _)| *v == t).map(|(v, _)| *v).unwrap_or(default)
+    options
+        .iter()
+        .find(|(v, _)| *v == t)
+        .map(|(v, _)| *v)
+        .unwrap_or(default)
 }
 
 /// Read a secret without echoing it. None when non-interactive or empty.
@@ -109,5 +126,9 @@ pub fn bytes(n: u64) -> String {
     const G: f64 = 1024.0 * 1024.0 * 1024.0;
     const M: f64 = 1024.0 * 1024.0;
     let f = n as f64;
-    if f >= G { format!("{:.1} GB", f / G) } else { format!("{:.0} MB", f / M) }
+    if f >= G {
+        format!("{:.1} GB", f / G)
+    } else {
+        format!("{:.0} MB", f / M)
+    }
 }

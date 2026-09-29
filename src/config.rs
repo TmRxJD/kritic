@@ -18,6 +18,8 @@ pub struct Config {
     /// Who answers Kev questions: `auto` (local Kev when installed, else cloud Jev when a key is
     /// configured), `local`, `cloud`, or `off` (deterministic tools only).
     pub backend: String,
+    /// Agent reply style kritic installs: "concise" (default) or "default" (leave the agent alone).
+    pub output_style: String,
     /// Cloud Jev (TypeSafe's model through an AI Gateway `/v1/evaluate` endpoint).
     pub cloud_url: String,
     pub cloud_model: String,
@@ -46,10 +48,8 @@ pub struct Config {
     /// Minimum per-criterion visual score (0-10) for approval. Calibrated: polished UI 7-9,
     /// plain unstyled 5-6, messy 0.
     pub visual_min: f64,
-    pub node_exe: String,
-    pub harness: PathBuf,
-    /// Where Playwright's browsers live. `None` uses Playwright's own default.
-    pub playwright_browsers: Option<PathBuf>,
+    /// Chrome or Edge for the native web tester. `None` finds an installed one.
+    pub browser: Option<PathBuf>,
     pub runs_dir: PathBuf,
     pub ui_timeout_s: u64,
     // ---- analyzers, desktop + resource harness
@@ -99,9 +99,8 @@ pub const KEYS: &[(&str, &str)] = &[
     ("review.max_revisions", "KRITIC_MAX_REVISIONS"),
     ("review.command_timeout_s", "KRITIC_COMMAND_TIMEOUT"),
     ("review.context_limit", "KRITIC_CONTEXT_LIMIT"),
-    ("ui.node", "KRITIC_NODE"),
-    ("ui.harness", "KRITIC_HARNESS"),
-    ("ui.playwright_browsers", "KRITIC_PLAYWRIGHT_BROWSERS"),
+    ("ui.browser", "KRITIC_BROWSER"),
+    ("output.style", "KRITIC_OUTPUT_STYLE"),
     ("ui.timeout_s", "KRITIC_UI_TIMEOUT"),
     ("scan.tools_bin", "KRITIC_TOOLS_BIN"),
     ("scan.cargo_tools_bin", "KRITIC_CARGO_TOOLS_BIN"),
@@ -123,30 +122,56 @@ pub const KEYS: &[(&str, &str)] = &[
 /// Tools off unless the config turns them on: domain packs that most projects don't need.
 pub const DEFAULT_DISABLED: &[&str] = &["map_eval"];
 
+/// An environment variable, treating set-but-empty (`KRITIC_HOME=`) as unset.
+pub fn env_var(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|v| !v.trim().is_empty())
+}
+
 fn user_home() -> PathBuf {
-    std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")).map(PathBuf::from).unwrap_or_default()
+    env_var("USERPROFILE")
+        .or_else(|| env_var("HOME"))
+        .map(PathBuf::from)
+        .unwrap_or_default()
 }
 
 /// `$KRITIC_HOME`, else `~/.kritic`.
 pub fn kritic_home() -> PathBuf {
-    std::env::var_os("KRITIC_HOME").map(PathBuf::from).unwrap_or_else(|| user_home().join(".kritic"))
+    let home = env_var("KRITIC_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| user_home().join(".kritic"));
+    // A relative KRITIC_HOME would scatter files wherever kritic happens to be started.
+    if home.is_absolute() {
+        home
+    } else {
+        std::env::current_dir()
+            .map(|d| d.join(&home))
+            .unwrap_or(home)
+    }
 }
 
 fn exe_name(name: &str) -> String {
-    if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
+    if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    }
 }
 
 /// First `name` on PATH.
 pub fn which(name: &str) -> Option<PathBuf> {
     let exe = exe_name(name);
-    std::env::split_paths(&std::env::var_os("PATH")?).map(|d| d.join(&exe)).find(|p| p.is_file())
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|d| d.join(&exe))
+        .find(|p| p.is_file())
 }
 
 /// The harness directory: `harness/` beside the binary (release archives), else the source tree
 /// the binary was built from.
 fn default_harness_dir() -> PathBuf {
-    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("harness")))
-        && dir.join("ui_test.mjs").is_file()
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(|p| p.join("harness")))
+        && dir.join("py").join("ux_adapter.py").is_file()
     {
         return dir;
     }
@@ -174,7 +199,9 @@ fn default_ollama_exe() -> PathBuf {
         return p;
     }
     if cfg!(windows) {
-        let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();
+        let local = env_var("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .unwrap_or_default();
         local.join("Programs").join("Ollama").join("ollama.exe")
     } else {
         PathBuf::from("/usr/local/bin/ollama")
@@ -198,8 +225,12 @@ struct Source {
 
 impl Source {
     fn get(&self, key: &str) -> Option<String> {
-        let env = KEYS.iter().find(|(k, _)| *k == key).map(|(_, e)| *e).expect("key listed in KEYS");
-        if let Ok(v) = std::env::var(env) {
+        let env = KEYS
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, e)| *e)
+            .expect("key listed in KEYS");
+        if let Some(v) = env_var(env) {
             return Some(v);
         }
         let (section, name) = key.split_once('.').expect("section.key");
@@ -212,22 +243,38 @@ impl Source {
         self.get(key).unwrap_or_else(|| default.into())
     }
     fn path(&self, key: &str, default: impl Into<PathBuf>) -> PathBuf {
-        self.get(key).map(PathBuf::from).unwrap_or_else(|| default.into())
+        self.get(key)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| default.into())
     }
     /// A list: a TOML array in the file, comma-separated in the environment.
     fn list(&self, key: &str, default: &[&str]) -> Vec<String> {
-        let env = KEYS.iter().find(|(k, _)| *k == key).map(|(_, e)| *e).expect("key listed in KEYS");
-        if let Ok(v) = std::env::var(env) {
-            return v.split(',').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
+        let env = KEYS
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, e)| *e)
+            .expect("key listed in KEYS");
+        if let Some(v) = env_var(env) {
+            return v
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect();
         }
         let (section, name) = key.split_once('.').expect("section.key");
         match self.file.get(section).and_then(|t| t.get(name)) {
-            Some(toml::Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
+            Some(toml::Value::Array(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
             _ => default.iter().map(|s| s.to_string()).collect(),
         }
     }
     fn num<T: std::str::FromStr>(&self, key: &str, default: T) -> T {
-        self.get(key).and_then(|v| v.parse().ok()).unwrap_or(default)
+        self.get(key)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
     }
 }
 
@@ -244,7 +291,10 @@ fn read_file(path: &Path) -> (toml::Table, Vec<String>) {
     let mut errors = Vec::new();
     for (section, value) in &table {
         let Some(inner) = value.as_table() else {
-            errors.push(format!("{}: `{section}` must be a [section]", path.display()));
+            errors.push(format!(
+                "{}: `{section}` must be a [section]",
+                path.display()
+            ));
             continue;
         };
         for name in inner.keys() {
@@ -261,7 +311,7 @@ impl Config {
     /// Environment, then `kritic.toml`, then defaults.
     pub fn load() -> Self {
         let home = kritic_home();
-        let explicit = std::env::var_os("KRITIC_CONFIG").map(PathBuf::from);
+        let explicit = env_var("KRITIC_CONFIG").map(PathBuf::from);
         let candidate = explicit.clone().unwrap_or_else(|| home.join("kritic.toml"));
         let (file, config_errors, config_file) = if candidate.is_file() || explicit.is_some() {
             let (t, e) = read_file(&candidate);
@@ -275,15 +325,35 @@ impl Config {
         let mut config_errors = config_errors;
         let backend = s.str("kev.backend", "auto");
         if !["auto", "local", "cloud", "off"].contains(&backend.as_str()) {
-            config_errors.push(format!("kev.backend = \"{backend}\": expected auto, local, cloud or off (using auto)"));
+            config_errors.push(format!(
+                "kev.backend = \"{backend}\": expected auto, local, cloud or off (using auto)"
+            ));
+        }
+        let output_style = s.str("output.style", "concise");
+        if !["concise", "default"].contains(&output_style.as_str()) {
+            config_errors.push(format!(
+                "output.style = \"{output_style}\": expected concise or default (using concise)"
+            ));
         }
         Config {
-            backend: if ["auto", "local", "cloud", "off"].contains(&backend.as_str()) { backend } else { "auto".into() },
+            output_style: if output_style == "default" {
+                output_style
+            } else {
+                "concise".into()
+            },
+            backend: if ["auto", "local", "cloud", "off"].contains(&backend.as_str()) {
+                backend
+            } else {
+                "auto".into()
+            },
             cloud_url: s.str("cloud.url", "https://ai-gateway.vercel.sh/v1/evaluate"),
             cloud_model: s.str("cloud.model", "typesafe-ai/jev"),
             cloud_key_file: s.path("cloud.key_file", home.join("ai-gateway.key")),
             laya_url: s.str("kev.laya_url", format!("http://127.0.0.1:{port}")),
-            laya_exe: s.path("kev.laya_exe", which("laya").unwrap_or_else(|| default_laya(&home))),
+            laya_exe: s.path(
+                "kev.laya_exe",
+                which("laya").unwrap_or_else(|| default_laya(&home)),
+            ),
             kev_gguf: s.path("kev.gguf", home.join("models").join("kev_4b_q8_0.gguf")),
             laya_port: port,
             model: s.str("kev.model", "kev-4b"),
@@ -298,13 +368,17 @@ impl Config {
             ollama_exe: s.path("vision.ollama_exe", default_ollama_exe()),
             vision_model: s.str("vision.model", "qwen2.5vl:7b"),
             visual_min: s.num("vision.visual_min", 6.0),
-            node_exe: s.str("ui.node", "node"),
-            harness: s.path("ui.harness", harness_dir.join("ui_test.mjs")),
-            playwright_browsers: s.get("ui.playwright_browsers").map(PathBuf::from),
+            browser: s.get("ui.browser").map(PathBuf::from),
             runs_dir: s.path("server.runs_dir", home.join("runs")),
             ui_timeout_s: s.num("ui.timeout_s", 300),
             tools_bin: s.path("scan.tools_bin", home.join("bin")),
-            cargo_tools_bin: s.path("scan.cargo_tools_bin", user_home().join(".cargo").join("bin")),
+            cargo_tools_bin: s.path(
+                "scan.cargo_tools_bin",
+                env_var("CARGO_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| user_home().join(".cargo"))
+                    .join("bin"),
+            ),
             scan_timeout_s: s.num("scan.timeout_s", 600),
             semgrep_config: s.str("scan.semgrep_config", "p/default"),
             max_triage: s.num("scan.max_triage", 25),
@@ -334,7 +408,10 @@ impl Config {
         {
             return Some(k.trim().to_string());
         }
-        std::fs::read_to_string(&self.cloud_key_file).ok().map(|k| k.trim().to_string()).filter(|k| !k.is_empty())
+        std::fs::read_to_string(&self.cloud_key_file)
+            .ok()
+            .map(|k| k.trim().to_string())
+            .filter(|k| !k.is_empty())
     }
 
     /// Alias of [`Config::load`]: environment variables still override the file.

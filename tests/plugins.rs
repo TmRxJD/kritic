@@ -9,9 +9,31 @@ use serde_json::{Value, json};
 
 struct FakeKev(f64);
 impl Decider for FakeKev {
-    async fn decide(&self, _s: &Value, qs: &BTreeMap<String, Question>) -> Result<Decision, String> {
-        let answers = qs.keys().map(|k| (k.clone(), Answer { value: self.0, choice: None, probabilities: None, confidence: 0.9 })).collect();
-        Ok(Decision { answers, truncated: false, latency_ms: 1, input_tokens: 10 })
+    async fn decide(
+        &self,
+        _s: &Value,
+        qs: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
+        let answers = qs
+            .keys()
+            .map(|k| {
+                (
+                    k.clone(),
+                    Answer {
+                        value: self.0,
+                        choice: None,
+                        probabilities: None,
+                        confidence: 0.9,
+                    },
+                )
+            })
+            .collect();
+        Ok(Decision {
+            answers,
+            truncated: false,
+            latency_ms: 1,
+            input_tokens: 10,
+        })
     }
 }
 
@@ -82,7 +104,11 @@ fn repo() -> tempfile::TempDir {
     std::fs::write(d.path().join("score.py"), SCRIPT).unwrap();
     std::fs::write(pdir.join("map-score.toml"), MANIFEST).unwrap();
     std::fs::write(pdir.join("vague.toml"), VAGUE).unwrap();
-    std::fs::write(pdir.join("broken.toml"), "name = \"x y\"\ncommand = []\ndescription = \"d\"\n").unwrap();
+    std::fs::write(
+        pdir.join("broken.toml"),
+        "name = \"x y\"\ncommand = []\ndescription = \"d\"\n",
+    )
+    .unwrap();
     d
 }
 
@@ -94,8 +120,17 @@ fn discovery_reports_invalid_manifests_and_specs() {
     assert_eq!(ok[0].name, "map-score");
     assert_eq!(errs.len(), 2, "{errs:?}");
     assert!(errs.iter().any(|e| e.contains("broken.toml")));
-    let vague = errs.iter().find(|e| e.contains("vague.toml")).expect("vague manifest refused");
-    for rule in ["names no state field", "one condition", "must be defined", "calibration evidence", "no question reads it"] {
+    let vague = errs
+        .iter()
+        .find(|e| e.contains("vague.toml"))
+        .expect("vague manifest refused");
+    for rule in [
+        "names no state field",
+        "one condition",
+        "must be defined",
+        "calibration evidence",
+        "no question reads it",
+    ] {
         assert!(vague.contains(rule), "missing '{rule}' in {vague}");
     }
 }
@@ -104,32 +139,81 @@ fn discovery_reports_invalid_manifests_and_specs() {
 async fn clean_run_approves_and_calibrated_gates_apply() {
     let d = repo();
     let cfg = Config::from_env();
-    let r = run(&FakeKev(0.9), &cfg, d.path(), "map-score", &json!({"mode": "ok"})).await;
+    let r = run(
+        &FakeKev(0.9),
+        &cfg,
+        d.path(),
+        "map-score",
+        &json!({"mode": "ok"}),
+    )
+    .await;
     assert!(r.ok, "{:?}", r.error);
     assert_eq!(r.approval, Some(true), "{:?}", r.reasons);
     assert_eq!(r.metrics["nps"], 5.2);
     assert!(r.full_result.is_some());
-    let low = run(&FakeKev(0.2), &cfg, d.path(), "map-score", &json!({"mode": "ok"})).await;
+    let low = run(
+        &FakeKev(0.2),
+        &cfg,
+        d.path(),
+        "map-score",
+        &json!({"mode": "ok"}),
+    )
+    .await;
     assert_eq!(low.approval, Some(false));
-    assert!(low.reasons[0].contains("parity outside ranked maps"), "{:?}", low.reasons);
+    assert!(
+        low.reasons[0].contains("parity outside ranked maps"),
+        "{:?}",
+        low.reasons
+    );
 }
 
 #[tokio::test]
 async fn kev_state_that_breaks_its_spec_is_unknown_not_guessed() {
     let d = repo();
-    let r = run(&FakeKev(0.9), &Config::from_env(), d.path(), "map-score", &json!({"mode": "wrong_state"})).await;
+    let r = run(
+        &FakeKev(0.9),
+        &Config::from_env(),
+        d.path(),
+        "map-score",
+        &json!({"mode": "wrong_state"}),
+    )
+    .await;
     assert_eq!(r.approval, None, "{:?}", r.reasons);
-    assert!(r.reasons.iter().any(|x| x.contains("does not start with a ranked_range term")), "{:?}", r.reasons);
+    assert!(
+        r.reasons
+            .iter()
+            .any(|x| x.contains("does not start with a ranked_range term")),
+        "{:?}",
+        r.reasons
+    );
 }
 
 #[tokio::test]
 async fn high_findings_block_and_bad_output_is_an_error() {
     let d = repo();
     let cfg = Config::from_env();
-    let r = run(&FakeKev(0.9), &cfg, d.path(), "map-score", &json!({"mode": "bad"})).await;
+    let r = run(
+        &FakeKev(0.9),
+        &cfg,
+        d.path(),
+        "map-score",
+        &json!({"mode": "bad"}),
+    )
+    .await;
     assert_eq!(r.approval, Some(false));
-    assert!(r.reasons.iter().any(|x| x.contains("parity break at beat 12") && x.contains("Expert.dat:3")));
-    let g = run(&FakeKev(0.9), &cfg, d.path(), "map-score", &json!({"mode": "garbage"})).await;
+    assert!(
+        r.reasons
+            .iter()
+            .any(|x| x.contains("parity break at beat 12") && x.contains("Expert.dat:3"))
+    );
+    let g = run(
+        &FakeKev(0.9),
+        &cfg,
+        d.path(),
+        "map-score",
+        &json!({"mode": "garbage"}),
+    )
+    .await;
     assert!(g.error.unwrap().contains("not one JSON object"));
     assert_eq!(g.approval, None);
     let m = run(&FakeKev(0.9), &cfg, d.path(), "map-score", &json!({})).await;

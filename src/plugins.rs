@@ -63,7 +63,9 @@ pub fn plugin_dir(base: &Path) -> PathBuf {
 pub fn discover(base: &Path) -> (Vec<Manifest>, Vec<String>) {
     let mut ok = Vec::new();
     let mut errs = Vec::new();
-    let Ok(rd) = std::fs::read_dir(plugin_dir(base)) else { return (ok, errs) };
+    let Ok(rd) = std::fs::read_dir(plugin_dir(base)) else {
+        return (ok, errs);
+    };
     let mut files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
     files.sort();
     for p in files {
@@ -87,7 +89,11 @@ pub fn discover(base: &Path) -> (Vec<Manifest>, Vec<String>) {
             Ok(mut m) => {
                 m.manifest_path = p.display().to_string();
                 if ok.iter().any(|x: &Manifest| x.name == m.name) {
-                    errs.push(format!("{}: duplicate plugin name '{}'", p.display(), m.name));
+                    errs.push(format!(
+                        "{}: duplicate plugin name '{}'",
+                        p.display(),
+                        m.name
+                    ));
                 } else {
                     ok.push(m);
                 }
@@ -99,8 +105,16 @@ pub fn discover(base: &Path) -> (Vec<Manifest>, Vec<String>) {
 }
 
 fn validate(m: &Manifest) -> Result<(), String> {
-    if m.name.is_empty() || !m.name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-        return Err(format!("invalid name '{}' (use letters, digits, _ or -)", m.name));
+    if m.name.is_empty()
+        || !m
+            .name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(format!(
+            "invalid name '{}' (use letters, digits, _ or -)",
+            m.name
+        ));
     }
     if m.command.is_empty() {
         return Err("command is empty".into());
@@ -139,21 +153,49 @@ fn rank(sev: &str) -> u8 {
 }
 
 /// Pure: plugin output + Kev answers -> approval and reasons.
-pub fn judge(m: &Manifest, out: &Value, kev: &BTreeMap<String, crate::kev::Answer>) -> (Option<bool>, Vec<String>) {
+pub fn judge(
+    m: &Manifest,
+    out: &Value,
+    kev: &BTreeMap<String, crate::kev::Answer>,
+) -> (Option<bool>, Vec<String>) {
     let mut reasons = Vec::new();
     if out["ok"] != true {
-        return (None, vec![format!("plugin reported not ok: {}", out["error"].as_str().unwrap_or("no error given"))]);
+        return (
+            None,
+            vec![format!(
+                "plugin reported not ok: {}",
+                out["error"].as_str().unwrap_or("no error given")
+            )],
+        );
     }
     if out["approval"] == false {
-        reasons.push(format!("plugin: {}", out["summary"].as_str().unwrap_or("not approved")));
+        reasons.push(format!(
+            "plugin: {}",
+            out["summary"].as_str().unwrap_or("not approved")
+        ));
     }
     if !m.findings_advisory {
-        for f in out["findings"].as_array().into_iter().flatten().filter(|f| rank(f["severity"].as_str().unwrap_or("")) >= 3).take(10) {
+        for f in out["findings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|f| rank(f["severity"].as_str().unwrap_or("")) >= 3)
+            .take(10)
+        {
             reasons.push(format!(
                 "[{}] {}{}",
                 f["severity"].as_str().unwrap_or("?"),
                 f["message"].as_str().unwrap_or(""),
-                f["file"].as_str().map(|p| format!(" ({p}{})", f["line"].as_u64().map(|l| format!(":{l}")).unwrap_or_default())).unwrap_or_default()
+                f["file"]
+                    .as_str()
+                    .map(|p| format!(
+                        " ({p}{})",
+                        f["line"]
+                            .as_u64()
+                            .map(|l| format!(":{l}"))
+                            .unwrap_or_default()
+                    ))
+                    .unwrap_or_default()
             ));
         }
     }
@@ -165,16 +207,42 @@ pub fn judge(m: &Manifest, out: &Value, kev: &BTreeMap<String, crate::kev::Answe
     (Some(reasons.is_empty()), reasons)
 }
 
-pub async fn run<D: Decider>(d: &D, cfg: &Config, base: &Path, name: &str, args: &Value) -> PluginResult {
+pub async fn run<D: Decider>(
+    d: &D,
+    cfg: &Config,
+    base: &Path,
+    name: &str,
+    args: &Value,
+) -> PluginResult {
     let t0 = Instant::now();
-    let mut r = PluginResult { tool: "plugin_run".into(), plugin: name.into(), ..Default::default() };
+    let mut r = PluginResult {
+        tool: "plugin_run".into(),
+        plugin: name.into(),
+        ..Default::default()
+    };
     let (plugins, errs) = discover(base);
     let Some(m) = plugins.into_iter().find(|m| m.name == name) else {
-        r.error = Some(format!("no plugin '{name}' in {} {}", plugin_dir(base).display(), if errs.is_empty() { String::new() } else { format!("(manifest errors: {})", errs.join("; ")) }));
+        r.error = Some(format!(
+            "no plugin '{name}' in {} {}",
+            plugin_dir(base).display(),
+            if errs.is_empty() {
+                String::new()
+            } else {
+                format!("(manifest errors: {})", errs.join("; "))
+            }
+        ));
         return r;
     };
-    if let Some(req) = m.input_schema.as_ref().and_then(|s| s["required"].as_array()) {
-        let missing: Vec<&str> = req.iter().filter_map(Value::as_str).filter(|k| args.get(k).is_none()).collect();
+    if let Some(req) = m
+        .input_schema
+        .as_ref()
+        .and_then(|s| s["required"].as_array())
+    {
+        let missing: Vec<&str> = req
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|k| args.get(k).is_none())
+            .collect();
         if !missing.is_empty() {
             r.error = Some(format!("missing required args: {}", missing.join(", ")));
             return r;
@@ -182,16 +250,26 @@ pub async fn run<D: Decider>(d: &D, cfg: &Config, base: &Path, name: &str, args:
     }
     let out_dir = crate::vision::run_dir(cfg, &format!("plugin-{name}"));
     let _ = std::fs::create_dir_all(&out_dir);
-    let sub = |s: &str| s.replace("{base_dir}", &base.display().to_string()).replace("{out_dir}", &out_dir.display().to_string());
+    let sub = |s: &str| {
+        s.replace("{base_dir}", &base.display().to_string())
+            .replace("{out_dir}", &out_dir.display().to_string())
+    };
     let mut argv: Vec<String> = m.command.iter().map(|a| sub(a)).collect();
     let prog = PathBuf::from(&argv[0]);
     if prog.components().count() > 1 && prog.is_relative() {
         argv[0] = base.join(prog).display().to_string();
     }
     let mut cmd = tokio::process::Command::new(&argv[0]);
-    cmd.args(&argv[1..]).current_dir(m.cwd.as_deref().map(|c| base.join(c)).unwrap_or_else(|| base.to_path_buf()));
+    cmd.args(&argv[1..]).current_dir(
+        m.cwd
+            .as_deref()
+            .map(|c| base.join(c))
+            .unwrap_or_else(|| base.to_path_buf()),
+    );
     let input = json!({"args": args, "base_dir": base, "out_dir": out_dir});
-    let out = match crate::proc::run_streaming(cmd, &input, m.timeout_s, &format!("plugin:{name}")).await {
+    let out = match crate::proc::run_streaming(cmd, &input, m.timeout_s, &format!("plugin:{name}"))
+        .await
+    {
         Ok(o) => o,
         Err(e) => {
             r.error = Some(e);
@@ -201,7 +279,10 @@ pub async fn run<D: Decider>(d: &D, cfg: &Config, base: &Path, name: &str, args:
     let v: Value = match serde_json::from_str(out.stdout.trim()) {
         Ok(v) => v,
         Err(e) => {
-            r.error = Some(format!("plugin output is not one JSON object: {e}; stderr: {}", out.stderr_tail.chars().take(300).collect::<String>()));
+            r.error = Some(format!(
+                "plugin output is not one JSON object: {e}; stderr: {}",
+                out.stderr_tail.chars().take(300).collect::<String>()
+            ));
             return r;
         }
     };
@@ -211,17 +292,32 @@ pub async fn run<D: Decider>(d: &D, cfg: &Config, base: &Path, name: &str, args:
     r.metrics = v["metrics"].clone();
     let findings: Vec<Value> = v["findings"].as_array().cloned().unwrap_or_default();
     for f in &findings {
-        *r.finding_counts.entry(f["severity"].as_str().unwrap_or("info").to_string()).or_default() += 1;
+        *r.finding_counts
+            .entry(f["severity"].as_str().unwrap_or("info").to_string())
+            .or_default() += 1;
     }
     // Kev on the plugin's declared state (never on raw summary/metrics)
     let mut answers = BTreeMap::new();
     if let Some(spec) = m.kev.as_ref().filter(|_| r.ok) {
         let given: Vec<(&str, String)> = v["kev_state"]
             .as_object()
-            .map(|o| o.iter().map(|(k, x)| (k.as_str(), x.as_str().map(String::from).unwrap_or_else(|| x.to_string()))).collect())
+            .map(|o| {
+                o.iter()
+                    .map(|(k, x)| {
+                        (
+                            k.as_str(),
+                            x.as_str()
+                                .map(String::from)
+                                .unwrap_or_else(|| x.to_string()),
+                        )
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
         match spec.state(&given) {
-            Err(e) => r.reasons.push(format!("Kev unavailable: plugin kev_state does not match its spec: {e}")),
+            Err(e) => r.reasons.push(format!(
+                "Kev unavailable: plugin kev_state does not match its spec: {e}"
+            )),
             Ok(state) => match d.decide(&state, &spec.wire()).await {
                 Ok(dec) => {
                     answers = dec.answers;
@@ -232,7 +328,12 @@ pub async fn run<D: Decider>(d: &D, cfg: &Config, base: &Path, name: &str, args:
         }
     }
     let (approval, reasons) = judge(&m, &v, &answers);
-    r.approval = if r.reasons.iter().any(|x| x.starts_with("Kev unavailable")) && approval == Some(true) { None } else { approval };
+    r.approval =
+        if r.reasons.iter().any(|x| x.starts_with("Kev unavailable")) && approval == Some(true) {
+            None
+        } else {
+            approval
+        };
     r.reasons.extend(reasons);
     r.findings = findings;
     r.full_result = crate::tools::save_full(cfg, &format!("plugin-{name}"), &r);

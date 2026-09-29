@@ -65,7 +65,10 @@ fn num(v: Option<&Value>) -> Option<f64> {
 /// Parse a v2 (`_notes`) or v3 (`colorNotes`) difficulty. Returns None when neither key exists.
 pub fn parse_notes(doc: &Value) -> Option<(String, Vec<Note>, usize, usize, usize)> {
     // v4 keeps positions in a shared table: colorNotes [{b, i}] index colorNotesData [{x, y, c, d}].
-    if let (Some(refs), Some(data)) = (doc.get("colorNotes").and_then(Value::as_array), doc.get("colorNotesData").and_then(Value::as_array)) {
+    if let (Some(refs), Some(data)) = (
+        doc.get("colorNotes").and_then(Value::as_array),
+        doc.get("colorNotesData").and_then(Value::as_array),
+    ) {
         let mut notes = Vec::new();
         let mut invalid = 0;
         for n in refs {
@@ -76,40 +79,80 @@ pub fn parse_notes(doc: &Value) -> Option<(String, Vec<Note>, usize, usize, usiz
             match index.and_then(|i| data.get(i as usize)) {
                 Some(d) => {
                     let g = |k: &str| num(d.get(k)).unwrap_or(0.0) as i64;
-                    notes.push(Note { beat: b, x: g("x"), y: g("y"), color: g("c"), dir: g("d") });
+                    notes.push(Note {
+                        beat: b,
+                        x: g("x"),
+                        y: g("y"),
+                        color: g("c"),
+                        dir: g("d"),
+                    });
                 }
                 _ => invalid += 1,
             }
         }
-        let bombs = doc.get("bombNotes").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
-        let obstacles = doc.get("obstacles").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+        let bombs = doc
+            .get("bombNotes")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
+        let obstacles = doc
+            .get("obstacles")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
         return Some(("v4".into(), notes, bombs, obstacles, invalid));
     }
     let (fmt, arr, keys) = if let Some(a) = doc.get("colorNotes").and_then(Value::as_array) {
         ("v3", a, ("b", "x", "y", "c", "d"))
     } else {
         let a = doc.get("_notes").and_then(Value::as_array)?;
-        ("v2", a, ("_time", "_lineIndex", "_lineLayer", "_type", "_cutDirection"))
+        (
+            "v2",
+            a,
+            (
+                "_time",
+                "_lineIndex",
+                "_lineLayer",
+                "_type",
+                "_cutDirection",
+            ),
+        )
     };
     let mut notes = Vec::new();
     let mut invalid = 0;
     let mut bombs = 0;
     for n in arr {
         let get = |k: &str| num(n.get(k));
-        match (get(keys.0), get(keys.1), get(keys.2), get(keys.3), get(keys.4)) {
+        match (
+            get(keys.0),
+            get(keys.1),
+            get(keys.2),
+            get(keys.3),
+            get(keys.4),
+        ) {
             (Some(b), Some(x), Some(y), Some(c), Some(d)) => {
                 if fmt == "v2" && c as i64 == 3 {
                     bombs += 1;
                     continue;
                 }
-                notes.push(Note { beat: b, x: x as i64, y: y as i64, color: c as i64, dir: d as i64 });
+                notes.push(Note {
+                    beat: b,
+                    x: x as i64,
+                    y: y as i64,
+                    color: c as i64,
+                    dir: d as i64,
+                });
             }
             // v3 notes may omit zero-valued fields in some editors; treat a missing field as invalid
             _ => invalid += 1,
         }
     }
     if fmt == "v3" {
-        bombs = doc.get("bombNotes").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+        bombs = doc
+            .get("bombNotes")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .unwrap_or(0);
     }
     let obstacles = doc
         .get("obstacles")
@@ -128,19 +171,43 @@ fn swing(dir: i64) -> i8 {
     }
 }
 
-pub fn stats(fmt: &str, notes: &[Note], bombs: usize, obstacles: usize, invalid: usize) -> MapStats {
-    let mut s = MapStats { format: fmt.into(), note_count: notes.len(), bomb_count: bombs, obstacle_count: obstacles, invalid_fields: invalid, ..Default::default() };
+pub fn stats(
+    fmt: &str,
+    notes: &[Note],
+    bombs: usize,
+    obstacles: usize,
+    invalid: usize,
+) -> MapStats {
+    let mut s = MapStats {
+        format: fmt.into(),
+        note_count: notes.len(),
+        bomb_count: bombs,
+        obstacle_count: obstacles,
+        invalid_fields: invalid,
+        ..Default::default()
+    };
     if notes.is_empty() {
         return s;
     }
-    let (lo, hi) = notes.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), n| (a.min(n.beat), b.max(n.beat)));
+    let (lo, hi) = notes
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), n| {
+            (a.min(n.beat), b.max(n.beat))
+        });
     s.beat_span = hi - lo;
-    s.notes_per_beat = (s.beat_span > 0.0).then(|| ((notes.len() as f64 / s.beat_span) * 1000.0).round() / 1000.0);
-    s.out_of_grid = notes.iter().filter(|n| !(0..=3).contains(&n.x) || !(0..=2).contains(&n.y)).count();
+    s.notes_per_beat =
+        (s.beat_span > 0.0).then(|| ((notes.len() as f64 / s.beat_span) * 1000.0).round() / 1000.0);
+    s.out_of_grid = notes
+        .iter()
+        .filter(|n| !(0..=3).contains(&n.x) || !(0..=2).contains(&n.y))
+        .count();
     s.invalid_directions = notes.iter().filter(|n| !(0..=8).contains(&n.dir)).count();
     s.unsorted_pairs = notes.windows(2).filter(|w| w[1].beat < w[0].beat).count();
     let mut seen = HashSet::new();
-    s.duplicate_positions = notes.iter().filter(|n| !seen.insert((n.beat.to_bits(), n.x, n.y))).count();
+    s.duplicate_positions = notes
+        .iter()
+        .filter(|n| !seen.insert((n.beat.to_bits(), n.x, n.y)))
+        .count();
     let mut sorted = notes.to_vec();
     sorted.sort_by(|a, b| a.beat.total_cmp(&b.beat));
     for hand in [0, 1] {
@@ -159,7 +226,8 @@ pub fn stats(fmt: &str, notes: &[Note], bombs: usize, obstacles: usize, invalid:
             last_beat = n.beat;
         }
     }
-    s.parity_break_rate = Some(((s.parity_breaks as f64 / notes.len() as f64) * 1000.0).round() / 1000.0);
+    s.parity_break_rate =
+        Some(((s.parity_breaks as f64 / notes.len() as f64) * 1000.0).round() / 1000.0);
     let red = notes.iter().filter(|n| n.color == 0).count();
     let blue = notes.iter().filter(|n| n.color == 1).count();
     s.red_blue_ratio = (blue > 0).then(|| ((red as f64 / blue as f64) * 100.0).round() / 100.0);
@@ -193,12 +261,27 @@ pub fn heuristic_issues(s: &MapStats) -> Vec<String> {
         }
     }
     if s.note_count > 0 && (s.parity_breaks as f64) > PARITY_BREAK_RATE_MAX * s.note_count as f64 {
-        v.push(format!("{} parity breaks ({:.1}% of notes > {:.0}%)", s.parity_breaks, 100.0 * s.parity_breaks as f64 / s.note_count as f64, PARITY_BREAK_RATE_MAX * 100.0));
+        v.push(format!(
+            "{} parity breaks ({:.1}% of notes > {:.0}%)",
+            s.parity_breaks,
+            100.0 * s.parity_breaks as f64 / s.note_count as f64,
+            PARITY_BREAK_RATE_MAX * 100.0
+        ));
     }
     v
 }
 
-const DIRS: [&str; 9] = ["up", "down", "left", "right", "upleft", "upright", "downleft", "downright", "any"];
+const DIRS: [&str; 9] = [
+    "up",
+    "down",
+    "left",
+    "right",
+    "upleft",
+    "upright",
+    "downleft",
+    "downright",
+    "any",
+];
 
 /// Compact text slices of `SLICE_BEATS` beats, each at most `max_chars`.
 pub fn slices(notes: &[Note], max_chars: usize) -> Vec<(f64, f64, String)> {
@@ -211,7 +294,9 @@ pub fn slices(notes: &[Note], max_chars: usize) -> Vec<(f64, f64, String)> {
         let dir = DIRS.get(n.dir as usize).copied().unwrap_or("?");
         let line = format!("{:.2} {hand} x{} y{} {dir}\n", n.beat, n.x, n.y);
         match out.last_mut() {
-            Some((s, _, t)) if *s == start && t.len() + line.len() <= max_chars => t.push_str(&line),
+            Some((s, _, t)) if *s == start && t.len() + line.len() <= max_chars => {
+                t.push_str(&line)
+            }
             _ => out.push((start, start + SLICE_BEATS, line)),
         }
     }
@@ -250,15 +335,35 @@ pub struct MapResult {
     pub latency_ms: u64,
 }
 
-pub async fn evaluate<D: Decider>(d: &D, cfg: &Config, content: &str, bpm: Option<f64>, kev_slices: bool) -> MapResult {
-    let mut r = MapResult { tool: "map_eval".into(), advisory: true, model: cfg.model.clone(), map_kind: "unknown".into(), ..Default::default() };
+pub async fn evaluate<D: Decider>(
+    d: &D,
+    cfg: &Config,
+    content: &str,
+    bpm: Option<f64>,
+    kev_slices: bool,
+) -> MapResult {
+    let mut r = MapResult {
+        tool: "map_eval".into(),
+        advisory: true,
+        model: cfg.model.clone(),
+        map_kind: "unknown".into(),
+        ..Default::default()
+    };
     let doc: Value = match serde_json::from_str(content) {
         Ok(v) => {
-            r.deterministic.push(Check { check: "json_parse".into(), status: crate::checks::Status::Pass, detail: None });
+            r.deterministic.push(Check {
+                check: "json_parse".into(),
+                status: crate::checks::Status::Pass,
+                detail: None,
+            });
             v
         }
         Err(e) => {
-            r.deterministic.push(Check { check: "json_parse".into(), status: crate::checks::Status::Fail, detail: Some(e.to_string()) });
+            r.deterministic.push(Check {
+                check: "json_parse".into(),
+                status: crate::checks::Status::Fail,
+                detail: Some(e.to_string()),
+            });
             r.approval = Some(false);
             r.reasons.push("map is not valid JSON".into());
             return r;
@@ -288,19 +393,25 @@ pub async fn evaluate<D: Decider>(d: &D, cfg: &Config, content: &str, bpm: Optio
         // Sample evenly across the song rather than scoring only its opening.
         r.slices_unscored = all.len() - MAX_SLICES;
         let step = all.len() as f64 / MAX_SLICES as f64;
-        all = (0..MAX_SLICES).map(|i| all[(i as f64 * step) as usize].clone()).collect();
+        all = (0..MAX_SLICES)
+            .map(|i| all[(i as f64 * step) as usize].clone())
+            .collect();
     }
     let mut p_max: f64 = 0.0;
     for (a, b, text) in &all {
         let count = text.lines().count();
         let tempo = match bpm {
-            Some(bpm) => format!("{bpm:.0} BPM; {:.1} notes per second in this stretch", count as f64 / (SLICE_BEATS * 60.0 / bpm)),
+            Some(bpm) => format!(
+                "{bpm:.0} BPM; {:.1} notes per second in this stretch",
+                count as f64 / (SLICE_BEATS * 60.0 / bpm)
+            ),
             None => format!("unknown BPM; {count} notes in these {SLICE_BEATS:.0} beats"),
         };
         let state = match spec.state(&[("notes", text.trim_end().to_string()), ("tempo", tempo)]) {
             Ok(s) => s,
             Err(e) => {
-                r.kev_advisory.push(format!("slice {a}-{b} not scored: {e}"));
+                r.kev_advisory
+                    .push(format!("slice {a}-{b} not scored: {e}"));
                 continue;
             }
         };
@@ -315,7 +426,11 @@ pub async fn evaluate<D: Decider>(d: &D, cfg: &Config, content: &str, bpm: Optio
                 let p = dec.answers["awkward"].value;
                 p_max = p_max.max(p);
                 if p > 0.5 {
-                    r.flagged_slices.push(SliceVerdict { start_beat: *a, end_beat: *b, p_awkward: p });
+                    r.flagged_slices.push(SliceVerdict {
+                        start_beat: *a,
+                        end_beat: *b,
+                        p_awkward: p,
+                    });
                 }
             }
         }
@@ -326,16 +441,25 @@ pub async fn evaluate<D: Decider>(d: &D, cfg: &Config, content: &str, bpm: Optio
         r.kev_advisory.push(format!("{} slices Kev leans awkward on (p > 0.5); advisory: map_slice.awkward measured AUC 0.685", r.flagged_slices.len()));
     }
     if r.slices_unscored > 0 {
-        r.kev_advisory.push(format!("{} of {} slices sampled", MAX_SLICES, MAX_SLICES + r.slices_unscored));
+        r.kev_advisory.push(format!(
+            "{} of {} slices sampled",
+            MAX_SLICES,
+            MAX_SLICES + r.slices_unscored
+        ));
     }
     r
 }
 
-
 /// The song's BPM from the Info.dat beside a difficulty (v2 `_beatsPerMinute`, v4 `audio.bpm`).
 pub fn bpm_beside(map_path: &std::path::Path) -> Option<f64> {
     let dir = map_path.parent()?;
-    let info = ["Info.dat", "info.dat"].iter().map(|n| dir.join(n)).find(|p| p.exists())?;
+    let info = ["Info.dat", "info.dat"]
+        .iter()
+        .map(|n| dir.join(n))
+        .find(|p| p.exists())?;
     let doc: Value = serde_json::from_str(&std::fs::read_to_string(info).ok()?).ok()?;
-    doc.get("_beatsPerMinute").and_then(Value::as_f64).or_else(|| doc.pointer("/audio/bpm").and_then(Value::as_f64)).filter(|b| *b > 0.0)
+    doc.get("_beatsPerMinute")
+        .and_then(Value::as_f64)
+        .or_else(|| doc.pointer("/audio/bpm").and_then(Value::as_f64))
+        .filter(|b| *b > 0.0)
 }

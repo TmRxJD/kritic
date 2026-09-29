@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-use kritic::context::{Archive, CompressInput, archive_id, compress, recall, text_of, total_tokens};
+use kritic::context::{
+    Archive, CompressInput, archive_id, compress, recall, text_of, total_tokens,
+};
 use kritic::kev::{Answer, Decider, Decision, Question};
 use serde_json::{Value, json};
 
@@ -14,7 +16,11 @@ struct Relevance {
 }
 
 impl Decider for Relevance {
-    async fn decide(&self, state: &Value, questions: &BTreeMap<String, Question>) -> Result<Decision, String> {
+    async fn decide(
+        &self,
+        state: &Value,
+        questions: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
         *self.calls.lock().unwrap() += 1;
         if self.fail {
             return Err("laya unreachable".into());
@@ -23,22 +29,40 @@ impl Decider for Relevance {
         let p = if chunk.contains("parser") { 0.9 } else { 0.1 };
         let mut d = Decision::default();
         for id in questions.keys() {
-            d.answers.insert(id.clone(), Answer { value: p, choice: None, probabilities: None, confidence: 0.9 });
+            d.answers.insert(
+                id.clone(),
+                Answer {
+                    value: p,
+                    choice: None,
+                    probabilities: None,
+                    confidence: 0.9,
+                },
+            );
         }
         Ok(d)
     }
 }
 
 fn rel() -> Relevance {
-    Relevance { calls: Mutex::new(0), fail: false }
+    Relevance {
+        calls: Mutex::new(0),
+        fail: false,
+    }
 }
 
 /// A realistic agent transcript: system, the request, tool calls with results, replies.
 fn transcript() -> Vec<Value> {
-    let mut m = vec![json!({"role": "system", "content": "You are a coding agent."}), json!({"role": "user", "content": "Fix the parser bug in src/parse.rs", "message_uid": "u0"})];
+    let mut m = vec![
+        json!({"role": "system", "content": "You are a coding agent."}),
+        json!({"role": "user", "content": "Fix the parser bug in src/parse.rs", "message_uid": "u0"}),
+    ];
     for i in 0..8 {
         let id = format!("call_{i}");
-        let topic = if i % 3 == 0 { "parser tokenizer state machine" } else { "unrelated CSS color tokens" };
+        let topic = if i % 3 == 0 {
+            "parser tokenizer state machine"
+        } else {
+            "unrelated CSS color tokens"
+        };
         m.push(json!({"role": "assistant", "content": "", "tool_calls": [{"id": id, "type": "function", "function": {"name": "read_file", "arguments": format!("{{\"path\": \"f{i}.rs\"}}")}}]}));
         m.push(json!({"role": "tool", "tool_call_id": id, "content": format!("f{i}.rs: {topic} {}", "line of code\n".repeat(200)), "message_uid": format!("t{i}")}));
         m.push(json!({"role": "assistant", "content": format!("Looked at f{i}.rs: {topic}.")}));
@@ -63,7 +87,11 @@ async fn compaction_is_lossless_structural_and_relevance_ordered() {
     let out = compress(Some(&d), &archive, &input(msgs.clone(), target)).await;
 
     // Shrinks to the target, by archiving.
-    assert!(out.tokens_after <= target, "{} > {target}", out.tokens_after);
+    assert!(
+        out.tokens_after <= target,
+        "{} > {target}",
+        out.tokens_after
+    );
     assert_eq!(out.ranking, "kev");
     assert!(!out.archived.is_empty());
 
@@ -72,7 +100,11 @@ async fn compaction_is_lossless_structural_and_relevance_ordered() {
     for (a, b) in out.messages.iter().zip(&msgs) {
         assert_eq!(a["role"], b["role"]);
         assert_eq!(a.get("tool_call_id"), b.get("tool_call_id"));
-        assert_eq!(a.get("tool_calls"), b.get("tool_calls"), "tool-call arguments are execution records");
+        assert_eq!(
+            a.get("tool_calls"),
+            b.get("tool_calls"),
+            "tool-call arguments are execution records"
+        );
         assert_eq!(a.get("message_uid"), b.get("message_uid"));
     }
     // System, the first request and the protected tail are verbatim.
@@ -82,32 +114,57 @@ async fn compaction_is_lossless_structural_and_relevance_ordered() {
 
     // Irrelevant results go before relevant ones: every archived parser result was archived only
     // after every CSS one.
-    let archived_tools: Vec<String> = out.archived.iter().filter(|a| msgs[a.index]["role"] == "tool").map(|a| text_of(&msgs[a.index])).collect();
+    let archived_tools: Vec<String> = out
+        .archived
+        .iter()
+        .filter(|a| msgs[a.index]["role"] == "tool")
+        .map(|a| text_of(&msgs[a.index]))
+        .collect();
     let css = archived_tools.iter().filter(|t| t.contains("CSS")).count();
-    let total_css = msgs.iter().filter(|m| m["role"] == "tool" && text_of(m).contains("CSS")).count();
+    let total_css = msgs
+        .iter()
+        .filter(|m| m["role"] == "tool" && text_of(m).contains("CSS"))
+        .count();
     assert!(css > 0, "irrelevant tool results are archived");
-    if archived_tools.iter().any(|t| t.contains("parser tokenizer")) {
-        assert_eq!(css, total_css, "a relevant result was archived while an irrelevant one stayed");
+    if archived_tools
+        .iter()
+        .any(|t| t.contains("parser tokenizer"))
+    {
+        assert_eq!(
+            css, total_css,
+            "a relevant result was archived while an irrelevant one stayed"
+        );
     }
 
     // Lossless: every stub's id recalls the original content exactly.
     for a in &out.archived {
         let stub = text_of(&out.messages[a.index]);
-        assert!(stub.contains(&a.id) && stub.contains("kritic_recall"), "{stub}");
+        assert!(
+            stub.contains(&a.id) && stub.contains("kritic_recall"),
+            "{stub}"
+        );
         let r = recall(&archive, Some(&a.id), None, 1_000_000);
         assert_eq!(r.found.len(), 1);
         assert_eq!(r.found[0].content, text_of(&msgs[a.index]));
     }
     // Search across the archive.
     let r = recall(&archive, None, Some("css COLOR"), 1_000_000);
-    assert!(!r.found.is_empty() && r.found.iter().all(|a| a.content.to_lowercase().contains("css color")));
+    assert!(
+        !r.found.is_empty()
+            && r.found
+                .iter()
+                .all(|a| a.content.to_lowercase().contains("css color"))
+    );
     // Output limit.
     let r = recall(&archive, None, Some("line of code"), 100);
     assert!(r.found.iter().map(|a| a.content.len()).sum::<usize>() <= 100 && r.truncated_chars > 0);
 
     // Stable ids: compressing the same input again archives the same ids and writes no duplicates.
     let again = compress(Some(&rel()), &archive, &input(msgs.clone(), target)).await;
-    assert_eq!(again.archived.iter().map(|a| &a.id).collect::<Vec<_>>(), out.archived.iter().map(|a| &a.id).collect::<Vec<_>>());
+    assert_eq!(
+        again.archived.iter().map(|a| &a.id).collect::<Vec<_>>(),
+        out.archived.iter().map(|a| &a.id).collect::<Vec<_>>()
+    );
     assert_eq!(archive.load().len(), out.archived.len());
     // Already-compacted input is left alone: stubs are never re-archived.
     let third = compress(Some(&rel()), &archive, &input(out.messages.clone(), target)).await;
@@ -129,8 +186,12 @@ async fn prune_needs_no_model_and_duplicates_go_first() {
         json!({"role": "tool", "tool_call_id": "b", "content": big.clone()}),
         json!({"role": "assistant", "content": "", "tool_calls": [{"id": "c", "type": "function", "function": {"name": "ls", "arguments": "{}"}}]}),
         json!({"role": "tool", "tool_call_id": "c", "content": "same listing"}),
-        json!({"role": "user", "content": "a"}), json!({"role": "user", "content": "b"}), json!({"role": "user", "content": "c"}),
-        json!({"role": "user", "content": "d"}), json!({"role": "user", "content": "e"}), json!({"role": "user", "content": "f"}),
+        json!({"role": "user", "content": "a"}),
+        json!({"role": "user", "content": "b"}),
+        json!({"role": "user", "content": "c"}),
+        json!({"role": "user", "content": "d"}),
+        json!({"role": "user", "content": "e"}),
+        json!({"role": "user", "content": "f"}),
     ];
     let mut inp = input(msgs.clone(), 1_000_000);
     inp.mode = "prune".into();
@@ -138,8 +199,14 @@ async fn prune_needs_no_model_and_duplicates_go_first() {
     let out = compress(Some(&d), &archive, &inp).await;
     assert_eq!(*d.calls.lock().unwrap(), 0, "prune never asks the model");
     let whys: Vec<&str> = out.archived.iter().map(|a| a.why.as_str()).collect();
-    assert_eq!(whys, ["duplicate of a later tool result", "large tool result"]);
-    assert_eq!(out.archived[0].index, 3, "the earlier duplicate goes; the latest copy stays");
+    assert_eq!(
+        whys,
+        ["duplicate of a later tool result", "large tool result"]
+    );
+    assert_eq!(
+        out.archived[0].index, 3,
+        "the earlier duplicate goes; the latest copy stays"
+    );
     assert_eq!(out.messages[7], msgs[7]);
     assert_eq!(out.archived[1].id, archive_id("tool", &big));
 }
@@ -150,19 +217,37 @@ async fn without_kev_it_falls_back_to_oldest_first_and_says_so() {
     let archive = Archive::for_session(dir.path(), "s3");
     let msgs = transcript();
     let target = total_tokens(&msgs) / 2;
-    let d = Relevance { calls: Mutex::new(0), fail: true };
+    let d = Relevance {
+        calls: Mutex::new(0),
+        fail: true,
+    };
     let out = compress(Some(&d), &archive, &input(msgs.clone(), target)).await;
     assert_eq!(out.ranking, "recency");
-    assert!(out.notes.iter().any(|n| n.contains("Kev unavailable")), "{:?}", out.notes);
+    assert!(
+        out.notes.iter().any(|n| n.contains("Kev unavailable")),
+        "{:?}",
+        out.notes
+    );
     assert!(out.tokens_after <= target);
     let first = out.archived.iter().map(|a| a.index).min().unwrap();
     // Index 2 is the first tool call: no text to archive (its arguments are never touched).
-    assert_eq!(first, 3, "the oldest unprotected message with content goes first");
+    assert_eq!(
+        first, 3,
+        "the oldest unprotected message with content goes first"
+    );
 
     // No decider at all: same order, no notes about Kev failing.
-    let out2 = compress(None::<&Relevance>, &Archive::for_session(dir.path(), "s4"), &input(msgs, target)).await;
+    let out2 = compress(
+        None::<&Relevance>,
+        &Archive::for_session(dir.path(), "s4"),
+        &input(msgs, target),
+    )
+    .await;
     assert_eq!(out2.ranking, "recency");
-    assert_eq!(out2.archived.iter().map(|a| a.index).collect::<Vec<_>>(), out.archived.iter().map(|a| a.index).collect::<Vec<_>>());
+    assert_eq!(
+        out2.archived.iter().map(|a| a.index).collect::<Vec<_>>(),
+        out.archived.iter().map(|a| a.index).collect::<Vec<_>>()
+    );
 }
 
 #[tokio::test]
@@ -173,8 +258,13 @@ async fn an_unwritable_archive_archives_nothing() {
     let archive = Archive::for_session(dir.path(), "s5");
     let msgs = transcript();
     let out = compress(Some(&rel()), &archive, &input(msgs.clone(), 10)).await;
-    assert_eq!(out.messages, msgs, "a stub must never point at an archive that doesn't exist");
-    assert!(out.archived.is_empty() && out.notes.iter().any(|n| n.contains("nothing was archived")));
+    assert_eq!(
+        out.messages, msgs,
+        "a stub must never point at an archive that doesn't exist"
+    );
+    assert!(
+        out.archived.is_empty() && out.notes.iter().any(|n| n.contains("nothing was archived"))
+    );
 }
 
 #[test]
@@ -183,17 +273,26 @@ fn multimodal_and_protected_messages_are_never_archived() {
     let dir = tempfile::tempdir().unwrap();
     let archive = Archive::for_session(dir.path(), "s6");
     let image = json!({"role": "user", "content": [{"type": "text", "text": "see this"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]});
-    let mut msgs = vec![json!({"role": "system", "content": "sys"}), json!({"role": "user", "content": "go"})];
+    let mut msgs = vec![
+        json!({"role": "system", "content": "sys"}),
+        json!({"role": "user", "content": "go"}),
+    ];
     msgs.push(image.clone());
     for i in 0..10 {
-        msgs.push(json!({"role": "assistant", "content": format!("step {i} {}", "words ".repeat(300))}));
+        msgs.push(
+            json!({"role": "assistant", "content": format!("step {i} {}", "words ".repeat(300))}),
+        );
     }
     let mut inp = input(msgs.clone(), 1);
     inp.protect_first_n = 1;
     inp.protect_last_n = 2;
     let out = rt.block_on(compress(None::<&Relevance>, &archive, &inp));
     assert_eq!(out.messages[2], image);
-    assert!(out.archived.iter().all(|a| a.index >= 3 && a.index < msgs.len() - 2));
+    assert!(
+        out.archived
+            .iter()
+            .all(|a| a.index >= 3 && a.index < msgs.len() - 2)
+    );
     assert!(out.notes.iter().any(|n| n.contains("over the target")));
 }
 
@@ -201,7 +300,8 @@ fn multimodal_and_protected_messages_are_never_archived() {
 fn hermes_usage_summarises_the_latest_session() {
     let dir = tempfile::tempdir().unwrap();
     let log = dir.path().join("hermes-usage.jsonl");
-    let mut lines = vec![r#"{"session_id":"old","prompt_tokens":5,"context_length":100}"#.to_string()];
+    let mut lines =
+        vec![r#"{"session_id":"old","prompt_tokens":5,"context_length":100}"#.to_string()];
     for (i, p) in [1000u64, 3000, 6000, 2500].iter().enumerate() {
         lines.push(format!(
             r#"{{"session_id":"s","prompt_tokens":{p},"completion_tokens":10,"cache_read_tokens":{},"context_length":10000,"compression_count":{},"archived_total":{}}}"#,
@@ -212,10 +312,26 @@ fn hermes_usage_summarises_the_latest_session() {
     }
     std::fs::write(&log, lines.join("\n")).unwrap();
     let h = kritic::usage::hermes_usage_from(&log, None).unwrap();
-    assert_eq!((h.session_id.as_str(), h.api_calls, h.context_now, h.context_peak), ("s", 4, 2500, 6000));
-    assert_eq!((h.compactions, h.archived_messages, h.output_tokens), (1, 7, 40));
+    assert_eq!(
+        (
+            h.session_id.as_str(),
+            h.api_calls,
+            h.context_now,
+            h.context_peak
+        ),
+        ("s", 4, 2500, 6000)
+    );
+    assert_eq!(
+        (h.compactions, h.archived_messages, h.output_tokens),
+        (1, 7, 40)
+    );
     assert_eq!(h.context_utilization_pct, 25.0);
     assert_eq!(h.context_growth_per_call, 500.0);
-    assert_eq!(kritic::usage::hermes_usage_from(&log, Some("old")).unwrap().api_calls, 1);
+    assert_eq!(
+        kritic::usage::hermes_usage_from(&log, Some("old"))
+            .unwrap()
+            .api_calls,
+        1
+    );
     assert!(kritic::usage::hermes_usage_from(&log, Some("none")).is_none());
 }
