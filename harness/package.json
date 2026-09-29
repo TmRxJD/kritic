@@ -1,0 +1,13 @@
+{
+  "name": "kritic-ui-harness",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic Playwright UI tester for kritic (no LLM involvement)",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "playwright": "1.63.0"
+  }
+}

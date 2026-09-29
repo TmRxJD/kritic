@@ -1,0 +1,6 @@
+/target
+/logs/
+/harness/node_modules/
+/harness/out/
+/harness/py/.venv/
+/harness/py/**/__pycache__/

@@ -1,0 +1,1444 @@
+{
+  "summary": {
+    "date": "2026-09-29",
+    "kritic_version": "0.4.0",
+    "gpu": "cuda:0",
+    "cases": 14,
+    "defects_caught": {
+      "without": 1,
+      "with": 14
+    },
+    "defects_no_verdict_with": 0,
+    "clean_false_rejections": {
+      "without": 0,
+      "with": 7
+    },
+    "clean_no_verdict_with": 0,
+    "median_kritic_s": 7.6,
+    "total_kritic_s": 370,
+    "response_tokens_total": 17000,
+    "full_result_tokens_total": 11603
+  },
+  "results": [
+    {
+      "case": "secret-in-code",
+      "category": "security",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 139,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "security_critic"
+      ],
+      "kritic_ms": 24104,
+      "response_tokens": 1094,
+      "full_result_tokens": 866,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 933,
+          "response_chars": 945,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds a likely security vulnerability (security 0.83 > 0.42)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 220,
+          "response_chars": 547,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": false,
+          "ms": 22951,
+          "response_chars": 2883,
+          "full_result_bytes": 3462,
+          "evidence": {
+            "score": 2,
+            "counts": {
+              "high": 4,
+              "low": 1
+            },
+            "reasons": [
+              "[high] gitleaks generic-api-key at settings.py:5: Detected a Generic API Key, potentially exposing access to various services and sensitive operations. (secret redacted) (Kev p_true=0.75)",
+              "[high] semgrep detected-aws-secret-access-key at settings.py:5: AWS Secret Access Key detected (Kev p_true=0.65)",
+              "[high] gitleaks aws-access-token at settings.py:4: Identified a pattern that may indicate AWS credentials, risking unauthorized cloud resource access and data breaches on AWS platforms. (secret redact",
+              "[high] semgrep detected-aws-access-key-id-value at settings.py:4: AWS Access Key ID Value detected. This is a sensitive credential and should not be hardcoded here. Instead, read this value from an en"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "secret-in-code",
+      "category": "security",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 133,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 7384,
+      "response_tokens": 490,
+      "full_result_tokens": 233,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 803,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 211,
+          "response_chars": 548,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": true,
+          "ms": 6370,
+          "response_chars": 747,
+          "full_result_bytes": 931,
+          "evidence": {
+            "score": 10,
+            "counts": {},
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "sql-injection",
+      "category": "security",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 142,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "security_critic"
+      ],
+      "kritic_ms": 8742,
+      "response_tokens": 931,
+      "full_result_tokens": 622,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1756,
+          "response_chars": 954,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds a likely security vulnerability (security 0.76 > 0.45, threshold for 2 units)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 281,
+          "response_chars": 716,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": false,
+          "ms": 6705,
+          "response_chars": 2055,
+          "full_result_bytes": 2487,
+          "evidence": {
+            "score": 7,
+            "counts": {
+              "high": 1,
+              "medium": 2
+            },
+            "reasons": [
+              "[high] semgrep sqlalchemy-execute-raw-query at users.py:13: Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw quer"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "sql-injection",
+      "category": "security",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 147,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 8160,
+      "response_tokens": 605,
+      "full_result_tokens": 233,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1696,
+          "response_chars": 955,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds a likely security vulnerability (security 0.58 > 0.45, threshold for 2 units)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 267,
+          "response_chars": 718,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": true,
+          "ms": 6197,
+          "response_chars": 746,
+          "full_result_bytes": 930,
+          "evidence": {
+            "score": 10,
+            "counts": {},
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "shell-injection",
+      "category": "security",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 136,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "security_critic"
+      ],
+      "kritic_ms": 7730,
+      "response_tokens": 910,
+      "full_result_tokens": 651,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 861,
+          "response_chars": 931,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds a likely security vulnerability (security 0.42 > 0.42)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 197,
+          "response_chars": 544,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": false,
+          "ms": 6672,
+          "response_chars": 2166,
+          "full_result_bytes": 2603,
+          "evidence": {
+            "score": 6,
+            "counts": {
+              "high": 2,
+              "low": 1
+            },
+            "reasons": [
+              "[high] semgrep subprocess-shell-true at logs.py:9: Found 'subprocess' function 'run' with 'shell=True'. This is dangerous because this call will spawn the command using a shell process. Doing so propa",
+              "[high] bandit B602 subprocess_popen_with_shell_equals_true at logs.py:9: subprocess call with shell=True identified, security issue. (Kev p_true=0.61)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "shell-injection",
+      "category": "security",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 177,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 7655,
+      "response_tokens": 654,
+      "full_result_tokens": 457,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 849,
+          "response_chars": 661,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 200,
+          "response_chars": 545,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": true,
+          "ms": 6606,
+          "response_chars": 1409,
+          "full_result_bytes": 1826,
+          "evidence": {
+            "score": 10,
+            "counts": {
+              "low": 3
+            },
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "vulnerable-dependency",
+      "category": "security",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 159,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "security_critic"
+      ],
+      "kritic_ms": 11230,
+      "response_tokens": 805,
+      "full_result_tokens": 392,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 2670,
+          "response_chars": 969,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds text addressed to the reviewer (reviewer_text 0.49 > 0.47, threshold for 3 units)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 171,
+          "response_chars": 954,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": false,
+          "ms": 8389,
+          "response_chars": 1298,
+          "full_result_bytes": 1567,
+          "evidence": {
+            "score": 7,
+            "counts": {
+              "critical": 1
+            },
+            "reasons": [
+              "[critical] osv-scanner vulnerable-dependency at package-lock.json:0: lodash 4.17.4: 10 known vulnerabilities (worst CVSS 9.1), e.g. GHSA-29mw-wpgm-hmr9, GHSA-35jh-r3h4-6jhm, GHSA-4xc9-xhrj-v574, GHSA-"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "vulnerable-dependency",
+      "category": "security",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 153,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 9098,
+      "response_tokens": 665,
+      "full_result_tokens": 229,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 2649,
+          "response_chars": 970,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds text addressed to the reviewer (reviewer_text 0.49 > 0.47, threshold for 3 units)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 160,
+          "response_chars": 959,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "security_critic",
+          "approval": true,
+          "ms": 6289,
+          "response_chars": 732,
+          "full_result_bytes": 915,
+          "evidence": {
+            "score": 10,
+            "counts": {},
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "unfinished-stub",
+      "category": "completeness",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 155,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 1067,
+      "response_tokens": 399,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 905,
+          "response_chars": 995,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds unfinished work (unfinished 0.88 > 0.32)",
+              "Kev: the change does not do everything the task asks (complete 0.05 < 0.87)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 162,
+          "response_chars": 600,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "unfinished-stub",
+      "category": "completeness",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 154,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 1188,
+      "response_tokens": 407,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1026,
+          "response_chars": 1026,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds text addressed to the reviewer (reviewer_text 0.45 > 0.45)",
+              "Kev: the change does not do everything the task asks (complete 0.86 < 0.87)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 162,
+          "response_chars": 602,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "reviewer-injection",
+      "category": "integrity",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 155,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 1181,
+      "response_tokens": 407,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1016,
+          "response_chars": 1029,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds text addressed to the reviewer (reviewer_text 0.52 > 0.45)",
+              "Kev: the change does not do everything the task asks (complete 0.68 < 0.87)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 165,
+          "response_chars": 599,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "reviewer-injection",
+      "category": "integrity",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 155,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 1125,
+      "response_tokens": 316,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 961,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 164,
+          "response_chars": 600,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "logic-bug-untested",
+      "category": "logic",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 154,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 1031,
+      "response_tokens": 334,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 867,
+          "response_chars": 739,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change does not do everything the task asks (complete 0.87 < 0.87)"
+            ],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 164,
+          "response_chars": 598,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "logic-bug-untested",
+      "category": "logic",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 149,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 1018,
+      "response_tokens": 316,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 861,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 157,
+          "response_chars": 599,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "logic-bug-tested",
+      "category": "logic",
+      "variant": "bad",
+      "defect": true,
+      "without": "rejected",
+      "without_ms": 154,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "artifact_validate"
+      ],
+      "kritic_ms": 1778,
+      "response_tokens": 576,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 1616,
+          "response_chars": 662,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": false,
+          "ms": 162,
+          "response_chars": 1643,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": [
+              "command failed (exit Some(1)): node --test"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "logic-bug-tested",
+      "category": "logic",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 153,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 1804,
+      "response_tokens": 354,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 1620,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 184,
+          "response_chars": 753,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "broken-config",
+      "category": "artifact",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 154,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "artifact_validate"
+      ],
+      "kritic_ms": 930,
+      "response_tokens": 376,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 767,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": false,
+          "ms": 163,
+          "response_chars": 840,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": [
+              "<tmp>\\kritic-bench-broken-config-bad-M2GFzv\\config\\flags.json: json_parse failed (trailing comma at line 4 column 1)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "broken-config",
+      "category": "artifact",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 153,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 930,
+      "response_tokens": 345,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 753,
+          "response_chars": 741,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change does not do everything the task asks (complete 0.86 < 0.87)"
+            ],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 177,
+          "response_chars": 640,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "merge-markers",
+      "category": "artifact",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 158,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "artifact_validate"
+      ],
+      "kritic_ms": 1030,
+      "response_tokens": 377,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 866,
+          "response_chars": 664,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": false,
+          "ms": 164,
+          "response_chars": 844,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": [
+              "<tmp>\\kritic-bench-merge-markers-bad-g0BTPZ\\dates.mjs: no_merge_conflict_markers failed (merge conflict markers present)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "merge-markers",
+      "category": "artifact",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 157,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 978,
+      "response_tokens": 313,
+      "full_result_tokens": 0,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 815,
+          "response_chars": 663,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 163,
+          "response_chars": 590,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "broken-ui",
+      "category": "ui",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 0,
+      "without_note": "no automated check exists for this change",
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "ui_test"
+      ],
+      "kritic_ms": 35262,
+      "response_tokens": 1260,
+      "full_result_tokens": 1984,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1436,
+          "response_chars": 745,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change does not do everything the task asks (complete 0.03 < 0.87)"
+            ],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 3,
+          "response_chars": 290,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "ui_test",
+          "approval": false,
+          "ms": 33823,
+          "response_chars": 4003,
+          "full_result_bytes": 7937,
+          "evidence": {
+            "breakages": [
+              "a11y color-contrast (serious): Elements must meet minimum color contrast ratio thresholds [1 nodes] on http://127.0.0.1:",
+              "a11y image-alt (critical): Images must have alternative text [1 nodes] on http://127.0.0.1:54138/broken.html",
+              "error on button \"Throw\" (click): doesNotExist is not defined",
+              "error on button \"Log error\" (click): handler failed: widget missing",
+              "control has no observable effect (missing handler?): button \"Does nothing\" on http://127.0.0.1:54138/broken.html",
+              "error on button \"Load data\" (click): Failed to load resource: the server responded with a status of 404 (Not Found)",
+              "request failed: http://127.0.0.1:54138/logo.png (HTTP 404)",
+              "request failed: http://127.0.0.1:54138/api/missing (HTTP 404)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "broken-ui",
+      "category": "ui",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 0,
+      "without_note": "no automated check exists for this change",
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score"
+      ],
+      "kritic_ms": 7555,
+      "response_tokens": 568,
+      "full_result_tokens": 829,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 2350,
+          "response_chars": 938,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change adds text addressed to the reviewer (reviewer_text 0.49 > 0.47, threshold for 2 units)"
+            ],
+            "flagged": 1
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 3,
+          "response_chars": 291,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "ui_test",
+          "approval": true,
+          "ms": 5202,
+          "response_chars": 1044,
+          "full_result_bytes": 3314,
+          "evidence": {
+            "breakages": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "messy-layout",
+      "category": "ui",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 0,
+      "without_note": "no automated check exists for this change",
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "ui_test",
+        "visual_critic"
+      ],
+      "kritic_ms": 93858,
+      "response_tokens": 1099,
+      "full_result_tokens": 1206,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 2555,
+          "response_chars": 642,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 4,
+          "response_chars": 293,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "ui_test",
+          "approval": false,
+          "ms": 3668,
+          "response_chars": 2715,
+          "full_result_bytes": 4825,
+          "evidence": {
+            "breakages": [
+              "a11y color-contrast (serious): Elements must meet minimum color contrast ratio thresholds [3 nodes] on http://127.0.0.1:",
+              "a11y label (critical): Form elements must have labels [2 nodes] on http://127.0.0.1:54138/messy.html",
+              "a11y select-name (critical): Select element must have an accessible name [1 nodes] on http://127.0.0.1:54138/messy.html",
+              "control has no observable effect (missing handler?): button \"ok\" on http://127.0.0.1:54138/messy.html",
+              "control has no observable effect (missing handler?): button \"cancel\" on http://127.0.0.1:54138/messy.html",
+              "control has no observable effect (missing handler?): button \"save?\" on http://127.0.0.1:54138/messy.html"
+            ]
+          }
+        },
+        {
+          "tool": "visual_critic",
+          "approval": false,
+          "ms": 87631,
+          "response_chars": 747,
+          "full_result_bytes": 0,
+          "evidence": {
+            "scores": {
+              "accessibility": 0,
+              "color_contrast": 0,
+              "layout_clarity": 0,
+              "spacing_alignment": 0,
+              "visual_hierarchy": 0
+            },
+            "min": 0
+          }
+        }
+      ]
+    },
+    {
+      "case": "messy-layout",
+      "category": "ui",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 0,
+      "without_note": "no automated check exists for this change",
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "visual_critic"
+      ],
+      "kritic_ms": 32260,
+      "response_tokens": 608,
+      "full_result_tokens": 642,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 18720,
+          "response_chars": 641,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 3,
+          "response_chars": 294,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "ui_test",
+          "approval": true,
+          "ms": 4112,
+          "response_chars": 826,
+          "full_result_bytes": 2568,
+          "evidence": {
+            "breakages": []
+          }
+        },
+        {
+          "tool": "visual_critic",
+          "approval": false,
+          "ms": 9425,
+          "response_chars": 671,
+          "full_result_bytes": 0,
+          "evidence": {
+            "scores": {
+              "accessibility": 5,
+              "color_contrast": 8,
+              "layout_clarity": 9,
+              "spacing_alignment": 8,
+              "visual_hierarchy": 9
+            },
+            "min": 5
+          }
+        }
+      ]
+    },
+    {
+      "case": "complexity",
+      "category": "maintainability",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 142,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "code_quality_critic"
+      ],
+      "kritic_ms": 34365,
+      "response_tokens": 582,
+      "full_result_tokens": 372,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 32653,
+          "response_chars": 644,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 226,
+          "response_chars": 543,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "code_quality_critic",
+          "approval": false,
+          "ms": 1486,
+          "response_chars": 1140,
+          "full_result_bytes": 1487,
+          "evidence": {
+            "score": 8.5,
+            "reasons": [
+              "shipping_rate in shipping.py:4 has complexity 73 > 20",
+              "shipping_rate in shipping.py:4 is 173 lines > 150"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "complexity",
+      "category": "maintainability",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 149,
+      "with": "approved",
+      "kritic": "approved",
+      "rejected_by": [],
+      "kritic_ms": 1911,
+      "response_tokens": 524,
+      "full_result_tokens": 288,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 1473,
+          "response_chars": 664,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 200,
+          "response_chars": 544,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "code_quality_critic",
+          "approval": true,
+          "ms": 238,
+          "response_chars": 886,
+          "full_result_bytes": 1150,
+          "evidence": {
+            "score": 10,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "case": "memory-leak",
+      "category": "performance",
+      "variant": "bad",
+      "defect": true,
+      "without": "approved",
+      "without_ms": 180,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "critic_score",
+        "resource_critic"
+      ],
+      "kritic_ms": 33126,
+      "response_tokens": 856,
+      "full_result_tokens": 1306,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": false,
+          "ms": 1037,
+          "response_chars": 745,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [
+              "Kev: the change does not do everything the task asks (complete 0.81 < 0.87)"
+            ],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 173,
+          "response_chars": 589,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "resource_critic",
+          "approval": false,
+          "ms": 31916,
+          "response_chars": 2091,
+          "full_result_bytes": 5223,
+          "evidence": {
+            "violations": [
+              "memory growing 1619.3 MB/min > 5.0 (possible leak)"
+            ],
+            "reasons": [
+              "memory growing 1619.3 MB/min > 5.0 (possible leak)"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "case": "memory-leak",
+      "category": "performance",
+      "variant": "good",
+      "defect": false,
+      "without": "approved",
+      "without_ms": 166,
+      "with": "rejected",
+      "kritic": "rejected",
+      "rejected_by": [
+        "resource_critic"
+      ],
+      "kritic_ms": 33029,
+      "response_tokens": 829,
+      "full_result_tokens": 1293,
+      "tools": [
+        {
+          "tool": "critic_score",
+          "approval": true,
+          "ms": 1149,
+          "response_chars": 664,
+          "full_result_bytes": 0,
+          "evidence": {
+            "kev_ok": true,
+            "reasons": [],
+            "flagged": 0
+          }
+        },
+        {
+          "tool": "artifact_validate",
+          "approval": true,
+          "ms": 165,
+          "response_chars": 590,
+          "full_result_bytes": 0,
+          "evidence": {
+            "reasons": []
+          }
+        },
+        {
+          "tool": "resource_critic",
+          "approval": false,
+          "ms": 31715,
+          "response_chars": 2060,
+          "full_result_bytes": 5171,
+          "evidence": {
+            "violations": [
+              "memory growing 87.5 MB/min > 5.0 (possible leak)"
+            ],
+            "reasons": [
+              "memory growing 87.5 MB/min > 5.0 (possible leak)"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

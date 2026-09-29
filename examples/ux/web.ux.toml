@@ -1,0 +1,38 @@
+# .kritic/ux.toml for a web app: what the UI is for, its modes and the tasks users do.
+# ux_critic explores the running app, finds the shortest path to each `done`, audits every
+# screen and (optionally) lets a deliberately weak novice try each task from its `goal`.
+ignore = ["^Sign out$", "^Delete"]      # labels never pressed (still audited)
+
+[app]
+kind = "web"
+purpose = "A notes app: browse notebooks, write notes, and share a note with a teammate."
+url = "http://localhost:5173/"          # or pass url= to ux_critic for today's dev server
+viewport = [1280, 800]
+
+[[modes]]                               # each mode needs a top-level entry (1 action from home)
+name = "Notebooks"
+done = { text = "All notebooks" }
+
+[[modes]]
+name = "Editor"
+done = { control = "^Save note$" }
+
+[[tasks]]
+name = "new note"
+goal = "Create a new note"              # plain words: all the novice gets
+done = { text = "Untitled note" }
+budget = 2
+primary = true                          # primary budgets may not exceed 3
+
+[[tasks]]
+name = "share"
+goal = "Share the note Weekly plan with a teammate"
+done = { text = "Share with" }
+budget = 3
+primary = true
+
+[[tasks]]
+name = "export"
+goal = "Export the note Weekly plan as Markdown"
+done = { url = "/export" }
+budget = 5

@@ -1,0 +1,37 @@
+{
+ "name": "resource_fit",
+ "purpose": "Say whether measured resource use fits the described workload (resource_critic). Budgets decide approval.",
+ "fields": [
+  {
+   "name": "workload",
+   "kind": {
+    "kind": "text",
+    "max_chars": 500
+   },
+   "meaning": "What the process was doing while it was sampled, as the caller described it."
+  },
+  {
+   "name": "usage",
+   "kind": {
+    "kind": "text",
+    "max_chars": 600
+   },
+   "meaning": "Measured use written by code in fixed words: CPU, memory level and trend, handles, disk and GPU."
+  }
+ ],
+ "questions": [
+  {
+   "id": "fits",
+   "ask": {
+    "type": "noul",
+    "instructions": "Is the use in `usage` what `workload` would need?",
+    "yes": "every resource in `usage` is in line with the work `workload` describes",
+    "no": "some resource in `usage` is far beyond what `workload` needs"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "measured 2026-09-27: Kev called a 1,120 MB/min leak reasonable; budgets decide"
+   }
+  }
+ ]
+}

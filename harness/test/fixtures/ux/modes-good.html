@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Studio (modes, good)</title><link rel="stylesheet" href="ux.css"></head>
+<body>
+<header><h1>Studio</h1>
+  <nav id="modes"></nav>
+</header>
+<main id="app"></main>
+<script>
+// Good variant: every mode has a top-level entry in the mode switcher.
+const state = { mode: "Library", song: null };
+const app = document.getElementById("app");
+function set(patch) { Object.assign(state, patch); render(); }
+function btn(label, on, extra = "") { return `<button type="button" data-on="${on}" ${extra}>${label}</button>`; }
+function render() {
+  document.getElementById("modes").innerHTML = ["Library", "Editor", "Composer"]
+    .map((m) => btn(m, `mode:${m}`, `role="tab" aria-selected="${state.mode === m}"`)).join("");
+  if (state.mode === "Library") {
+    app.innerHTML = `<h2>Song library</h2><div class="panel list">${["Echo in the Dark", "Lanterns", "Night Drive"]
+      .map((s) => btn(s, `open:${s}`)).join("")}</div>`;
+  } else if (state.mode === "Editor") {
+    app.innerHTML = `<h2>Map editor</h2><div class="bar">${btn("Play preview", "play")}${btn("Save", "noop")}</div>
+      <div class="panel">${state.song ? `Editing ${state.song}` : "No song open"}</div>
+      <p class="status">${state.playing ? "Preview playing" : ""}</p>`;
+  } else {
+    app.innerHTML = `<h2>Composer workspace</h2><div class="panel list">${["Intro", "Verse", "Chorus"]
+      .map((s) => btn(s, `section:${s}`)).join("")}</div><p class="status">${state.section ? `Section ${state.section} selected` : ""}</p>`;
+  }
+}
+document.body.addEventListener("click", (e) => {
+  const on = e.target.closest("[data-on]")?.dataset.on;
+  if (!on) return;
+  const [k, v] = on.split(":");
+  if (k === "mode") set({ mode: v, playing: false });
+  else if (k === "open") set({ mode: "Editor", song: v });
+  else if (k === "play") set({ playing: true });
+  else if (k === "section") set({ section: v });
+});
+render();
+</script></body></html>

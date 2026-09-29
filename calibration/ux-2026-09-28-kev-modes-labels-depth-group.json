@@ -1,0 +1,860 @@
+{
+  "date": "2026-09-28",
+  "novice": "kev",
+  "pairs": [
+    {
+      "pair": "modes",
+      "good": {
+        "actions": 70,
+        "approval": true,
+        "duration_ms": 207752,
+        "hard_fails": [],
+        "mean_step_distance": [
+          null,
+          0.111,
+          null,
+          0.283
+        ],
+        "mode_steps": [
+          [
+            "Library",
+            0
+          ],
+          [
+            "Editor",
+            1
+          ],
+          [
+            "Composer",
+            1
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "open a song",
+              1.0
+            ],
+            [
+              "play preview",
+              3.33
+            ],
+            [
+              "open Composer",
+              2.33
+            ],
+            [
+              "select a section",
+              6.0
+            ]
+          ],
+          "per_task": [
+            [
+              "open a song",
+              2
+            ],
+            [
+              "play preview",
+              3
+            ],
+            [
+              "open Composer",
+              3
+            ],
+            [
+              "select a section",
+              1
+            ]
+          ],
+          "rate": 0.75,
+          "runs": 12,
+          "successes": 9,
+          "tried": [
+            [
+              "open a song",
+              [
+                "Lanterns",
+                "Lanterns",
+                "Night Drive > Composer > Editor > Library > Night Drive > Editor"
+              ]
+            ],
+            [
+              "play preview",
+              [
+                "Echo in the Dark > Play preview",
+                "Night Drive > Save > Composer > Library > Echo in the Dark > Play preview",
+                "Night Drive > Play preview"
+              ]
+            ],
+            [
+              "open Composer",
+              [
+                "Echo in the Dark > Composer",
+                "Lanterns > Save > Composer",
+                "Night Drive > Composer"
+              ]
+            ],
+            [
+              "select a section",
+              [
+                "Echo in the Dark > Composer > Intro > Composer > Verse > Chorus",
+                "Lanterns > Save > Composer > Library > Echo in the Dark > Play preview",
+                "Night Drive > Composer > Composer > Library > Night Drive > Composer"
+              ]
+            ]
+          ],
+          "within_budget": 7
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "open a song",
+            1
+          ],
+          [
+            "play preview",
+            2
+          ],
+          [
+            "open Composer",
+            1
+          ],
+          [
+            "select a section",
+            2
+          ]
+        ],
+        "out_dir": "runs/20260928-170258-268-31816-0-ux-cal-modes-good",
+        "rule_counts": {},
+        "screens": 13
+      },
+      "bad": {
+        "actions": 125,
+        "approval": false,
+        "duration_ms": 213994,
+        "hard_fails": [
+          "mode \"Composer\" has no top-level entry: 3 actions from the home screen (Editor > More > Composer)",
+          "primary task \"open Composer\": the novice failed 3 of 3 runs: the entry is not discoverable",
+          "task \"select a section\": takes 4 actions, budget 3 (Editor > More > Composer > Chorus)"
+        ],
+        "mean_step_distance": [
+          null,
+          0.111,
+          0.097,
+          0.182
+        ],
+        "mode_steps": [
+          [
+            "Library",
+            0
+          ],
+          [
+            "Editor",
+            1
+          ],
+          [
+            "Composer",
+            3
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "open a song",
+              1.0
+            ],
+            [
+              "play preview",
+              2.33
+            ],
+            [
+              "open Composer",
+              null
+            ],
+            [
+              "select a section",
+              null
+            ]
+          ],
+          "per_task": [
+            [
+              "open a song",
+              2
+            ],
+            [
+              "play preview",
+              3
+            ],
+            [
+              "open Composer",
+              0
+            ],
+            [
+              "select a section",
+              0
+            ]
+          ],
+          "rate": 0.4166666666666667,
+          "runs": 12,
+          "successes": 5,
+          "tried": [
+            [
+              "open a song",
+              [
+                "Lanterns",
+                "Lanterns",
+                "Night Drive > Play preview > Editor > Library > Night Drive > Editor"
+              ]
+            ],
+            [
+              "play preview",
+              [
+                "Lanterns > Play preview",
+                "Night Drive > More > Play preview",
+                "Night Drive > Play preview"
+              ]
+            ],
+            [
+              "open Composer",
+              [
+                "Echo in the Dark > Play preview > Play preview > Library > Echo in the Dark > More",
+                "Lanterns > More > Save > Library > Echo in the Dark > Save",
+                "Night Drive > Play preview > Editor > Library > Night Drive > Editor"
+              ]
+            ],
+            [
+              "select a section",
+              [
+                "Echo in the Dark > Play preview > Play preview > Editor > Save > More",
+                "Night Drive > More > Save > Library > Lanterns > More",
+                "Night Drive > Play preview > Editor > Library > Night Drive > Editor"
+              ]
+            ]
+          ],
+          "within_budget": 5
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "open a song",
+            1
+          ],
+          [
+            "play preview",
+            2
+          ],
+          [
+            "open Composer",
+            3
+          ],
+          [
+            "select a section",
+            4
+          ]
+        ],
+        "out_dir": "runs/20260928-170626-021-31816-1-ux-cal-modes-bad",
+        "rule_counts": {},
+        "screens": 21
+      },
+      "note": "from the first kev run; its labels variant hit a Chromium renderer crash and the rest were rerun"
+    },
+    {
+      "bad": {
+        "actions": 90,
+        "approval": false,
+        "duration_ms": 166175,
+        "hard_fails": [
+          "primary task \"undo\": the novice failed 2 of 3 runs: the entry is not discoverable",
+          "rule unlabelled: 9 finding(s), e.g. button:#1, button:#2, button:#3, button:#4"
+        ],
+        "mean_step_distance": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "play",
+              4.0
+            ],
+            [
+              "export",
+              4.5
+            ],
+            [
+              "undo",
+              3.0
+            ],
+            [
+              "settings",
+              2.0
+            ],
+            [
+              "mirror",
+              3.0
+            ],
+            [
+              "snap",
+              1.0
+            ],
+            [
+              "bookmark",
+              3.0
+            ]
+          ],
+          "per_task": [
+            [
+              "play",
+              2
+            ],
+            [
+              "export",
+              2
+            ],
+            [
+              "undo",
+              1
+            ],
+            [
+              "settings",
+              2
+            ],
+            [
+              "mirror",
+              2
+            ],
+            [
+              "snap",
+              1
+            ],
+            [
+              "bookmark",
+              3
+            ]
+          ],
+          "rate": 0.6190476190476191,
+          "runs": 21,
+          "successes": 13,
+          "tried": [
+            [
+              "play",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "export",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "undo",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "settings",
+              [
+                "(no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label)"
+              ]
+            ],
+            [
+              "mirror",
+              [
+                "(no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "snap",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "bookmark",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label)",
+                "(no label)"
+              ]
+            ]
+          ],
+          "within_budget": 8
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "play",
+            1
+          ],
+          [
+            "export",
+            1
+          ],
+          [
+            "undo",
+            1
+          ],
+          [
+            "settings",
+            1
+          ],
+          [
+            "mirror",
+            1
+          ],
+          [
+            "snap",
+            1
+          ],
+          [
+            "bookmark",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-171841-547-26456-1-ux-cal-labels-bad",
+        "rule_counts": {
+          "icon_no_tooltip": 9,
+          "unlabelled": 9
+        },
+        "screens": 10
+      },
+      "good": {
+        "actions": 90,
+        "approval": false,
+        "duration_ms": 170422,
+        "hard_fails": [
+          "primary task \"undo\": the novice failed 2 of 3 runs: the entry is not discoverable"
+        ],
+        "mean_step_distance": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "play",
+              4.0
+            ],
+            [
+              "export",
+              2.5
+            ],
+            [
+              "undo",
+              3.0
+            ],
+            [
+              "settings",
+              2.0
+            ],
+            [
+              "mirror",
+              3.0
+            ],
+            [
+              "snap",
+              3.5
+            ],
+            [
+              "bookmark",
+              2.67
+            ]
+          ],
+          "per_task": [
+            [
+              "play",
+              2
+            ],
+            [
+              "export",
+              2
+            ],
+            [
+              "undo",
+              1
+            ],
+            [
+              "settings",
+              3
+            ],
+            [
+              "mirror",
+              2
+            ],
+            [
+              "snap",
+              2
+            ],
+            [
+              "bookmark",
+              3
+            ]
+          ],
+          "rate": 0.7142857142857143,
+          "runs": 21,
+          "successes": 15,
+          "tried": [
+            [
+              "play",
+              [
+                "Settings > Export > Export > Record > Settings > Mirror notes",
+                "Mirror notes > Snap to grid > Undo > Play",
+                "Add bookmark > Export > Undo > Play"
+              ]
+            ],
+            [
+              "export",
+              [
+                "Settings > Settings > Settings > Record > Settings > Snap to grid",
+                "Snap to grid > Add bookmark > Export",
+                "Add bookmark > Export"
+              ]
+            ],
+            [
+              "undo",
+              [
+                "Settings > Export > Settings > Record > Mirror notes > Snap to grid",
+                "Snap to grid > Snap to grid > Export > Play > Settings > Mirror notes",
+                "Add bookmark > Settings > Undo"
+              ]
+            ],
+            [
+              "settings",
+              [
+                "Settings",
+                "Snap to grid > Add bookmark > Settings",
+                "Add bookmark > Settings"
+              ]
+            ],
+            [
+              "mirror",
+              [
+                "Mirror notes",
+                "Snap to grid > Add bookmark > Settings > Play > Mirror notes",
+                "Add bookmark > Settings > Export > Play > Add bookmark > Export"
+              ]
+            ],
+            [
+              "snap",
+              [
+                "Mirror notes > Settings > Settings > Record > Mirror notes > Snap to grid",
+                "Snap to grid",
+                "Add bookmark > Settings > Export > Play > Add bookmark > Export"
+              ]
+            ],
+            [
+              "bookmark",
+              [
+                "Mirror notes > Settings > Settings > Undo > Mirror notes > Add bookmark",
+                "Add bookmark",
+                "Add bookmark"
+              ]
+            ]
+          ],
+          "within_budget": 10
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "play",
+            1
+          ],
+          [
+            "export",
+            1
+          ],
+          [
+            "undo",
+            1
+          ],
+          [
+            "settings",
+            1
+          ],
+          [
+            "mirror",
+            1
+          ],
+          [
+            "snap",
+            1
+          ],
+          [
+            "bookmark",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-171551-123-26456-0-ux-cal-labels-good",
+        "rule_counts": {},
+        "screens": 10
+      },
+      "pair": "labels"
+    },
+    {
+      "bad": {
+        "actions": 32,
+        "approval": false,
+        "duration_ms": 70720,
+        "hard_fails": [
+          "primary task \"export\": takes 5 actions, budget 3 (File > Share… > Advanced > Export options > Export now)",
+          "primary task \"export\": the novice failed 3 of 3 runs: the entry is not discoverable"
+        ],
+        "mean_step_distance": [
+          0.053
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "export",
+              null
+            ]
+          ],
+          "per_task": [
+            [
+              "export",
+              0
+            ]
+          ],
+          "rate": 0.0,
+          "runs": 3,
+          "successes": 0,
+          "tried": [
+            [
+              "export",
+              [
+                "View > View > Edit > Edit > View > Zoom out",
+                "View > Zoom out > Edit > File > Open… > New map",
+                "View > View > Edit > File > Share… > View"
+              ]
+            ]
+          ],
+          "within_budget": 0
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "export",
+            5
+          ]
+        ],
+        "out_dir": "runs/20260928-172231-539-26456-3-ux-cal-depth-bad",
+        "rule_counts": {
+          "small_target": 4
+        },
+        "screens": 8
+      },
+      "good": {
+        "actions": 44,
+        "approval": true,
+        "duration_ms": 63811,
+        "hard_fails": [],
+        "mean_step_distance": [
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "export",
+              4.0
+            ]
+          ],
+          "per_task": [
+            [
+              "export",
+              2
+            ]
+          ],
+          "rate": 0.6666666666666666,
+          "runs": 3,
+          "successes": 2,
+          "tried": [
+            [
+              "export",
+              [
+                "Edit > Edit > File > File > Edit > Redo",
+                "View > Zoom out > Edit > Export",
+                "View > Edit > File > Export"
+              ]
+            ]
+          ],
+          "within_budget": 0
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "export",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-172127-727-26456-2-ux-cal-depth-good",
+        "rule_counts": {},
+        "screens": 8
+      },
+      "pair": "depth"
+    },
+    {
+      "bad": {
+        "actions": 27,
+        "approval": false,
+        "duration_ms": 47371,
+        "hard_fails": [
+          "primary task \"trim\": the novice failed 2 of 3 runs: the entry is not discoverable"
+        ],
+        "mean_step_distance": [
+          0.676
+        ],
+        "mode_steps": [
+          [
+            "Clip editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "trim",
+              6.0
+            ]
+          ],
+          "per_task": [
+            [
+              "trim",
+              1
+            ]
+          ],
+          "rate": 0.3333333333333333,
+          "runs": 3,
+          "successes": 1,
+          "tried": [
+            [
+              "trim",
+              [
+                "Theme > Zoom > Zoom > Set in point > Theme > Set out point",
+                "Set out point > Set out point > Help > Set in point > Zoom > Theme",
+                "Set out point > Zoom > Help > Set in point > Set out point > Apply trim"
+              ]
+            ]
+          ],
+          "within_budget": 0
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "trim",
+            3
+          ]
+        ],
+        "out_dir": "runs/20260928-172429-003-26456-5-ux-cal-group-bad",
+        "rule_counts": {
+          "scattered": 1
+        },
+        "screens": 5
+      },
+      "good": {
+        "actions": 27,
+        "approval": false,
+        "duration_ms": 46741,
+        "hard_fails": [
+          "primary task \"trim\": the novice failed 2 of 3 runs: the entry is not discoverable"
+        ],
+        "mean_step_distance": [
+          0.07
+        ],
+        "mode_steps": [
+          [
+            "Clip editor",
+            0
+          ]
+        ],
+        "novice": {
+          "mean_steps": [
+            [
+              "trim",
+              6.0
+            ]
+          ],
+          "per_task": [
+            [
+              "trim",
+              1
+            ]
+          ],
+          "rate": 0.3333333333333333,
+          "runs": 3,
+          "successes": 1,
+          "tried": [
+            [
+              "trim",
+              [
+                "Theme > Zoom > Zoom > Set in point > Theme > Help",
+                "Help > Help > Set out point > Set in point > Theme > Theme",
+                "Help > Zoom > Set out point > Set in point > Help > Apply trim"
+              ]
+            ]
+          ],
+          "within_budget": 0
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "trim",
+            3
+          ]
+        ],
+        "out_dir": "runs/20260928-172342-261-26456-4-ux-cal-group-good",
+        "rule_counts": {},
+        "screens": 5
+      },
+      "pair": "group"
+    }
+  ]
+}

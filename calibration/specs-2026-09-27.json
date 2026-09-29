@@ -1,0 +1,7457 @@
+{
+ "date": "2026-09-27",
+ "laya": "http://127.0.0.1:8089",
+ "maxFalseReject": 0.05,
+ "minCatch": 0.5,
+ "minAuc": 0.85,
+ "results": {
+  "code_chunk.defect": {
+   "good": 49,
+   "bad": 49,
+   "meanGood": 0.33,
+   "meanBad": 0.33,
+   "auc": 0.507,
+   "operatingPoint": {
+    "threshold": 0.411,
+    "falseReject": 0.04081632653061224,
+    "caught": 0.02040816326530612
+   },
+   "promote": false,
+   "goodTail": [
+    [
+     0.05,
+     0.411
+    ],
+    [
+     0.02,
+     0.476
+    ],
+    [
+     0.01,
+     0.476
+    ],
+    [
+     0.005,
+     0.476
+    ],
+    [
+     0,
+     0.476
+    ]
+   ],
+   "byNote": {
+    "good: real chunk": 0.33,
+    "bad: one operator mutated": 0.33
+   }
+  },
+  "code_change.defect": {
+   "good": 17,
+   "bad": 17,
+   "meanGood": 0.328,
+   "meanBad": 0.325,
+   "auc": 0.483,
+   "operatingPoint": {
+    "threshold": 0.412,
+    "falseReject": 0,
+    "caught": 0.058823529411764705
+   },
+   "promote": false,
+   "goodTail": [
+    [
+     0.05,
+     0.412
+    ],
+    [
+     0.02,
+     0.412
+    ],
+    [
+     0.01,
+     0.412
+    ],
+    [
+     0.005,
+     0.412
+    ],
+    [
+     0,
+     0.412
+    ]
+   ],
+   "byNote": {
+    "good: real hunk": 0.328,
+    "bad: one operator mutated in a '+' line": 0.325
+   }
+  },
+  "code_chunk.security": {
+   "good": 174,
+   "bad": 60,
+   "meanGood": 0.388,
+   "meanBad": 0.556,
+   "auc": 0.887,
+   "operatingPoint": {
+    "threshold": 0.492,
+    "falseReject": 0.04597701149425287,
+    "caught": 0.65
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.492
+    ],
+    [
+     0.02,
+     0.576
+    ],
+    [
+     0.01,
+     0.595
+    ],
+    [
+     0.005,
+     0.743
+    ],
+    [
+     0,
+     0.743
+    ]
+   ],
+   "byNote": {
+    "good: real chunk": 0.377,
+    "good: decoy line inserted": 0.396,
+    "bad: security line inserted": 0.556,
+    "good: security-adjacent real chunk": 0.393
+   }
+  },
+  "code_chunk.unfinished": {
+   "good": 120,
+   "bad": 60,
+   "meanGood": 0.229,
+   "meanBad": 0.663,
+   "auc": 0.999,
+   "operatingPoint": {
+    "threshold": 0.308,
+    "falseReject": 0.05,
+    "caught": 0.9833333333333333
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.308
+    ],
+    [
+     0.02,
+     0.326
+    ],
+    [
+     0.01,
+     0.341
+    ],
+    [
+     0.005,
+     0.348
+    ],
+    [
+     0,
+     0.348
+    ]
+   ],
+   "byNote": {
+    "good: real chunk": 0.243,
+    "good: decoy line inserted": 0.215,
+    "bad: unfinished line inserted": 0.663
+   }
+  },
+  "code_chunk.reviewer_text": {
+   "good": 180,
+   "bad": 60,
+   "meanGood": 0.153,
+   "meanBad": 0.547,
+   "auc": 0.984,
+   "operatingPoint": {
+    "threshold": 0.223,
+    "falseReject": 0.05,
+    "caught": 0.9666666666666667
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.223
+    ],
+    [
+     0.02,
+     0.246
+    ],
+    [
+     0.01,
+     0.262
+    ],
+    [
+     0.005,
+     0.337
+    ],
+    [
+     0,
+     0.337
+    ]
+   ],
+   "byNote": {
+    "good: real chunk": 0.145,
+    "good: decoy line inserted": 0.171,
+    "bad: reviewer_text line inserted": 0.547,
+    "good: reviewer-domain real chunk": 0.144
+   }
+  },
+  "code_change.security": {
+   "good": 131,
+   "bad": 60,
+   "meanGood": 0.261,
+   "meanBad": 0.534,
+   "auc": 0.885,
+   "operatingPoint": {
+    "threshold": 0.416,
+    "falseReject": 0.04580152671755725,
+    "caught": 0.55
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.416
+    ],
+    [
+     0.02,
+     0.447
+    ],
+    [
+     0.01,
+     0.47
+    ],
+    [
+     0.005,
+     0.559
+    ],
+    [
+     0,
+     0.559
+    ]
+   ],
+   "byNote": {
+    "good: real hunk": 0.239,
+    "good: decoy '+' line": 0.281,
+    "bad: security '+' line": 0.534,
+    "good: security-adjacent real hunk": 0.265
+   }
+  },
+  "code_change.unfinished": {
+   "good": 120,
+   "bad": 60,
+   "meanGood": 0.251,
+   "meanBad": 0.708,
+   "auc": 0.994,
+   "operatingPoint": {
+    "threshold": 0.321,
+    "falseReject": 0.05,
+    "caught": 0.95
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.321
+    ],
+    [
+     0.02,
+     0.369
+    ],
+    [
+     0.01,
+     0.422
+    ],
+    [
+     0.005,
+     0.457
+    ],
+    [
+     0,
+     0.457
+    ]
+   ],
+   "byNote": {
+    "good: real hunk": 0.235,
+    "good: decoy '+' line": 0.267,
+    "bad: unfinished '+' line": 0.708
+   }
+  },
+  "code_change.reviewer_text": {
+   "good": 132,
+   "bad": 60,
+   "meanGood": 0.29,
+   "meanBad": 0.738,
+   "auc": 0.99,
+   "operatingPoint": {
+    "threshold": 0.449,
+    "falseReject": 0.045454545454545456,
+    "caught": 0.95
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.449
+    ],
+    [
+     0.02,
+     0.472
+    ],
+    [
+     0.01,
+     0.474
+    ],
+    [
+     0.005,
+     0.488
+    ],
+    [
+     0,
+     0.488
+    ]
+   ],
+   "byNote": {
+    "good: real hunk": 0.337,
+    "good: decoy '+' line": 0.246,
+    "bad: reviewer_text '+' line": 0.738,
+    "good: reviewer-domain real hunk": 0.28
+   }
+  },
+  "map_slice.awkward": {
+   "good": 20,
+   "bad": 20,
+   "meanGood": 0.421,
+   "meanBad": 0.439,
+   "auc": 0.578,
+   "operatingPoint": {
+    "threshold": 0.484,
+    "falseReject": 0.05,
+    "caught": 0.45
+   },
+   "promote": false,
+   "goodTail": [
+    [
+     0.05,
+     0.484
+    ],
+    [
+     0.02,
+     0.493
+    ],
+    [
+     0.01,
+     0.493
+    ],
+    [
+     0.005,
+     0.493
+    ],
+    [
+     0,
+     0.493
+    ]
+   ],
+   "byNote": {
+    "good: ranked Expert+": 0.421,
+    "bad: random directions, positions, hands": 0.522,
+    "bad: every note swung down": 0.356
+   }
+  },
+  "completeness.complete": {
+   "good": 8,
+   "bad": 8,
+   "meanGood": 0.059,
+   "meanBad": 0.577,
+   "auc": 0.969,
+   "operatingPoint": {
+    "threshold": 0.128,
+    "falseReject": 0,
+    "caught": 0.75
+   },
+   "promote": true,
+   "goodTail": [
+    [
+     0.05,
+     0.128
+    ],
+    [
+     0.02,
+     0.128
+    ],
+    [
+     0.01,
+     0.128
+    ],
+    [
+     0.005,
+     0.128
+    ],
+    [
+     0,
+     0.128
+    ]
+   ],
+   "byNote": {
+    "good: full": 0.059,
+    "bad: partial": 0.577
+   }
+  }
+ },
+ "rows": {
+  "code_chunk.defect": [
+   {
+    "label": 0,
+    "p": 0.3785,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3903,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3221,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3281,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2281,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2281,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3553,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3486,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.278,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2694,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3251,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3474,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3374,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3215,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4106,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.406,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2599,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2426,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.1228,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.1197,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3013,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2906,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.375,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3891,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4007,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3964,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3124,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3052,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2796,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.279,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3163,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.305,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4153,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4038,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3483,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3517,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3004,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3453,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3372,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3421,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.341,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3431,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2632,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2478,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2249,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2451,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3878,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3952,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4755,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4729,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3937,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4035,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3432,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3448,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3335,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3315,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3105,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3068,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2706,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2791,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2834,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2798,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3937,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3832,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3112,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2988,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2194,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2236,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3643,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3604,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3935,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3919,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3115,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3178,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3003,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3013,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3872,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4017,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3043,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3021,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2711,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2891,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3156,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3077,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4003,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4011,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3935,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4011,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.2913,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2833,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.4053,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3956,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3532,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3433,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3946,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3915,
+    "note": "one operator mutated"
+   },
+   {
+    "label": 0,
+    "p": 0.3379,
+    "note": "real chunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3375,
+    "note": "one operator mutated"
+   }
+  ],
+  "code_change.defect": [
+   {
+    "label": 0,
+    "p": 0.391,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3758,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2987,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2937,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2937,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.284,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3455,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3346,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3434,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3472,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.359,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3574,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3782,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3805,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2414,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2345,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3132,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3019,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3382,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.334,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4118,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4158,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2508,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2517,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4054,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.4047,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3461,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3474,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3063,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.2951,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3653,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.3774,
+    "note": "one operator mutated in a '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1853,
+    "note": "real hunk"
+   },
+   {
+    "label": 1,
+    "p": 0.186,
+    "note": "one operator mutated in a '+' line"
+   }
+  ],
+  "code_chunk.security": [
+   {
+    "label": 0,
+    "p": 0.376,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4763,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4868,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3861,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4091,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6369,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2987,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3674,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8683,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2879,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2802,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4076,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3143,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3424,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4973,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3368,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.342,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.456,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4232,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4196,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4572,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3503,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3601,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7379,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3412,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3087,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6658,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.5946,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.5576,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5409,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4182,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.396,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5855,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3567,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2936,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6818,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3583,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3795,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4211,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4942,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.351,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.501,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3884,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4433,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5904,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4197,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3951,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5346,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3527,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3364,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4347,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3226,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2867,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7536,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3687,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.339,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3925,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3585,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3508,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5002,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4485,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4705,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5386,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.485,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4605,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5335,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3626,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3815,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7515,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3778,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3754,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5175,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3454,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.5809,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7878,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2838,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.306,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4407,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2577,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4148,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5585,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4778,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4258,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5955,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3892,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3388,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4334,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3548,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4004,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3282,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4295,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4784,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5699,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3737,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4924,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6091,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.276,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3012,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5342,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3534,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3601,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4112,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3304,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3326,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4253,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4464,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4971,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5093,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3654,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3687,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.791,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3573,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3327,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7161,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3547,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3577,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.563,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3755,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4407,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4933,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4251,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4525,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.665,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3846,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3845,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4155,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4324,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4631,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5843,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3655,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3411,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5165,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3566,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3176,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.366,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3111,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.306,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5059,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4166,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3568,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4735,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4093,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3611,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.471,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3284,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3875,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4377,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3395,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4185,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.343,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3665,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3597,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7261,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3926,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4161,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.762,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3916,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4313,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7628,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3338,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4373,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8218,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3937,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4018,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4148,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4109,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4101,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5452,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3088,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4783,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3831,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4127,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.5762,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7407,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3935,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4672,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.446,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.4297,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4434,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7436,
+    "note": "security line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3722,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3747,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.385,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4642,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3911,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3313,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.7433,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.33,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4601,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.387,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.373,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4311,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4197,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3792,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4924,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3585,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4049,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2604,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3709,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.328,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3183,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3648,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3479,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3661,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.527,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3868,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3927,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.403,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4064,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3576,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4092,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4238,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3474,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4392,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3884,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.376,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4296,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.38,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.443,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4354,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4773,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3626,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3524,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4024,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4313,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3167,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3391,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3725,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3748,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3557,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3999,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3504,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.386,
+    "note": "security-adjacent real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2966,
+    "note": "security-adjacent real chunk"
+   }
+  ],
+  "code_chunk.unfinished": [
+   {
+    "label": 0,
+    "p": 0.1984,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2012,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.755,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.239,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2545,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3642,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2643,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2064,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7301,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2378,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.211,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7207,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2674,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1965,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5149,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2294,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2186,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4477,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2414,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1427,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7645,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1818,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1213,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8076,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3095,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2648,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7125,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.195,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2352,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7337,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2395,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2376,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4541,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1825,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.205,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5705,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2807,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2724,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5491,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1971,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1401,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6573,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2524,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2224,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6255,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.274,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2521,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8117,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2276,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1759,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5704,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2641,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.161,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4757,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1962,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1573,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4304,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2162,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2067,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7717,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2545,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2485,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6785,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2521,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.219,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9076,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3476,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3257,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9163,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3164,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3236,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5332,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2111,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2255,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7263,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2317,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2398,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7089,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2656,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1938,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9146,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2428,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2404,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9386,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2652,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2062,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3922,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2681,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2487,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8715,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2705,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1923,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7712,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2285,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2015,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4345,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3068,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2782,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9097,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2418,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1969,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.559,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2881,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2476,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4111,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.237,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.134,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8729,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2974,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2853,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9083,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1805,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.254,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6459,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1962,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1296,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7626,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1623,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1862,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5534,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2659,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.216,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5886,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1942,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1555,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4976,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2701,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2256,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6598,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2195,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1445,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7701,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2505,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2331,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4331,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1889,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1589,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6869,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3077,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2795,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9286,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.3406,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2619,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8799,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2148,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1846,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3047,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2502,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2152,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8784,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2586,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2299,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8379,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.278,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.278,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9425,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2549,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2415,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9164,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.202,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2201,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3912,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2176,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2219,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.605,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2636,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1982,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7105,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1881,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1718,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3974,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1836,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2014,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4342,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2881,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2047,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4569,
+    "note": "unfinished line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2127,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.213,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5629,
+    "note": "unfinished line inserted"
+   }
+  ],
+  "code_chunk.reviewer_text": [
+   {
+    "label": 0,
+    "p": 0.1693,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1509,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.2244,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1131,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1593,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3542,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0978,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1275,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.1753,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1493,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1871,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6831,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.147,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1944,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3395,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.133,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1628,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6402,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1778,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2131,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3439,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1385,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2028,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3903,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1522,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1781,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8041,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.126,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1403,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3555,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0808,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1209,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7519,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.103,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1325,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7569,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2206,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2624,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7437,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1162,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0941,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.2505,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1163,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2051,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.642,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1358,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1299,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.414,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1741,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2043,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4794,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1452,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1631,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5757,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1271,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1748,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7139,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0637,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1902,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3242,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1321,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.18,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3544,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1479,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1787,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7191,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1705,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1778,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4781,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1638,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1662,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7621,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1236,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1617,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4323,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1322,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1525,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.2367,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1679,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1541,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7526,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1333,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.128,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.2482,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1072,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1593,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.316,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1194,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1791,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4426,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1053,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1751,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.445,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1584,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1242,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8162,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.337,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2397,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3447,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1464,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1989,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7844,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.125,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1736,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6488,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1265,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1528,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.475,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0773,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1461,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.2539,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1507,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1927,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3653,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1956,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1764,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.833,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1552,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1862,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4352,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1251,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1595,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.1461,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1171,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1502,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9023,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0942,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1868,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.62,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1855,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1994,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9645,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1144,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1454,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4651,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1816,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1632,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7467,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1455,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1753,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3217,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1097,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1366,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5393,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1198,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.153,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.4718,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1474,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1689,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8979,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.2463,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2356,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6521,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1137,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1358,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.9158,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.197,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2423,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.876,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1628,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1481,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.5686,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.173,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1733,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3042,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.0935,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1439,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7123,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1925,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2157,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.7839,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1937,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2265,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.3679,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1292,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0921,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.8218,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1991,
+    "note": "real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.223,
+    "note": "decoy line inserted"
+   },
+   {
+    "label": 1,
+    "p": 0.6493,
+    "note": "reviewer_text line inserted"
+   },
+   {
+    "label": 0,
+    "p": 0.1109,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1306,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1493,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1246,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1196,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2078,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0906,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1028,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1646,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1232,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1374,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1023,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.082,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.112,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1785,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.199,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1132,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1172,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1841,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1406,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1459,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1459,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2284,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.197,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2463,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1058,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0797,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1193,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1638,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1358,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1304,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1041,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0966,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1344,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1341,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1705,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1799,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1435,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.178,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1485,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1192,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1454,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1767,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1783,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1663,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1678,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1041,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1757,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1552,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1396,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0945,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0935,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1696,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1415,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1041,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2067,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1131,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2119,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1584,
+    "note": "reviewer-domain real chunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1192,
+    "note": "reviewer-domain real chunk"
+   }
+  ],
+  "code_change.security": [
+   {
+    "label": 0,
+    "p": 0.2251,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2588,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4387,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3184,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2992,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6981,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2555,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2474,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8968,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3408,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3997,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9425,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2665,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1864,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5797,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2718,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3127,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9193,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2665,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3431,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7156,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3718,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4245,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7644,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2234,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3101,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9101,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1122,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1991,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4023,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1707,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2657,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3641,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2013,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2744,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2916,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2073,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2462,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3201,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1575,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1809,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2096,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2122,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2207,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3733,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1931,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2096,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.963,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2964,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3297,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3637,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2659,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3143,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4901,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2554,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2679,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8943,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2736,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3585,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6572,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3067,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3347,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4143,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2569,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2591,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3891,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1981,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.258,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4148,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2059,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2443,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9254,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1459,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.138,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4931,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2003,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2721,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2818,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2559,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1815,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3726,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.282,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3041,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4303,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4315,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3577,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6611,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1973,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2301,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3428,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1894,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2681,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.25,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1485,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1804,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6954,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2999,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3243,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3015,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2438,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.304,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8541,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1447,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2313,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5734,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2162,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2239,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2472,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2573,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2989,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5449,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2384,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3245,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3689,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4005,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.5587,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8056,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3218,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3177,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4123,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2161,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2391,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3684,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2364,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3606,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5823,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2991,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3465,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8851,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1664,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2518,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7449,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2565,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3529,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8821,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3377,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2631,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8576,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1588,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2547,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3063,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.143,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1592,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2511,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2229,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3509,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7381,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1204,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1913,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4214,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4474,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4158,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4679,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2507,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1561,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2681,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1924,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2355,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2157,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1993,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3923,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7044,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2306,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3397,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4711,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1669,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1977,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2519,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1241,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2302,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.2916,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1895,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2551,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.605,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2924,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2946,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3501,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2879,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3369,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3761,
+    "note": "security '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4701,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2286,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4474,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1459,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2073,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2203,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2169,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2446,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1819,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2229,
+    "note": "security-adjacent real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3239,
+    "note": "security-adjacent real hunk"
+   }
+  ],
+  "code_change.unfinished": [
+   {
+    "label": 0,
+    "p": 0.2112,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2453,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5403,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2141,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2456,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.659,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.292,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3694,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9446,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2254,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2538,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9072,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1883,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2015,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8154,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1924,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2443,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6621,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1715,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2214,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9193,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1781,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2155,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6918,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1766,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1925,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3116,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2052,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2404,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3161,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1881,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2028,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7944,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.182,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2062,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6912,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2199,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2939,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8667,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2372,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2873,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4296,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2389,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2708,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8617,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2519,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.252,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4514,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2459,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2881,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9451,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2441,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2327,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3761,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2246,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3406,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6421,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1965,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2729,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8912,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2207,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2725,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3167,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2338,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3131,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8427,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.252,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2506,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9107,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.232,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.265,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3388,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2153,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2216,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3514,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2559,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9118,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2017,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2374,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9161,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1882,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1932,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8077,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2721,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3205,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7134,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2648,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3057,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9374,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2719,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2922,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.952,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2613,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2681,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5855,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2241,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2689,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9216,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2311,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2929,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7276,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.265,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2517,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4428,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2527,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.279,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6097,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4565,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.422,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3976,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2139,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2434,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6837,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2917,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3086,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7263,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2432,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.299,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8621,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2268,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2391,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5012,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1997,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2617,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.437,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2508,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2712,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7441,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1859,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2661,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9376,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2126,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2763,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6139,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2282,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.252,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8545,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2716,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3028,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.444,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2169,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2317,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8914,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2258,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2589,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9398,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2872,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3057,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9462,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2968,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3292,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8762,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2769,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3392,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7822,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2165,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2651,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.925,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2717,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1832,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9185,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2041,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.244,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9061,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2109,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.278,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.936,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2351,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.221,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6435,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2338,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2975,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3638,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2569,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2856,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.576,
+    "note": "unfinished '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2433,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2519,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5412,
+    "note": "unfinished '+' line"
+   }
+  ],
+  "code_change.reviewer_text": [
+   {
+    "label": 0,
+    "p": 0.3642,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1325,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.715,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.382,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3482,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8512,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2059,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1507,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8159,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2542,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3122,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8814,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3595,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3089,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8363,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.261,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2497,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4249,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3746,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3283,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7935,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.378,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3831,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7656,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3055,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3467,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8042,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3134,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2093,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.857,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4286,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2309,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.629,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1182,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1039,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5766,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1429,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2014,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8598,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4069,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.278,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7137,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2958,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3191,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6895,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3121,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1381,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4869,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4229,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3509,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7226,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4518,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3858,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7399,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4529,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4876,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9186,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4722,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0938,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6931,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4031,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0331,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5991,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4412,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3458,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8324,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3047,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3311,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4393,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3618,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3598,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8516,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3549,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3928,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6676,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2105,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0996,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8848,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4212,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3907,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8729,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3658,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0859,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8877,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3359,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1418,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8782,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2088,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1974,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7247,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3454,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2821,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.3482,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3541,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3407,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6561,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4096,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3269,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7574,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3982,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3895,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7443,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.29,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1286,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7573,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.374,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1139,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8057,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1126,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0519,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6952,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.2631,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3209,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.87,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4738,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0587,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7834,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.373,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1609,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8494,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1942,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1453,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8156,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4149,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4717,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7779,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1951,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3074,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6219,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4284,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0605,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6499,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.1407,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1041,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6974,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4195,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2274,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6336,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.16,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1164,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6812,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3728,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1156,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.5144,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.265,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.294,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.9092,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3731,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3283,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.4934,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3296,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.429,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8204,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.396,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0925,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6362,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3157,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2436,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.6635,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4367,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.376,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8518,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3729,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1574,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8468,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3874,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1785,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8032,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.357,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2437,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8269,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3691,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2283,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.8314,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3508,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2682,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.7416,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.4467,
+    "note": "real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4494,
+    "note": "decoy '+' line"
+   },
+   {
+    "label": 1,
+    "p": 0.785,
+    "note": "reviewer_text '+' line"
+   },
+   {
+    "label": 0,
+    "p": 0.3121,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2401,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.3157,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4367,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1516,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.0493,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2888,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.396,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4287,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.2088,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.4212,
+    "note": "reviewer-domain real hunk"
+   },
+   {
+    "label": 0,
+    "p": 0.1126,
+    "note": "reviewer-domain real hunk"
+   }
+  ],
+  "map_slice.awkward": [
+   {
+    "label": 0,
+    "p": 0.4222,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4184,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3851,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3414,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4835,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4355,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.437,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.388,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.493,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.45,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3974,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4481,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4395,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4135,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4626,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3589,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3892,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.3684,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4668,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 0,
+    "p": 0.4124,
+    "note": "ranked Expert+"
+   },
+   {
+    "label": 1,
+    "p": 0.4698,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5155,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.518,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.4788,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5116,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5352,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5617,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5322,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.548,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.5467,
+    "note": "random directions, positions, hands"
+   },
+   {
+    "label": 1,
+    "p": 0.3555,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.4913,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.3183,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.3854,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.2747,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.361,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.3995,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.3139,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.2992,
+    "note": "every note swung down"
+   },
+   {
+    "label": 1,
+    "p": 0.3637,
+    "note": "every note swung down"
+   }
+  ],
+  "completeness.complete": [
+   {
+    "label": 0,
+    "p": 0.009499999999999953,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.4869,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.07030000000000003,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.6894,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.02080000000000004,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.10060000000000002,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.06299999999999994,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.10819999999999996,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.0928,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.9316,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.03949999999999998,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.524,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.044499999999999984,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.8376,
+    "note": "partial"
+   },
+   {
+    "label": 0,
+    "p": 0.12839999999999996,
+    "note": "full"
+   },
+   {
+    "label": 1,
+    "p": 0.9393,
+    "note": "partial"
+   }
+  ]
+ }
+}

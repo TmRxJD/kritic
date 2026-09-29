@@ -1,0 +1,11 @@
+# A repo plugin: counts TODO/FIXME/XXX markers the working-tree change adds (git diff HEAD),
+# and fails approval when there are more than `max_new` of them.
+# Discovered by plugin_list(base_dir); run with plugin_run(base_dir, "todo-budget", {max_new: 0}).
+name = "todo-budget"
+description = "Fail when the uncommitted change adds more TODO/FIXME/XXX markers than allowed"
+command = ["node", "tools/todo-budget.mjs"]
+timeout_s = 60
+
+[input_schema]
+type = "object"
+properties.max_new = { type = "integer", description = "markers the change may add (default 0)" }

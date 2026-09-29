@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    # Developed and measured on Windows; the desktop harness and several offline tests use Win32.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --test unit --test phase2 --test phase3 --test metrics --test specs --test plugins --test config --test ux
+      - name: scripts parse
+        shell: bash
+        run: |
+          bash -n scripts/install.sh scripts/fetch-models.sh
+          for f in scripts/*.mjs bench/*.mjs harness/*.mjs; do node --check "$f"; done

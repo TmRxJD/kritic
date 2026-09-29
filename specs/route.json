@@ -1,0 +1,45 @@
+{
+ "name": "route",
+ "purpose": "Suggest which worker should handle a task (route tool). A suggestion only.",
+ "fields": [
+  {
+   "name": "task",
+   "kind": {
+    "kind": "text",
+    "max_chars": 2000
+   },
+   "meaning": "The task description, with any hints and the kind of artifact it produces."
+  }
+ ],
+ "questions": [
+  {
+   "id": "tier",
+   "ask": {
+    "type": "choice",
+    "instructions": "Which worker should handle `task`?",
+    "options": [
+     [
+      "local_worker",
+      "a trivial text transform a small local model can do"
+     ],
+     [
+      "haiku",
+      "mechanical work: git, running tests or lint, renames, simple lookups"
+     ],
+     [
+      "sonnet",
+      "standard feature work and routine refactors"
+     ],
+     [
+      "opus",
+      "deep architecture, cross-module design, or debugging that resisted a first attempt"
+     ]
+    ]
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a routing suggestion; the user's rules decide"
+   }
+  }
+ ]
+}

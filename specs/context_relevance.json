@@ -1,0 +1,37 @@
+{
+ "name": "context_relevance",
+ "purpose": "Rank context chunks by relevance to a query (context_trim).",
+ "fields": [
+  {
+   "name": "query",
+   "kind": {
+    "kind": "text",
+    "max_chars": 1000
+   },
+   "meaning": "The question the kept context has to answer."
+  },
+  {
+   "name": "chunk",
+   "kind": {
+    "kind": "text",
+    "max_chars": 1400
+   },
+   "meaning": "One candidate chunk of context, as given."
+  }
+ ],
+ "questions": [
+  {
+   "id": "relevant",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `chunk` contain information needed to answer `query`?",
+    "yes": "a fact, definition or line in `chunk` is needed to answer `query`",
+    "no": "nothing in `chunk` is needed to answer `query`"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a ranking score; the caller's budget decides what is kept"
+   }
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+[project]
+name = "kritic-desktop-harness"
+version = "0.1.0"
+description = "Deterministic desktop UI tester and resource sampler for kritic (no LLM)"
+requires-python = ">=3.11"
+dependencies = [
+    "pywinauto>=0.6.9; sys_platform == 'win32'",
+    "psutil>=6.0",
+    "pillow>=11.0",
+    "websockets>=13.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Broken app</title>
+  <style>.faint { color: #bbb; background: #fff; }</style>
+</head>
+<body>
+  <main>
+    <h1>Broken</h1>
+    <p class="faint">Low contrast text that fails WCAG.</p>
+    <img src="/logo.png">
+    <button id="crashy" onclick="doesNotExist()">Throw</button>
+    <button id="logger" onclick="console.error('handler failed: widget missing')">Log error</button>
+    <button id="inert">Does nothing</button>
+    <button id="fetcher" onclick="fetch('/api/missing')">Load data</button>
+    <button id="danger" onclick="document.body.innerHTML=''">Delete account</button>
+    <input id="note" placeholder="Note (should persist but doesn't)">
+    <a href="https://example.com/">External</a>
+    <a href="/good.html">Good page</a>
+  </main>
+</body>
+</html>

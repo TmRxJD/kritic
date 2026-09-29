@@ -1,0 +1,48 @@
+# ux_critic calibration: icon-only unlabelled toolbar buttons (bad) against labelled ones (good).
+[app]
+kind = "web"
+purpose = "Edit a Beat Saber map: play it, record, undo, export and change settings from the toolbar."
+url = "labels-good.html"
+
+[[modes]]
+name = "Editor"
+done = { text = "Map editor" }
+
+[[tasks]]
+name = "play"
+goal = "Play the song"
+done = { text = "Playing" }
+primary = true
+
+[[tasks]]
+name = "export"
+goal = "Export the map"
+done = { text = "Map exported" }
+primary = true
+
+[[tasks]]
+name = "undo"
+goal = "Undo the last change"
+done = { text = "Last change undone" }
+primary = true
+
+[[tasks]]
+name = "settings"
+goal = "Open the settings"
+done = { text = "Settings panel open" }
+
+# Domain actions: no universal icon exists for these, so only a label (or tooltip) says what they do.
+[[tasks]]
+name = "mirror"
+goal = "Mirror the notes"
+done = { text = "Notes mirrored" }
+
+[[tasks]]
+name = "snap"
+goal = "Snap the notes to the grid"
+done = { text = "Notes snapped to the grid" }
+
+[[tasks]]
+name = "bookmark"
+goal = "Add a bookmark"
+done = { text = "Bookmark added" }

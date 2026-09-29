@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Good app</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem; color: #111; background: #fff; }
+    main { max-width: 36rem; }
+    label { display: block; margin-top: 1rem; }
+    button { margin-top: 1rem; padding: .5rem 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Settings</h1>
+    <p id="status">Idle</p>
+    <label for="name">Display name</label>
+    <input id="name" type="text">
+    <label><input id="dark" type="checkbox"> Dark mode</label>
+    <label for="size">Size</label>
+    <select id="size"><option>Small</option><option>Medium</option><option>Large</option></select>
+    <button id="save" type="button">Save</button>
+    <p><a href="/good.html#top">Back to top</a> · <a href="/about.html">About</a></p>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    for (const id of ["name", "size"]) {
+      $(id).value = localStorage.getItem(id) ?? $(id).value;
+      $(id).addEventListener("change", () => localStorage.setItem(id, $(id).value));
+    }
+    $("dark").checked = localStorage.getItem("dark") === "1";
+    $("dark").addEventListener("change", () => localStorage.setItem("dark", $("dark").checked ? "1" : "0"));
+    $("save").addEventListener("click", () => { $("status").textContent = "Saved"; });
+  </script>
+</body>
+</html>

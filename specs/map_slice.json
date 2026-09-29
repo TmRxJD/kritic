@@ -1,0 +1,37 @@
+{
+ "name": "map_slice",
+ "purpose": "Judge whether a 16-beat stretch of a Beat Saber difficulty is awkward to play (map_eval, advisory).",
+ "fields": [
+  {
+   "name": "notes",
+   "kind": {
+    "kind": "code",
+    "max_chars": 1400
+   },
+   "meaning": "The notes of one 16-beat stretch, one per line: beat, hand (L or R), column x0-x3, row y0-y2, cut direction."
+  },
+  {
+   "name": "tempo",
+   "kind": {
+    "kind": "text",
+    "max_chars": 120
+   },
+   "meaning": "The song's tempo in beats per minute and this stretch's notes per second."
+  }
+ ],
+ "questions": [
+  {
+   "id": "awkward",
+   "ask": {
+    "type": "noul",
+    "instructions": "At `tempo`, would a player find the swings in `notes` awkward?",
+    "yes": "a hand must reverse or cross its own path with no time, reach across the whole grid between close notes, or two notes block each other",
+    "no": "each hand alternates forehand and backhand swings with room to move between notes"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "measured 2026-09-27, scripts/calibrate-specs.mjs on ranked maps from a private seed corpus and broken fixtures: 20 good vs 20 bad (16-beat stretches of ranked Expert+ maps vs random and all-down versions); AUC 0.578; at 5% false rejects 45% caught: gating needs AUC >= 0.85 and at least 50% caught at 5% false rejects"
+   }
+  }
+ ]
+}

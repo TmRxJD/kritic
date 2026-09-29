@@ -1,0 +1,29 @@
+{
+ "name": "function_maintainability",
+ "purpose": "Rank the most complex functions by how hard they are to maintain (code_quality_critic).",
+ "fields": [
+  {
+   "name": "function",
+   "kind": {
+    "kind": "code",
+    "max_chars": 1400
+   },
+   "meaning": "One function's source, whole, as the metrics pass found it."
+  }
+ ],
+ "questions": [
+  {
+   "id": "hard",
+   "ask": {
+    "type": "noul",
+    "instructions": "Would a maintainer struggle to change `function` safely?",
+    "yes": "its control flow, state or naming would make a correct change hard to write and review",
+    "no": "a maintainer could read it once and change it with confidence"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "measured flat (0.48-0.73 across hotspots); metrics decide approval"
+   }
+  }
+ ]
+}

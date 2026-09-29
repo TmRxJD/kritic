@@ -1,0 +1,15 @@
+# ux_critic calibration: a workflow's controls scattered to the corners (bad) against grouped (good).
+[app]
+kind = "web"
+purpose = "Edit audio clips: trim a clip to its in and out points."
+url = "group-good.html"
+
+[[modes]]
+name = "Clip editor"
+done = { text = "Clip editor" }
+
+[[tasks]]
+name = "trim"
+goal = "Trim the clip: set its in point and out point, then apply the trim"
+done = { text = "Clip trimmed" }
+primary = true

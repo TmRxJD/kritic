@@ -1,0 +1,37 @@
+{
+ "name": "ux_novice_step",
+ "purpose": "ux_critic's text-only novice, used when the vision model is unavailable: how likely a first-time user is to press one control next, given only the goal and the control's visible label. The novice samples controls in proportion to it.",
+ "fields": [
+  {
+   "name": "goal",
+   "kind": {
+    "kind": "text",
+    "max_chars": 460
+   },
+   "meaning": "What the user wants to get done, in plain words as the app's ux spec states it, followed by the controls already pressed toward it this run, if any."
+  },
+  {
+   "name": "control",
+   "kind": {
+    "kind": "text",
+    "max_chars": 120
+   },
+   "meaning": "The visible label of one control on the current screen, or (no label) when it shows none."
+  }
+ ],
+ "questions": [
+  {
+   "id": "next_step",
+   "ask": {
+    "type": "noul",
+    "instructions": "Would a first-time user press `control` as the next step toward `goal`?",
+    "yes": "the label in `control` names `goal` itself, or the place in the app where `goal` is done",
+    "no": "the label in `control` is unrelated to `goal`, or `control` shows no label"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "never a gate: a sampling weight for the text-only novice. Measured 2026-09-28 on the ux fixtures (calibration/ux-2026-09-28-kev-*.json): it separated a buried mode (9 vs 5 of 12 runs) and a 5-deep action (2 vs 0 of 3) but not unlabelled icons (15 vs 13 of 21) or scattering (1 vs 1 of 3), and failed good-variant primary tasks 2 of 3 times, so its novice failures never fail a task"
+   }
+  }
+ ]
+}

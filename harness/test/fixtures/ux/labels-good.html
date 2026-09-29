@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Studio (labels, good)</title><link rel="stylesheet" href="ux.css"></head>
+<body>
+<header><h1>Studio</h1></header>
+<main>
+  <h2>Map editor</h2>
+  <div class="bar" id="toolbar"></div>
+  <div class="panel" id="body">Echo in the Dark · Expert+</div>
+  <p class="status" id="status"></p>
+</main>
+<script>
+// Good variant: every toolbar button shows its icon and a text label.
+const LABELED = true;
+const ICONS = {
+  play: '<path d="M6 4l10 6-10 6z" fill="currentColor"/>',
+  stop: '<rect x="5" y="5" width="10" height="10" fill="currentColor"/>',
+  record: '<circle cx="10" cy="10" r="5" fill="currentColor"/>',
+  undo: '<path d="M8 5L3 9l5 4M3 9h9a4 4 0 010 8H9" fill="none" stroke="currentColor" stroke-width="2"/>',
+  export: '<path d="M10 3v10M6 9l4 4 4-4M4 17h12" fill="none" stroke="currentColor" stroke-width="2"/>',
+  settings: '<circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="3 2"/>',
+  // domain actions: no universal glyph exists for these
+  mirror: '<path d="M9 4L3 10l6 6zM11 4l6 6-6 6z" fill="currentColor"/>',
+  quantize: '<g fill="currentColor"><circle cx="5" cy="5" r="1.6"/><circle cx="10" cy="5" r="1.6"/><circle cx="15" cy="5" r="1.6"/><circle cx="5" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="15" cy="10" r="1.6"/><circle cx="5" cy="15" r="1.6"/><circle cx="10" cy="15" r="1.6"/><circle cx="15" cy="15" r="1.6"/></g>',
+  bookmark: '<path d="M5 3h10v14l-5-4-5 4z" fill="currentColor"/>',
+};
+const TOOLS = [["play", "Play", "Playing"], ["stop", "Stop", "Stopped"], ["record", "Record", "Recording"],
+  ["undo", "Undo", "Last change undone"], ["export", "Export", "Map exported"], ["settings", "Settings", "Settings panel open"],
+  ["mirror", "Mirror notes", "Notes mirrored"], ["quantize", "Snap to grid", "Notes snapped to the grid"], ["bookmark", "Add bookmark", "Bookmark added"]];
+document.getElementById("toolbar").innerHTML = TOOLS.map(([k, label]) =>
+  `<button type="button" class="icon${LABELED ? " wide" : ""}" data-k="${k}"><svg viewBox="0 0 20 20" aria-hidden="true">${ICONS[k]}</svg>${LABELED ? `<span>${label}</span>` : ""}</button>`).join("");
+document.getElementById("toolbar").addEventListener("click", (e) => {
+  const k = e.target.closest("[data-k]")?.dataset.k;
+  if (k) document.getElementById("status").textContent = TOOLS.find((t) => t[0] === k)[2];
+});
+</script></body></html>

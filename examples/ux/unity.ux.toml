@@ -1,0 +1,25 @@
+# .kritic/ux.toml for a Unity app. Unity draws its own UI, so the app answers harness commands
+# over its event WebSocket (see docs/unity.md for the protocol: controls, click, home, shot).
+[app]
+kind = "unity"
+purpose = "A level editor: open a level, place props, and play-test it."
+exe = "Builds/Editor/LevelEditor.exe"
+args = ["--harness"]
+app_events = "ws://127.0.0.1:4733"
+ready_event = '"event":"workspace-ready"'
+ready_timeout_s = 120
+shot_dir = "Builds/Editor/harness"      # where the app writes files its `shot` reply names
+
+[[modes]]
+name = "Edit"
+done = { event = '"mode":"edit"' }
+
+[[modes]]
+name = "Play"
+done = { event = '"mode":"play"' }
+
+[[tasks]]
+name = "place a prop"
+goal = "Place a crate in the level"
+done = { event = '"prop-placed"' }
+primary = true

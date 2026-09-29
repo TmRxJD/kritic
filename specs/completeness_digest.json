@@ -1,0 +1,37 @@
+{
+ "name": "completeness_digest",
+ "purpose": "Judge whether a change too large to show as code does everything the user asked, from a digest of it (critic_score).",
+ "fields": [
+  {
+   "name": "task",
+   "kind": {
+    "kind": "text",
+    "max_chars": 1500
+   },
+   "meaning": "The user's request that the change implements, in their words or a faithful summary."
+  },
+  {
+   "name": "change_digest",
+   "kind": {
+    "kind": "text",
+    "max_chars": 3000
+   },
+   "meaning": "A digest of the change: the changed files, their new definitions and doc comments, not the code itself."
+  }
+ ],
+ "questions": [
+  {
+   "id": "complete",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `change_digest` cover everything `task` asks for?",
+    "yes": "every requirement in `task` has a matching file, definition or doc comment in `change_digest`",
+    "no": "at least one requirement in `task` has nothing matching it in `change_digest`"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "not calibrated on digests: the completeness calibration used code; measured 2026-09-27, a complete 29-hunk change scored 0.45-0.48 here"
+   }
+  }
+ ]
+}

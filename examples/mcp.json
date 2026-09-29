@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "kritic": {
+      "type": "stdio",
+      "command": "/absolute/path/to/.kritic/bin/kritic",
+      "args": [],
+      "env": {}
+    }
+  }
+}

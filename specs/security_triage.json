@@ -1,0 +1,37 @@
+{
+ "name": "security_triage",
+ "purpose": "Order a scanner's findings by how likely each is real (security_critic). Never removes or adds a finding.",
+ "fields": [
+  {
+   "name": "finding",
+   "kind": {
+    "kind": "text",
+    "max_chars": 600
+   },
+   "meaning": "The scanner's report: severity, tool, rule id and message."
+  },
+  {
+   "name": "code",
+   "kind": {
+    "kind": "code",
+    "max_chars": 1400
+   },
+   "meaning": "The flagged line with up to six lines of context on each side."
+  }
+ ],
+ "questions": [
+  {
+   "id": "real",
+   "ask": {
+    "type": "noul",
+    "instructions": "Is the problem `finding` reports actually present in `code`?",
+    "yes": "the flagged line does what the rule warns about, with input an attacker can influence",
+    "no": "the flagged line is safe here: its input is constant or validated, or the rule misread the code"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "triage only orders findings; deterministic findings decide approval"
+   }
+  }
+ ]
+}

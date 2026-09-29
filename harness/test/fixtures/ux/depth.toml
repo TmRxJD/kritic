@@ -1,0 +1,15 @@
+# ux_critic calibration: the primary action five clicks deep (bad) against one click (good).
+[app]
+kind = "web"
+purpose = "Edit a Beat Saber map and export it for the game."
+url = "depth-good.html"
+
+[[modes]]
+name = "Editor"
+done = { text = "Map editor" }
+
+[[tasks]]
+name = "export"
+goal = "Export the map to a file"
+done = { text = "Map exported" }
+primary = true

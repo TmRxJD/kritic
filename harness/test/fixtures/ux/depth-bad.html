@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Studio (depth, bad)</title><link rel="stylesheet" href="ux.css"></head>
+<body>
+<header><h1>Studio</h1></header>
+<div class="bar" id="toolbar"></div>
+<main id="app"></main>
+<script>
+// Bad variant: Export is five clicks deep: File, Share, Advanced, Export options, Export now.
+const DEEP = true;
+const state = { step: 0, done: false, open: null };
+const btn = (label, on) => `<button type="button" data-on="${on}">${label}</button>`;
+function render() {
+  document.getElementById("toolbar").innerHTML = DEEP
+    ? btn("File", "file") + btn("Edit", "edit") + btn("View", "view")
+    : btn("Export", "export") + btn("File", "file") + btn("Edit", "edit") + btn("View", "view");
+  let html = `<h2>Map editor</h2><div class="panel">Echo in the Dark · Expert+</div>`;
+  if (state.open === "file") html += `<div class="menu">${btn("New map", "noop")}${btn("Open…", "noop")}${DEEP ? btn("Share…", "share") : ""}</div>`;
+  if (state.open === "edit") html += `<div class="menu">${btn("Undo", "noop")}${btn("Redo", "noop")}</div>`;
+  if (state.open === "view") html += `<div class="menu">${btn("Zoom in", "noop")}${btn("Zoom out", "noop")}</div>`;
+  if (state.open === "share") html += `<div class="panel"><h3>Share</h3>${btn("Basic", "noop")}${btn("Advanced", "advanced")}</div>`;
+  if (state.open === "advanced") html += `<div class="panel"><h3>Advanced sharing</h3>${btn("Export options", "options")}</div>`;
+  if (state.open === "options") html += `<div class="panel"><h3>Export options</h3>${btn("Export now", "export")}</div>`;
+  if (state.done) html += `<p class="status">Map exported to Echo.zip</p>`;
+  document.getElementById("app").innerHTML = html;
+}
+document.body.addEventListener("click", (e) => {
+  const on = e.target.closest("[data-on]")?.dataset.on;
+  if (!on || on === "noop") return;
+  if (on === "export") Object.assign(state, { done: true, open: null });
+  else state.open = state.open === on ? null : on;
+  render();
+});
+render();
+</script></body></html>

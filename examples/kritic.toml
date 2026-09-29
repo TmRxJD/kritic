@@ -1,0 +1,73 @@
+# kritic configuration.
+#
+# Location: $KRITIC_CONFIG, else $KRITIC_HOME/kritic.toml (KRITIC_HOME defaults to ~/.kritic).
+# Precedence: environment variable > this file > built-in default. Every key below is shown
+# commented out with its default; uncomment only what you change. Unknown keys are reported by
+# the `status` tool (config_errors) and ignored.
+#
+# Kev thresholds are deliberately NOT configurable: they are calibrated gates stored with their
+# evidence in specs/*.json. Recalibrate (scripts/calibrate-specs.mjs) instead of editing them.
+
+[kev]
+# Kev-4B typed-decision model, served by laya. kritic starts laya itself when it is not running.
+# laya_url = "http://127.0.0.1:8089"            # KRITIC_LAYA_URL (default built from laya_port)
+# laya_port = 8089                              # KRITIC_LAYA_PORT
+# laya_exe = "~/.kritic/laya/laya.exe"          # KRITIC_LAYA_EXE (default: laya on PATH, else ~/.kritic/laya/)
+# gguf = "~/.kritic/models/kev_4b_q8_0.gguf"    # KRITIC_KEV_GGUF
+# model = "kev-4b"                              # KRITIC_KEV_MODEL
+# cuda_cache = "~/.kritic/cuda-cache"           # KRITIC_CUDA_CACHE: persisted PTX JIT (skips a ~40 s compile on restart)
+# chunk_chars = 1300                            # KRITIC_CHUNK_CHARS: code per Kev request (context is 2,048 tokens)
+# token_budget = 2900                           # KRITIC_TOKEN_BUDGET: rows x tokens per laya batch (latency cliff above ~3.7k)
+# max_seq_tokens = 2048                         # KRITIC_MAX_SEQ_TOKENS
+# request_s = 60                                # KRITIC_KEV_REQUEST_S: one request; a stall stops laya so the next call restarts it
+# critic_deadline_s = 600                       # KRITIC_CRITIC_DEADLINE_S: a whole critic pass returns what it has after this
+
+[vision]
+# Qwen2.5-VL through Ollama: visual_critic scores and the ux_critic novice.
+# ollama_url = "http://127.0.0.1:11434"         # KRITIC_OLLAMA_URL
+# ollama_exe = "ollama"                         # KRITIC_OLLAMA_EXE (default: ollama on PATH, else the platform install path)
+# model = "qwen2.5vl:7b"                        # KRITIC_VISION_MODEL
+# visual_min = 6.0                              # KRITIC_VISUAL_MIN: lowest per-criterion score (0-10) that still approves
+
+[review]
+# max_revisions = 2                             # KRITIC_MAX_REVISIONS: revise-and-rescore rounds the agent may take
+# command_timeout_s = 300                       # KRITIC_COMMAND_TIMEOUT: each artifact_validate command
+# context_limit = 1000000                       # KRITIC_CONTEXT_LIMIT: model context size token_metrics measures against
+
+[ui]
+# Playwright web harness (ui_test, visual_critic screenshots, ux_critic on web apps).
+# node = "node"                                 # KRITIC_NODE
+# harness = "<install>/harness/ui_test.mjs"     # KRITIC_HARNESS (default: harness/ beside the binary, else the source tree)
+# playwright_browsers = ""                      # KRITIC_PLAYWRIGHT_BROWSERS (default: Playwright's own location)
+# timeout_s = 300                               # KRITIC_UI_TIMEOUT
+
+[scan]
+# security_critic / code_quality_critic. Each tool is looked up in tools_bin, then on PATH.
+# A missing tool is reported as failed and approval becomes null; nothing is assumed clean.
+# tools_bin = "~/.kritic/bin"                   # KRITIC_TOOLS_BIN: gitleaks, osv-scanner, semgrep, bandit, ruff
+# cargo_tools_bin = "~/.cargo/bin"              # KRITIC_CARGO_TOOLS_BIN: cargo-audit
+# timeout_s = 600                               # KRITIC_SCAN_TIMEOUT
+# semgrep_config = "p/default"                  # KRITIC_SEMGREP_CONFIG
+# max_triage = 25                               # KRITIC_MAX_TRIAGE: findings Kev ranks (ordering only)
+# max_hotspots = 10                             # KRITIC_MAX_HOTSPOTS: complex functions Kev rates for maintainability
+
+[desktop]
+# Python harness (uv): desktop_test, resource_critic, hygiene_critic, ux_critic on desktop/Unity apps.
+# uv = "uv"                                     # KRITIC_UV
+# harness_py = "<install>/harness/py"           # KRITIC_HARNESS_PY
+
+[unity]
+# editor = ""                                   # KRITIC_UNITY_EDITOR: force one Unity.exe for unity_tests
+# hub_editors = "C:/Program Files/Unity/Hub/Editor"   # KRITIC_UNITY_HUB_EDITORS: <version>/Editor/Unity.exe is used
+
+[server]
+# ws_port = 8790                                # KRITIC_WS_PORT: live event stream (a free port is used if taken; status() reports it)
+# gpu_wait_s = 900                              # KRITIC_GPU_WAIT: wait for another session's model before running anyway
+# log = "~/.kritic/logs/calls.jsonl"            # KRITIC_LOG: audit log; model_usage.jsonl and laya.log sit beside it
+# runs_dir = "~/.kritic/runs"                   # KRITIC_RUNS_DIR: screenshots and full results (full_result paths)
+
+[tools]
+# MCP tools not offered to the client. map_eval is the Beat Saber domain pack; set
+# disabled = [] to enable it. Disable anything you never use to shrink the tool list the
+# agent loads into its context.
+# disabled = ["map_eval"]                       # KRITIC_DISABLED_TOOLS (comma-separated)

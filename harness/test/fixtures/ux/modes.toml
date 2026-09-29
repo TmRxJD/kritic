@@ -1,0 +1,40 @@
+# ux_critic calibration: a mode buried under another mode's menu (bad) against a top-level entry (good).
+[app]
+kind = "web"
+purpose = "Map Beat Saber songs: browse the song library, edit a map, and compose song sections."
+url = "modes-good.html"
+
+[[modes]]
+name = "Library"
+done = { text = "Song library" }
+
+[[modes]]
+name = "Editor"
+done = { text = "Map editor" }
+
+[[modes]]
+name = "Composer"
+done = { text = "Composer workspace" }
+
+[[tasks]]
+name = "open a song"
+goal = "Open the song Lanterns"
+done = { text = "Editing Lanterns" }
+primary = true
+
+[[tasks]]
+name = "play preview"
+goal = "Play a preview of the map"
+done = { text = "Preview playing" }
+primary = true
+
+[[tasks]]
+name = "open Composer"
+goal = "Open the Composer"
+done = { text = "Composer workspace" }
+primary = true
+
+[[tasks]]
+name = "select a section"
+goal = "Select the Chorus section in the Composer"
+done = { text = "Section Chorus selected" }

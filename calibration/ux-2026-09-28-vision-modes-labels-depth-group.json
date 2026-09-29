@@ -1,0 +1,723 @@
+{
+  "date": "2026-09-28",
+  "novice": "vision",
+  "pairs": [
+    {
+      "bad": {
+        "actions": 125,
+        "approval": false,
+        "duration_ms": 206930,
+        "hard_fails": [
+          "mode \"Composer\" has no top-level entry: 3 actions from the home screen (Editor > More > Composer)",
+          "primary task \"open Composer\": the novice failed 2 of 3 runs: the entry is not discoverable",
+          "task \"select a section\": takes 4 actions, budget 3 (Editor > More > Composer > Chorus)"
+        ],
+        "mean_step_distance": [
+          null,
+          0.111,
+          0.097,
+          0.182
+        ],
+        "mode_steps": [
+          [
+            "Library",
+            0
+          ],
+          [
+            "Editor",
+            1
+          ],
+          [
+            "Composer",
+            3
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "open a song",
+              3
+            ],
+            [
+              "play preview",
+              3
+            ],
+            [
+              "open Composer",
+              1
+            ],
+            [
+              "select a section",
+              1
+            ]
+          ],
+          "rate": 0.6666666666666666,
+          "runs": 12,
+          "successes": 8,
+          "tried": [
+            [
+              "open a song",
+              [
+                "Lanterns",
+                "Lanterns",
+                "Lanterns"
+              ]
+            ],
+            [
+              "play preview",
+              [
+                "Echo in the Dark > Play preview",
+                "Echo in the Dark > Play preview",
+                "Lanterns > Play preview"
+              ]
+            ],
+            [
+              "open Composer",
+              [
+                "Editor > Play preview > Save > More > Composer",
+                "Editor > Play preview > Play preview > Save > Save > Save",
+                "Editor > Play preview > Play preview > Play preview > Save > Save"
+              ]
+            ],
+            [
+              "select a section",
+              [
+                "Echo in the Dark > Editor > Play preview > Save > More > Preferences",
+                "Echo in the Dark > More > Composer > Chorus",
+                "Night Drive > Play preview > Play preview > Save > Save > Save"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "open a song",
+            1
+          ],
+          [
+            "play preview",
+            2
+          ],
+          [
+            "open Composer",
+            3
+          ],
+          [
+            "select a section",
+            4
+          ]
+        ],
+        "out_dir": "runs/20260928-164652-611-19904-1-ux-cal-modes-bad",
+        "rule_counts": {},
+        "screens": 21
+      },
+      "good": {
+        "actions": 70,
+        "approval": true,
+        "duration_ms": 103170,
+        "hard_fails": [],
+        "mean_step_distance": [
+          null,
+          0.111,
+          null,
+          0.283
+        ],
+        "mode_steps": [
+          [
+            "Library",
+            0
+          ],
+          [
+            "Editor",
+            1
+          ],
+          [
+            "Composer",
+            1
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "open a song",
+              3
+            ],
+            [
+              "play preview",
+              3
+            ],
+            [
+              "open Composer",
+              3
+            ],
+            [
+              "select a section",
+              3
+            ]
+          ],
+          "rate": 1.0,
+          "runs": 12,
+          "successes": 12,
+          "tried": [
+            [
+              "open a song",
+              [
+                "Lanterns",
+                "Lanterns",
+                "Lanterns"
+              ]
+            ],
+            [
+              "play preview",
+              [
+                "Lanterns > Play preview",
+                "Echo in the Dark > Play preview",
+                "Night Drive > Play preview"
+              ]
+            ],
+            [
+              "open Composer",
+              [
+                "Composer",
+                "Composer",
+                "Composer"
+              ]
+            ],
+            [
+              "select a section",
+              [
+                "Composer > Chorus",
+                "Composer > Chorus",
+                "Editor > Composer > Chorus"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "open a song",
+            1
+          ],
+          [
+            "play preview",
+            2
+          ],
+          [
+            "open Composer",
+            1
+          ],
+          [
+            "select a section",
+            2
+          ]
+        ],
+        "out_dir": "runs/20260928-164509-440-19904-0-ux-cal-modes-good",
+        "rule_counts": {},
+        "screens": 13
+      },
+      "pair": "modes"
+    },
+    {
+      "bad": {
+        "actions": 90,
+        "approval": false,
+        "duration_ms": 116202,
+        "hard_fails": [
+          "rule unlabelled: 9 finding(s), e.g. button:#1, button:#2, button:#3, button:#4"
+        ],
+        "mean_step_distance": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "play",
+              3
+            ],
+            [
+              "export",
+              3
+            ],
+            [
+              "undo",
+              3
+            ],
+            [
+              "settings",
+              3
+            ],
+            [
+              "mirror",
+              2
+            ],
+            [
+              "snap",
+              3
+            ],
+            [
+              "bookmark",
+              3
+            ]
+          ],
+          "rate": 0.9523809523809523,
+          "runs": 21,
+          "successes": 20,
+          "tried": [
+            [
+              "play",
+              [
+                "(no label)",
+                "(no label)",
+                "(no label)"
+              ]
+            ],
+            [
+              "export",
+              [
+                "(no label)",
+                "(no label)",
+                "(no label)"
+              ]
+            ],
+            [
+              "undo",
+              [
+                "(no label)",
+                "(no label)",
+                "(no label)"
+              ]
+            ],
+            [
+              "settings",
+              [
+                "(no label)",
+                "(no label)",
+                "(no label)"
+              ]
+            ],
+            [
+              "mirror",
+              [
+                "(no label) > (no label) > (no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label)",
+                "(no label) > (no label) > (no label) > (no label) > (no label)"
+              ]
+            ],
+            [
+              "snap",
+              [
+                "(no label) > (no label) > (no label) > (no label)",
+                "(no label)",
+                "(no label) > (no label)"
+              ]
+            ],
+            [
+              "bookmark",
+              [
+                "(no label)",
+                "(no label)",
+                "(no label)"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "play",
+            1
+          ],
+          [
+            "export",
+            1
+          ],
+          [
+            "undo",
+            1
+          ],
+          [
+            "settings",
+            1
+          ],
+          [
+            "mirror",
+            1
+          ],
+          [
+            "snap",
+            1
+          ],
+          [
+            "bookmark",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-165200-728-19904-3-ux-cal-labels-bad",
+        "rule_counts": {
+          "icon_no_tooltip": 9,
+          "unlabelled": 9
+        },
+        "screens": 10
+      },
+      "good": {
+        "actions": 90,
+        "approval": true,
+        "duration_ms": 101183,
+        "hard_fails": [],
+        "mean_step_distance": [
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "play",
+              3
+            ],
+            [
+              "export",
+              3
+            ],
+            [
+              "undo",
+              3
+            ],
+            [
+              "settings",
+              3
+            ],
+            [
+              "mirror",
+              3
+            ],
+            [
+              "snap",
+              3
+            ],
+            [
+              "bookmark",
+              3
+            ]
+          ],
+          "rate": 1.0,
+          "runs": 21,
+          "successes": 21,
+          "tried": [
+            [
+              "play",
+              [
+                "Play",
+                "Play",
+                "Play"
+              ]
+            ],
+            [
+              "export",
+              [
+                "Export",
+                "Export",
+                "Export"
+              ]
+            ],
+            [
+              "undo",
+              [
+                "Undo",
+                "Undo",
+                "Undo"
+              ]
+            ],
+            [
+              "settings",
+              [
+                "Settings",
+                "Settings",
+                "Settings"
+              ]
+            ],
+            [
+              "mirror",
+              [
+                "Mirror notes",
+                "Mirror notes",
+                "Mirror notes"
+              ]
+            ],
+            [
+              "snap",
+              [
+                "Snap to grid",
+                "Snap to grid",
+                "Snap to grid"
+              ]
+            ],
+            [
+              "bookmark",
+              [
+                "Add bookmark",
+                "Add bookmark",
+                "Add bookmark"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "play",
+            1
+          ],
+          [
+            "export",
+            1
+          ],
+          [
+            "undo",
+            1
+          ],
+          [
+            "settings",
+            1
+          ],
+          [
+            "mirror",
+            1
+          ],
+          [
+            "snap",
+            1
+          ],
+          [
+            "bookmark",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-165019-544-19904-2-ux-cal-labels-good",
+        "rule_counts": {},
+        "screens": 10
+      },
+      "pair": "labels"
+    },
+    {
+      "bad": {
+        "actions": 32,
+        "approval": false,
+        "duration_ms": 56601,
+        "hard_fails": [
+          "primary task \"export\": takes 5 actions, budget 3 (File > Share… > Advanced > Export options > Export now)"
+        ],
+        "mean_step_distance": [
+          0.053
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "export",
+              2
+            ]
+          ],
+          "rate": 0.6666666666666666,
+          "runs": 3,
+          "successes": 2,
+          "tried": [
+            [
+              "export",
+              [
+                "File > Share… > Advanced > Export options > Export now",
+                "File > Share… > View > File > Share… > File",
+                "File > Share… > Basic > Advanced > Export options > Export now"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "export",
+            5
+          ]
+        ],
+        "out_dir": "runs/20260928-165449-295-19904-5-ux-cal-depth-bad",
+        "rule_counts": {
+          "small_target": 4
+        },
+        "screens": 8
+      },
+      "good": {
+        "actions": 44,
+        "approval": true,
+        "duration_ms": 52362,
+        "hard_fails": [],
+        "mean_step_distance": [
+          null
+        ],
+        "mode_steps": [
+          [
+            "Editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "export",
+              3
+            ]
+          ],
+          "rate": 1.0,
+          "runs": 3,
+          "successes": 3,
+          "tried": [
+            [
+              "export",
+              [
+                "Export",
+                "Export",
+                "Export"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "export",
+            1
+          ]
+        ],
+        "out_dir": "runs/20260928-165356-932-19904-4-ux-cal-depth-good",
+        "rule_counts": {},
+        "screens": 8
+      },
+      "pair": "depth"
+    },
+    {
+      "bad": {
+        "actions": 27,
+        "approval": true,
+        "duration_ms": 39215,
+        "hard_fails": [],
+        "mean_step_distance": [
+          0.676
+        ],
+        "mode_steps": [
+          [
+            "Clip editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "trim",
+              3
+            ]
+          ],
+          "rate": 1.0,
+          "runs": 3,
+          "successes": 3,
+          "tried": [
+            [
+              "trim",
+              [
+                "Set out point > Set in point > Apply trim",
+                "Set out point > Set in point > Apply trim",
+                "Set out point > Set in point > Apply trim"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "trim",
+            3
+          ]
+        ],
+        "out_dir": "runs/20260928-165625-382-19904-7-ux-cal-group-bad",
+        "rule_counts": {
+          "scattered": 1
+        },
+        "screens": 5
+      },
+      "good": {
+        "actions": 27,
+        "approval": true,
+        "duration_ms": 39483,
+        "hard_fails": [],
+        "mean_step_distance": [
+          0.07
+        ],
+        "mode_steps": [
+          [
+            "Clip editor",
+            0
+          ]
+        ],
+        "novice": {
+          "per_task": [
+            [
+              "trim",
+              3
+            ]
+          ],
+          "rate": 1.0,
+          "runs": 3,
+          "successes": 3,
+          "tried": [
+            [
+              "trim",
+              [
+                "Set in point > Set out point > Apply trim",
+                "Set in point > Set out point > Apply trim",
+                "Set in point > Set out point > Apply trim"
+              ]
+            ]
+          ]
+        },
+        "novice_error": null,
+        "optimal_steps": [
+          [
+            "trim",
+            3
+          ]
+        ],
+        "out_dir": "runs/20260928-165545-898-19904-6-ux-cal-group-good",
+        "rule_counts": {},
+        "screens": 5
+      },
+      "pair": "group"
+    }
+  ]
+}

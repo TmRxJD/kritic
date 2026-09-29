@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Studio (grouping, good)</title><link rel="stylesheet" href="ux.css"></head>
+<body>
+<header><h1>Studio</h1></header>
+<main>
+  <h2>Clip editor</h2>
+  <div class="panel">Clip 1 · 0.0 s to 12.0 s</div>
+  <div id="tools"></div>
+  <p class="status" id="status"></p>
+</main>
+<script>
+// Good variant: the trim workflow's controls sit together, in workflow order.
+const SCATTERED = false;
+const state = { inPt: false, outPt: false, trimmed: false };
+const b = (label, on, pos = "", dis = false) =>
+  `<button type="button" data-on="${on}" ${pos ? `class="corner" style="${pos}"` : ""} ${dis ? 'disabled title="Set the in and out points first"' : ""}>${label}</button>`;
+function render() {
+  const off = !(state.inPt && state.outPt);
+  document.getElementById("tools").innerHTML = SCATTERED
+    ? b("Set in point", "in", "left:12px;top:64px") + b("Help", "noop", "left:620px;top:64px") +
+      b("Apply trim", "apply", "right:12px;top:64px", off) + b("Zoom", "noop", "left:12px;bottom:12px") +
+      b("Theme", "noop", "left:620px;bottom:12px") + b("Set out point", "out", "right:12px;bottom:12px")
+    : `<div class="panel"><h3>Trim</h3><div class="bar">${b("Set in point", "in")}${b("Set out point", "out")}${b("Apply trim", "apply", "", off)}</div></div>
+       <div class="bar">${b("Zoom", "noop")}${b("Theme", "noop")}${b("Help", "noop")}</div>`;
+  document.getElementById("status").textContent = state.trimmed ? "Clip trimmed" :
+    [state.inPt ? "In point set" : "", state.outPt ? "Out point set" : ""].filter(Boolean).join(" · ");
+}
+document.body.addEventListener("click", (e) => {
+  const on = e.target.closest("[data-on]")?.dataset.on;
+  if (on === "in") state.inPt = true;
+  else if (on === "out") state.outPt = true;
+  else if (on === "apply") state.trimmed = true;
+  else return;
+  render();
+});
+render();
+</script></body></html>
