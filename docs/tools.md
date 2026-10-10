@@ -45,6 +45,15 @@ difference.
 - `ui_test`, `visual_critic` and `ux_critic` refuse non-local URLs unless `allow_remote=true`.
 - Controls that look destructive ("Delete", "Remove", "Reset"…) are skipped unless `allow_destructive=true`.
 - `resource_critic` attaches to an existing process only with `allow_attach=true`.
+- Native resource sampling verifies process creation identity before accepting descendants:
+  Windows retains process handles, and Linux uses pidfds. Cleanup uses those identities rather
+  than a fresh parent-PID guess. Unsupported identity/cleanup paths fail closed; Linux runtime
+  behavior remains unvalidated in this test release.
+- Resource stats `exited_early` / `exit_code` describe the launched root's natural exit.
+  `tree_completed` means the root and **observed, verified** descendants finished naturally,
+  not that no unseen child ever existed. A child that becomes orphaned between snapshots can
+  be missed. Surviving verified descendants are cleaned up even after the root exits; cleanup
+  failures return `ok=false` and cannot produce an approval.
 - `security_critic` never echoes a secret; findings carry a redacted match.
 - Critic input is treated as data: text in the code addressed to a reviewer is itself a finding
   (`reviewer_text`), never an instruction.
