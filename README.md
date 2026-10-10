@@ -16,6 +16,33 @@ freshness, weak acceptance checks and enforcement wiring. It is enabled in the m
 and needs no model. Missing proof stays unverified; CI text is not proof CI actually ran.
 See [review a work contract](#review-a-work-contract) and [contract format](docs/contracts.md).
 
+## Why Kritic: Kev + critic
+
+**Kritic = Kev + critic.** Kev is the optional local typed-decision engine; the critic is the
+evidence-based review workflow. The name reflects that pairing, while the default workflow
+works without Kev or any other model.
+
+A **classifier model** learns to assign inputs to defined categories: for example, whether a
+reported problem looks relevant, which issue type it belongs to, or whether there is enough
+evidence to judge it. A score can help prioritize review; it is not proof the judgment is right.
+Kev fills this bounded decision role. It uses a language model to return structured judgments,
+rather than generating the implementation. Structured output alone does not make a model a
+trained classifier or guarantee calibrated confidence.
+
+This division suits code review: tests, scanners and browser checks collect concrete evidence;
+an optional model helps interpret and prioritize it; the coding agent checks the claim and
+decides what to fix. Narrow decisions are easier to validate than an unrestricted review essay,
+and deterministic checks still work on a friend's laptop with no GPU. Models remain useful for
+ambiguous cases, but can miss subtle bugs or flag correct code. The [examples below](#evidence-from-real-use)
+demonstrate particular checks, not universal model accuracy.
+
+**Why Rust?** Kritic coordinates processes, browser sessions, files and optional model resources.
+Rust's type system and ownership help make those lifetimes explicit, catch invalid states during
+development and avoid garbage-collector pauses in the server. A compiled executable also keeps
+the minimum Windows installation small in dependencies: no Python or Node runtime is required
+for the core. Optional tools still have their own dependencies. Rust supports a dependable
+orchestrator; it does not make model judgments correct, sandbox commands or eliminate all bugs.
+
 ## What your hardware can run
 
 **A GPU unlocks optional local reviewers, not the deterministic checks.** Capabilities are
