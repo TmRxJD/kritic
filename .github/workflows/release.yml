@@ -22,19 +22,7 @@ jobs:
       - run: cargo build --release --locked
       - name: Package binary, skill, config and optional desktop harness
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path package/kritic/bin/harness,package/kritic/examples -Force | Out-Null
-          # Include tracked source references so relative links in the bundled docs work.
-          git archive HEAD --format=tar --output=package/source.tar
-          tar -xf package/source.tar -C package/kritic
-          Remove-Item -LiteralPath package/source.tar
-          Copy-Item target/release/kritic.exe package/kritic/bin/
-          Copy-Item README.md,LICENSE,CONTRIBUTING.md,SECURITY.md package/kritic/
-          Copy-Item examples/kritic.toml,examples/contract.toml package/kritic/examples/
-          Copy-Item examples/claude package/kritic/examples/ -Recurse
-          Copy-Item docs package/kritic/ -Recurse
-          Copy-Item harness/py package/kritic/bin/harness/ -Recurse
-          Compress-Archive -Path package/kritic -DestinationPath kritic-windows-x86_64-test.zip
+        run: ./scripts/package-test-release.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kritic-windows-x86_64-test

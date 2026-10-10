@@ -1,6 +1,6 @@
 [package]
 name = "kritic"
-version = "0.5.0-test.1"
+version = "0.5.0-test.2"
 edition = "2024"
 rust-version = "1.89"
 description = "Experimental evidence-based review for coding agents: deterministic checks, work contracts, optional cloud/local reviewers."
@@ -45,3 +45,6 @@ lto = "thin"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_System_ProcessStatus", "Win32_System_Diagnostics_ToolHelp"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2.189"

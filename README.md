@@ -11,60 +11,82 @@ Kritic is a Rust MCP server. The skill tells your existing coding agent how to c
 check requirements and evaluate the findings. That agent can use the cloud model it already runs
 on; Kritic needs no separate inference service or API key for this workflow.
 
-## Start without a GPU
+**Work-contract critic included:** `contract_critic` audits declared requirements, evidence
+freshness, weak acceptance checks and enforcement wiring. It is enabled in the minimal profile
+and needs no model. Missing proof stays unverified; CI text is not proof CI actually ran.
+See [review a work contract](#review-a-work-contract) and [contract format](docs/contracts.md).
 
-**Windows testers:** download the ZIP from the [0.5.0-test.1 release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.1),
-extract it into your chosen persistent directory, then open the extracted `kritic` folder:
+## What your hardware can run
+
+**A GPU unlocks optional local reviewers, not the deterministic checks.** Capabilities are
+explicit configuration choices; Kritic does not automatically enable them because a GPU exists.
+16 GB system RAM is a practical recommendation for an IDE/browser and ordinary projects, not a
+measured minimum. Your project's builds, browsers and scanners can require more.
+
+| Your machine / reviewer | Available with the right optional dependencies | Unavailable or limited |
+|---|---|---|
+| CPU, no dedicated GPU, no extra API key | Artifact checks, work contracts, process/resource checks; browser/UX, scanners, linters and Windows desktop checks after installing their dependencies. Your existing Codex/Work/Cursor session interprets evidence. | No Kritic model code scores, visual model judgments or model context helpers with backends off. Deterministic UX rules still work. |
+| CPU + direct cloud API | Everything above plus optional text critic; visual critic/novice only with an image-capable API model and cloud vision enabled. | Requires separate provider API access, sends selected review inputs to that provider. No local GPU needed. |
+| 8 GB GPU | All deterministic features; local Kev Q8 is a realistic testing target with about 5 GB recorded usage, reserving roughly 1.5–2 GB for display/system/apps plus slack. | Vision at 8 GB is tight and unverified. Other apps/context buffers may leave too little headroom. Mixed Q4 Kev is about 4.21 GB on disk, not a 2 GB model. |
+| 12 GB+ GPU | Local Kev and vision are the recommended sequential testing configuration, in addition to deterministic tools. | Not a promise they fit concurrently or that local-model judgments are accurate. Other GPU users still consume memory. |
+| CPU-only local Kev | Optional slower text review with `kev.cpu_only=true` and a CPU service; budget model RAM plus runtime overhead separately from the IDE/project. | No measured minimum RAM/latency guarantee. No CPU-only vision setup promise. |
+
+Windows x86-64 is the tested platform. Desktop UI Automation needs Windows and an interactive
+desktop; it cannot drive your PC from an unrelated cloud container. Linux/macOS core/browser
+paths need field testing; there are no prebuilt packages for those platforms in this release.
+
+## Quickstart: install the minimum, then choose extras
+
+1. **Get the binary:** download the Windows ZIP from [the test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.2).
+   Extract it into a persistent location and open its `kritic` folder in PowerShell.
+   Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+   if absent. No Rust, Python, Node, GPU, Ollama or API key is required for the minimum setup.
+2. **Choose the minimal profile:** on a fresh installation run the commands below. If you already
+   have `kritic.toml`, merge the profile deliberately instead of replacing your settings.
+3. **Connect your agent:** follow [Codex / local Work, Cursor, Claude Code or Hermes setup](docs/clients.md).
+   Install both the MCP connection and skill; one does not automatically install the other.
+4. **Verify:** run `doctor`, then ask your agent to call `status(start=false)` and
+   `artifact_validate(use_model=false)` on a small real change. Review its actual evidence.
 
 ```powershell
 $env:KRITIC_HOME = (Resolve-Path .).Path
-.\bin\kritic.exe setup --backend off --no-vision
+# Fresh install only: do not overwrite an existing config.
+Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
+.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-scanners --no-register
 .\bin\kritic.exe doctor
 ```
 
-No Rust installation or API key is needed. See [runtime prerequisites and client registration](docs/getting-started.md).
-Install the bundled TEST RELEASE skill and ask your agent to independently validate each finding.
+The minimal profile exposes artifact, contract and native resource/hygiene checks plus utility
+tools. Browser/UX, security, quality, desktop, plugins and model helpers are deliberately hidden.
+Installing a dependency does not turn its group on. Enabling a group does not install its dependencies.
 
-**Source build:**
+### Add only the capabilities you need
 
-Install Rust 1.89+ to build from source. Run in Bash (Git Bash on Windows):
+Edit `$KRITIC_HOME/kritic.toml`, use [the complete configuration reference](examples/kritic.toml)
+for the named keys, then restart your MCP connection. Keep `[review].backend` and
+`[vision].backend` set to `"off"` for all the deterministic rows below.
 
-```bash
-git clone https://github.com/TmRxJD/kritic.git
-cd kritic
-export KRITIC_HOME="${KRITIC_HOME:-$HOME/.kritic}"
-scripts/install.sh
-"$KRITIC_HOME/bin/kritic" setup --backend off --no-vision
-```
+| Optional capability | Enable in `[capabilities]` | Install / configure | What it gives you |
+|---|---|---|---|
+| Web interactions and UX rules | `web=true`, `ux=true` | Chrome/Edge/Chromium; app URL and useful workflow/spec. Run setup with `--no-scanners --no-register` to provision missing harness dependencies for enabled groups. | `ui_test`, `ux_critic(novice="off")`; interaction evidence and axe/workflow rules. No screenshot model score. No Node/Playwright required for native CDP. |
+| Security | `security=true` | Install uv first if Python scanners are absent; setup uses `uv tool install` for Semgrep/Bandit/Ruff and provisions gitleaks/osv-scanner. Run setup with `--no-harness --no-register`. Network may be needed. | `security_critic`; missing applicable scanners remain incomplete coverage. cargo-audit is optional. |
+| Quality | `quality=true` | Your project's linter/typechecker and its normal dependencies; Ruff where applicable. | `code_quality_critic`; Kritic does not install your project's toolchain. |
+| Windows desktop / Unity | `desktop=true` (and `ux=true` for workflows) | Python 3.11+, uv, pywinauto harness; interactive Windows session. Run setup with `--no-scanners --no-register`. Unity checks also need the matching Unity editor. | `desktop_test`, `unity_tests`, desktop UX evidence. No GPU model required; the app under test may require one. |
+| Repository checks / Beat Saber maps | `plugins=true` / `domain_maps=true` | Relevant repository plugin or map evaluator and its dependencies. | Project-defined checks / `map_eval`; not general model review. |
+| Text model review | No capability group; select `[review].backend` | Optional [cloud API](docs/cloud.md) or [local Kev](docs/getting-started.md#optional-local-models). | `critic_score`, `decide`; advisory model assessments. |
+| Image model review / novice | Set `[vision].backend`; `ux=true` for novice | Image-capable cloud API or local Ollama vision model; browser/desktop capture dependencies for the target. | `visual_critic`, model novice observations; independently validate them. |
+| Model context helpers | `context=true` and text backend enabled | Same reviewer as text review. Hermes archival integration is separately configured. | `route`, `context_trim`, `locate`; no automatic context-engine takeover. |
 
-Set `KRITIC_HOME` first if you want data somewhere other than `~/.kritic`; for example
-`export KRITIC_HOME='E:/AI/kritic'` on Windows. If you do not set it, invoke `~/.kritic/bin/kritic`
-(Windows: `kritic.exe`). Setup can install browser/scanner dependencies and register Claude Code
-or Hermes. `--no-register`, `--no-harness` and `--no-scanners` suppress those steps. No models
-are installed unless you explicitly select local review or pass `--vision`.
+Every optional setup command must also include `--yes --backend off --no-vision` for deterministic
+use. Setup reads the capability switches and skips disabled groups. `--no-harness` skips both
+browser and desktop provisioning; `--no-scanners` skips scanner provisioning; `--no-register`
+prevents unrelated Claude/Hermes registration. These flags skip installs, not capability exposure.
 
-Any MCP client can start `kritic serve` over stdio. Install the
-[test-release skill](examples/claude/skills/kritic/SKILL.md) in your client's skill directory.
-Claude Code: `kritic register --claude`. Hermes: `kritic register --hermes`.
-For clients with no skill support, use the [short instruction block](examples/claude/CLAUDE.md).
-
-## Choose your capabilities
-
-| Capability | Model/GPU needed? | Evidence and limits |
-|---|---|---|
-| Artifact validation | No | Parsing, conflict markers, requested tests/typecheck/lint; only tests that actually ran count |
-| Work contracts | No | Declared acceptance checks, input hashes, stale/missing evidence, static enforcement wiring |
-| Web and UX checks | No | Chrome/Edge interactions, errors, persistence, axe rules, declared workflow paths; needs browser/spec |
-| Security and quality | No | Installed scanners, project linters and code metrics; missing tools mean incomplete coverage |
-| Desktop and processes | No | Windows UI Automation, process budgets/hygiene; desktop needs Python/uv |
-| Model code critic | Optional | Local Kev or your configured cloud API; coarse screening, never a substitute for tests |
-| Screenshot/novice critic | Optional | Local Ollama or a cloud vision model; observations can be false |
-| Context helpers / map domain | Optional | Disabled by default; opt in only when relevant |
-
-`status` reports capability settings and exposed tools. `kritic doctor` checks dependencies;
-`kritic doctor --online` explicitly makes a reviewer API/inference call. A configured key is not
-proof that a provider works. Toggle groups in `[capabilities]` and individual tools in
-`[tools].disabled`; restart your MCP client after changing configuration.
+`status` shows exposed tools/configuration. `doctor` checks dependencies, while `doctor --online`
+explicitly makes a reviewer API/inference call. No models/API calls are needed just to install the skill.
+Environment overrides take precedence over the file, including KRITIC_CONFIG and backend/capability
+variables; verify the effective settings in status if your installed tools differ from the chosen profile.
+For source builds and other platforms, follow [the source installation path](docs/getting-started.md#install-from-source-and-configure).
 
 ## Optional cloud or local review
 
@@ -90,7 +112,8 @@ Code excerpts go to the selected endpoint; screenshots are sent only when cloud 
 explicitly enabled. Default operation has no inference calls, although tools such as dependency
 scanners, setup and browsers can access networks.
 
-Local Kev: `kritic setup --backend local --no-vision`. Local vision: `kritic setup --vision`.
+For explicit local-model installation commands and runtime/quantization limits, see
+[optional local models](docs/getting-started.md#optional-local-models).
 Local inference is optional: roughly 8 GB VRAM for Kev Q8, 12 GB recommended for sequential
 Kev and vision. The 8 GB vision configuration remains a field-testing target, not a guarantee.
 No GPU is required for deterministic checks or cloud review. 16 GB system RAM is a practical
@@ -124,7 +147,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-targets
 # Hermes tests use the real Hermes agent.context_engine ABC.
 # Set PYTHONPATH to a Hermes checkout and KRITIC_EXE to this build's absolute binary path.
-python -m pip install pytest
+python -m pip install pytest==9.1.1 PyYAML==6.0.3 ruamel.yaml==0.18.16
 python -m pytest integrations/hermes/tests
 python scripts/test_calibration_policy.py
 ```
@@ -159,6 +182,7 @@ broken-control finding.
 ## Documentation
 
 [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) ·
+[Codex/Work and Cursor](docs/clients.md) ·
 [Cloud reviewers](docs/cloud.md) · [Work contracts](docs/contracts.md) ·
 [Tool behavior](docs/tools.md) · [Architecture](docs/architecture.md) ·
 [Security audit](docs/security-audit.md) ·
