@@ -11,6 +11,11 @@ Kritic is a Rust MCP server. The skill tells your existing coding agent how to c
 check requirements and evaluate the findings. That agent can use the cloud model it already runs
 on; Kritic needs no separate inference service or API key for this workflow.
 
+**Work-contract critic included:** `contract_critic` audits declared requirements, evidence
+freshness, weak acceptance checks and enforcement wiring. It is enabled in the minimal profile
+and needs no model. Missing proof stays unverified; CI text is not proof CI actually ran.
+See [review a work contract](#review-a-work-contract) and [contract format](docs/contracts.md).
+
 ## What your hardware can run
 
 **A GPU unlocks optional local reviewers, not the deterministic checks.** Capabilities are
