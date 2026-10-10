@@ -37,7 +37,7 @@ import logging
 import math
 import os
 import shutil
-import subprocess
+import subprocess  # noqa: S404; intended local tool invocation  # nosec B404
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -165,7 +165,7 @@ class KriticContextEngine(ContextEngine):
             logger.warning("kritic: %s", self.last_error)
             return None
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # noqa: S603; explicit argv, operator-selected executable or fixed test harness  # nosec B603
                 [exe, "context", op], input=json.dumps(payload), capture_output=True, text=True,
                 encoding="utf-8", timeout=self.timeout_s,
             )

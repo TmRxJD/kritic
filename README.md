@@ -13,6 +13,20 @@ on; Kritic needs no separate inference service or API key for this workflow.
 
 ## Start without a GPU
 
+**Windows testers:** download the ZIP from the [0.5.0-test.1 release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.1),
+extract it into your chosen persistent directory, then open the extracted `kritic` folder:
+
+```powershell
+$env:KRITIC_HOME = (Resolve-Path .).Path
+.\bin\kritic.exe setup --backend off --no-vision
+.\bin\kritic.exe doctor
+```
+
+No Rust installation or API key is needed. See [runtime prerequisites and client registration](docs/getting-started.md).
+Install the bundled TEST RELEASE skill and ask your agent to independently validate each finding.
+
+**Source build:**
+
 Install Rust 1.89+ to build from source. Run in Bash (Git Bash on Windows):
 
 ```bash
@@ -147,6 +161,7 @@ broken-control finding.
 [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) ·
 [Cloud reviewers](docs/cloud.md) · [Work contracts](docs/contracts.md) ·
 [Tool behavior](docs/tools.md) · [Architecture](docs/architecture.md) ·
+[Security audit](docs/security-audit.md) ·
 [Test release](docs/testing-release.md) · [Historical measurements](docs/measurements.md)
 
 Apache-2.0. Optional model runtimes, scanners, axe-core and other dependencies retain their own

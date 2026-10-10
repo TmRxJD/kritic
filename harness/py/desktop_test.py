@@ -15,7 +15,7 @@ import ctypes
 import json
 import re
 import shutil
-import subprocess
+import subprocess  # noqa: S404; intended local tool invocation  # nosec B404
 import sys
 import threading
 import time
@@ -199,7 +199,7 @@ class App:
         import os
 
         env = {**os.environ, **{str(k): str(v) for k, v in (self.inp.get("env") or {}).items()}}
-        self.proc = subprocess.Popen(
+        self.proc = subprocess.Popen(  # noqa: S603; explicit argv, operator-selected executable or fixed test harness  # nosec B603
             cmd, cwd=self.inp.get("cwd") or default_cwd(self.inp["exe"]), stdout=self.errf, stderr=self.errf,
             stdin=subprocess.DEVNULL, env=env
         )
@@ -214,7 +214,7 @@ class App:
         for h in top_windows(tree_pids(self.pid)):
             try:
                 out.append(Desktop(backend="uia").window(handle=h).wrapper_object())
-            except Exception:  # noqa: BLE001  (window closed meanwhile)
+            except Exception:  # noqa: BLE001  (window closed meanwhile)  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
                 continue
         return out
 
@@ -231,7 +231,7 @@ class App:
                 if t and (not title_re or re.search(title_re, t)):
                     try:
                         return Desktop(backend="uia").window(handle=h).wrapper_object()
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
                         continue
             time.sleep(0.1)
         return None
@@ -247,7 +247,7 @@ class App:
         for w in self.windows():
             try:
                 w.close()
-            except Exception:
+            except Exception:  # noqa: S110; transient UI control failure is best-effort  # nosec B110
                 pass
         # Two different things: the app honouring the close (its windows go), and the process
         # object ending. A process can outlive its windows while the kernel finishes a driver
@@ -295,7 +295,7 @@ class App:
                 pass
         try:
             self.errf.close()
-        except Exception:
+        except Exception:  # noqa: S110; transient UI control failure is best-effort  # nosec B110
             pass
 
     def stderr_tail(self) -> str:
@@ -337,9 +337,9 @@ def signature(win) -> str:
             try:
                 ei = d.element_info
                 parts.append(f"{ei.control_type}|{ei.name}|{d.is_enabled()}")
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
                 continue
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # noqa: S110; transient UI control failure is best-effort  # nosec B110
         pass
     return str(hash("\n".join(parts)))
 
@@ -358,7 +358,7 @@ def candidates(win) -> list:
             if parent is not None and parent.element_info.control_type in COMPOSITE_PARENTS:
                 continue  # e.g. a ComboBox's own "Open" button, title-bar Minimize/Close
             out.append(d)
-        except Exception:
+        except Exception:  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
             continue
     return out
 
@@ -449,7 +449,7 @@ def shot(win, path: Path) -> str | None:
     try:
         if print_window(win.handle, path):
             return str(path)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # noqa: S110; transient UI control failure is best-effort  # nosec B110
         pass
     try:
         win.capture_as_image().save(path)  # fallback: screen region
@@ -580,7 +580,7 @@ def find_target(app: "App", target: dict, timeout_s: float):
                 spec = Desktop(backend="uia").window(handle=h).child_window(**crit)
                 if spec.exists(timeout=0):
                     return spec.wrapper_object()
-            except Exception:  # noqa: BLE001  (window went away)
+            except Exception:  # noqa: BLE001  (window went away)  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
                 continue
         if time.time() > deadline:
             return None
@@ -593,7 +593,7 @@ def control_text(c) -> str:
             v = getattr(c, getter)()
             if v:
                 return str(v)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
             continue
     return c.element_info.name or ""
 
@@ -861,7 +861,7 @@ def collect_frames(pm, pm_csv: Path, exe_pm, soak: float, t0: float) -> dict:
 
 
 def port_holder(url: str) -> str | None:
-    """Who already listens on the ws:// URL's port, before we launch anything. A second instance
+    """Who already listens on the loopback WebSocket URL's port, before we launch anything. A second instance
     cannot bind it, so the test would only wait out its timeouts talking to the wrong process."""
     m = re.match(r"wss?://[^/:]+:(\d+)", url or "")
     if not m:
@@ -1197,7 +1197,7 @@ def gpu_sample() -> dict | None:
     if not exe:
         return None
     try:
-        out = subprocess.run(
+        out = subprocess.run(  # noqa: S603; explicit argv, operator-selected executable or fixed test harness  # nosec B603
             [exe, "--query-gpu=utilization.gpu,memory.used", "--format=csv,noheader,nounits"],
             capture_output=True, text=True, timeout=3,
         ).stdout.strip().splitlines()[0]
@@ -1295,7 +1295,7 @@ def start_target(inp: dict):
     # A string command is run through the shell on purpose: resource_critic measures whatever
     # command the caller (Claude, on the user's behalf) gives it, like artifact_validate's
     # `commands`. Pass an argv list to avoid the shell.
-    proc = subprocess.Popen(  # noqa: S602  # nosec B602 - caller-supplied command, by design
+    proc = subprocess.Popen(  # noqa: S602; caller-supplied command by design # nosec B602
         cmd, shell=isinstance(cmd, str), cwd=inp.get("cwd") or None,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
     )

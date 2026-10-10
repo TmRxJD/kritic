@@ -77,6 +77,7 @@ historical scores are not advertised as verified mapping quality.
 
 Mock provider tests verify request/response handling, isolation and rejection paths, not live
 account compatibility or model quality. Local model/GPU behavior and non-Windows platforms remain
-unverified. Semgrep can report parser/coverage errors; Kritic retains findings and does not turn
-that into a clean security pass. Generic command-execution and loopback-WebSocket scanner warnings
-need contextual review rather than blanket suppression. None of this is release-grade assurance.
+unverified. Semgrep's installer parser error and actionable findings were investigated and repaired;
+reviewed exceptions are narrowly annotated. The [security audit](security-audit.md) records the fixes,
+trust boundaries and Linux-only dependency maintenance notice. Future scanner coverage errors remain
+unverified, rather than becoming a clean pass. None of this is production assurance.

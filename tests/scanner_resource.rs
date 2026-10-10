@@ -193,6 +193,23 @@ fn zero_scanner_coverage_is_unverified() {
 }
 
 #[test]
+fn scanner_errors_retain_actionable_bounded_diagnostics() {
+    let report = serde_json::json!({"results":[], "errors":[{
+        "path":"scripts/install.sh", "message":"unexpected shell case syntax"
+    }]});
+    let error = scan::completion_error("semgrep", &report.to_string(), 0, 0).unwrap();
+    assert!(error.contains("scripts/install.sh"));
+    assert!(error.contains("unexpected shell case syntax"));
+    let report = serde_json::json!({"results":[], "errors":[{"message":"x".repeat(10000)}]});
+    assert!(
+        scan::completion_error("semgrep", &report.to_string(), 0, 0)
+            .unwrap()
+            .len()
+            < 400
+    );
+}
+
+#[test]
 fn maintenance_notices_are_not_vulnerabilities_but_mixed_security_stays_high() {
     use serde_json::json;
     let info = json!({"id":"RUSTSEC-2024-0436", "affected":[{"database_specific":{"informational":"unmaintained"}}]});

@@ -641,7 +641,32 @@ pub fn completion_error(tool: &str, stdout: &str, code: i32, findings: usize) ->
     if let Some(errors) = v.get("errors")
         && !errors.as_array().is_some_and(|a| a.is_empty())
     {
-        return Some(format!("{tool} report contains scanner errors"));
+        let details = errors
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .take(3)
+                    .map(|error| {
+                        ["type", "path", "message"]
+                            .iter()
+                            .filter_map(|key| error.get(key).and_then(Value::as_str))
+                            .collect::<Vec<_>>()
+                            .join(": ")
+                            .chars()
+                            .take(300)
+                            .collect::<String>()
+                    })
+                    .filter(|detail| !detail.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            })
+            .unwrap_or_default();
+        return Some(if details.is_empty() {
+            format!("{tool} report contains scanner errors")
+        } else {
+            format!("{tool} report contains scanner errors: {details}")
+        });
     }
     let valid = match tool {
         "bandit" | "semgrep" | "osv-scanner" => v["results"].is_array(),

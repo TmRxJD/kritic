@@ -22,7 +22,12 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-EXE=kritic; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=kritic.exe ;; esac
+EXE=kritic
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    EXE=kritic.exe
+    ;;
+esac
 
 cargo build --release --quiet
 TARGET="$(cargo metadata --format-version 1 --no-deps | python -c 'import sys,json;print(json.load(sys.stdin)["target_directory"])')"

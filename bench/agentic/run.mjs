@@ -31,7 +31,8 @@ const repeats = Number(arg("--repeats", "1"));
 const budget = arg("--budget-usd", "2");
 const only = arg("--only", null);
 const outDir = arg("--out", join(root, "bench", "results"));
-const python = ["python", "python3"].find((p) => spawnSync(p, ["--version"]).status === 0);
+const python = spawnSync("python", ["--version"]).status === 0 ? "python"
+  : spawnSync("python3", ["--version"]).status === 0 ? "python3" : null;
 if (!python) throw new Error("python is required to run the tasks' tests");
 
 const keyFile = process.env.KRITIC_CLOUD_KEY_FILE ?? join(process.env.KRITIC_HOME ?? join(homedir(), ".kritic"), "ai-gateway.key");

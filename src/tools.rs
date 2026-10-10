@@ -727,23 +727,22 @@ pub fn source_files(base: &std::path::Path, limit: usize) -> Vec<String> {
     out
 }
 
-/// A WebSocket URL on this machine: ws:// or wss:// to 127.0.0.1, localhost or [::1].
+/// A WebSocket URL restricted to loopback; plaintext transport never reaches a remote host.
 pub fn require_loopback_ws(url: &str) -> Result<(), String> {
-    let rest = url
-        .strip_prefix("ws://")
-        .or_else(|| url.strip_prefix("wss://"))
-        .ok_or_else(|| format!("app_events must be a ws:// or wss:// URL, got {url}"))?;
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    if authority.contains('@') {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "app_events URL is invalid".to_string())?;
+    if !matches!(parsed.scheme(), "ws" | "wss") {
+        return Err("app_events must use a WebSocket scheme".into());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(format!("app_events must not carry credentials: {url}"));
     }
-    let host = if let Some(v6) = authority.strip_prefix('[') {
-        v6.split(']').next().unwrap_or("")
-    } else {
-        authority.split(':').next().unwrap_or("")
-    };
-    match host.to_ascii_lowercase().as_str() {
-        "127.0.0.1" | "localhost" | "::1" => Ok(()),
+    match parsed
+        .host_str()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "127.0.0.1" | "localhost" | "[::1]" => Ok(()),
         _ => Err(format!(
             "refusing non-local app_events {url} (send steps would push commands to it); pass allow_remote_app_events for your own remote app"
         )),

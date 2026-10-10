@@ -871,6 +871,8 @@ fn app_events_must_be_loopback() {
         "ws://user@127.0.0.1:1",
         "http://127.0.0.1:4733",
         "ws://10.0.0.5:4733",
+        "ws://[::1]evil.example:4733",
+        "ws://localhost:invalid",
     ] {
         assert!(require_loopback_ws(bad).is_err(), "{bad}");
     }
@@ -963,6 +965,10 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     });
     let mut c = cfg();
     c.laya_url = format!("http://127.0.0.1:{port}");
+    // This fixture selects its fake local HTTP service explicitly; the product default is off.
+    c.backend = "local".into();
+    c.config_errors.clear();
+    c.kev_cpu_only = true; // no GPU locks, unloads or process termination in an offline test
     c.laya_exe = "kritic-test-no-such-laya.exe".into(); // the stall handler's stop must not touch a real laya
     c.kev_request_s = 1;
     let kev = KevClient::new(std::sync::Arc::new(c));

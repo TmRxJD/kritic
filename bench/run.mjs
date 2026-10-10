@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { connect } from "./mcp.mjs";
 import { BENCH_FIXTURE_DIR, CASES, FIXTURE_DIR } from "./cases.mjs";
+import { fixturePath } from "./fixture-path.mjs";
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(name);
@@ -30,9 +31,9 @@ const outDir = arg("--out", join(root, "bench", "results"));
 // ---- static server for the UI fixtures
 const TYPES = { ".html": "text/html", ".css": "text/css", ".png": "image/png" };
 const server = createServer((req, res) => {
-  const rel = decodeURIComponent(new URL(req.url, "http://x").pathname);
   // bench/fixtures overrides the harness fixtures (a clean variant that must also work)
-  const path = [join(BENCH_FIXTURE_DIR, rel), join(FIXTURE_DIR, rel)].find((p) => { try { return statSync(p).isFile(); } catch { return false; } }) ?? join(FIXTURE_DIR, rel);
+  const path = fixturePath(req.url, [BENCH_FIXTURE_DIR, FIXTURE_DIR]);
+  if (!path) { res.writeHead(404).end("not found"); return; }
   try {
     const body = readFileSync(path);
     res.writeHead(200, { "content-type": TYPES[extname(path)] ?? "application/octet-stream" }).end(body);
@@ -65,7 +66,11 @@ function project(c, variant) {
 function baseline(c, dir) {
   if (!c.test) return { ran: false, rejected: false, ms: 0, note: "no automated check exists for this change" };
   const t0 = Date.now();
-  const r = spawnSync(c.test, { cwd: dir, shell: true, encoding: "utf8", timeout: 120_000 });
+  const options = { cwd: dir, shell: false, encoding: "utf8", timeout: 120_000 };
+  let r;
+  if (c.test === "node --test") r = spawnSync("node", ["--test"], options);
+  else if (c.test === "python -m unittest -q") r = spawnSync("python", ["-m", "unittest", "-q"], options);
+  else throw new Error(`unsupported benchmark test command: ${c.test}`);
   return { ran: true, rejected: r.status !== 0, ms: Date.now() - t0, exit: r.status };
 }
 

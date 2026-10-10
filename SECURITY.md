@@ -15,3 +15,7 @@ commands or reports. Local reports can contain source/output: review before shar
 
 Do not rely on scanners alone for authorization/business-logic security. Missing scanner coverage
 must be reported. This project does not provide a sandbox for arbitrary project command execution.
+
+See the [test-release security audit](docs/security-audit.md) for fixes, reviewed exceptions and
+the disclosed Linux-only dependency maintenance notice. Browser origins cannot subscribe to
+the local progress stream; native local tools can. Remote app-event transport is an explicit opt-in.

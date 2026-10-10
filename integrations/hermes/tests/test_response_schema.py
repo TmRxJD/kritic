@@ -1,7 +1,7 @@
 """Offline subprocess-seam regression: actual plugin/ABC, no provider calls."""
 import importlib.util
 import os
-import subprocess
+import subprocess  # noqa: S404; intended local tool invocation  # nosec B404
 from pathlib import Path
 import pytest
 PLUGIN = Path(os.environ.get('STAGE3_PLUGIN', str(Path(__file__).resolve().parents[1] / 'kritic' / '__init__.py')))
@@ -18,10 +18,10 @@ def test_original_list_regression_retains_context(monkeypatch):
     e = m.KriticContextEngine()
     messages = [{'role': 'user', 'content': 'essential diagnostic'}]
     e.last_prompt_tokens = 17
-    assert e.compress(messages) is messages
-    assert e.compression_count == e.archived_total == 0
-    assert e.last_prompt_tokens == 17
-    assert e.last_error and 'schema' in e.last_error
+    assert e.compress(messages) is messages  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.compression_count == e.archived_total == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_prompt_tokens == 17  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_error and 'schema' in e.last_error  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 @pytest.mark.parametrize('wire', [
@@ -48,10 +48,10 @@ def test_invalid_preserves_context_and_all_counters(monkeypatch, wire, method):
     e.compression_count, e.archived_total, e.last_prompt_tokens = 3, 5, 31
     original = [{'role': 'user', 'content': 'retained critical constraint'}]
     out = getattr(e, method)(original)
-    assert (out[0] if method != 'compress' else out) is original
-    if method != 'compress': assert out[1] == 0
-    assert (e.compression_count, e.archived_total, e.last_prompt_tokens) == (3, 5, 31)
-    assert e.get_status()['last_error']
+    assert (out[0] if method != 'compress' else out) is original  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    if method != 'compress': assert out[1] == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert (e.compression_count, e.archived_total, e.last_prompt_tokens) == (3, 5, 31)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.get_status()['last_error']  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 @pytest.mark.parametrize('wire,archives,tokens', [
@@ -67,9 +67,9 @@ def test_valid_schema_updates_only_on_success(monkeypatch, wire, archives, token
     monkeypatch.setattr(m.subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a[0], 0, wire, ''))
     e = m.KriticContextEngine()
     e.last_error = 'previous error'
-    assert e.compress([]) == json.loads(wire)['messages']
-    assert e.compression_count == 1 and e.archived_total == archives
-    assert e.last_prompt_tokens == tokens and e.last_error is None
+    assert e.compress([]) == json.loads(wire)['messages']  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.compression_count == 1 and e.archived_total == archives  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_prompt_tokens == tokens and e.last_error is None  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 @pytest.mark.parametrize('failure', ['timeout', 'oserror', 'nonzero', 'json', 'schema', 'backend'])
@@ -88,10 +88,10 @@ def test_failure_then_next_call_recovers_without_hidden_retry(monkeypatch, failu
     monkeypatch.setattr(m.subprocess, 'run', run)
     e = m.KriticContextEngine()
     original = [{'role':'user','content':'essential'}]
-    assert e.compress(original) is original
-    assert len(calls) == 1 and e.last_error and e.compression_count == 0
-    assert e.compress(original) == [{'role':'user','content':'ok'}]
-    assert len(calls) == 2 and e.last_error is None and e.compression_count == 1
+    assert e.compress(original) is original  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert len(calls) == 1 and e.last_error and e.compression_count == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.compress(original) == [{'role':'user','content':'ok'}]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert len(calls) == 2 and e.last_error is None and e.compression_count == 1  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 @pytest.mark.parametrize('wire', ['[]', '{}', '{"found":[1]}', '{"error":{"code":"offline","message":"recover"}}'])
@@ -101,15 +101,15 @@ def test_recall_malformed_is_explicit_error(monkeypatch, wire):
     monkeypatch.setattr(m, '_kritic_exe', lambda: 'isolated-fake')
     monkeypatch.setattr(m.subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a[0], 0, wire, ''))
     e = m.KriticContextEngine()
-    assert json.loads(e.handle_tool_call('kritic_recall', {'id':'kr-1'}))['error']
-    assert e.last_error and e.compression_count == e.archived_total == 0
+    assert json.loads(e.handle_tool_call('kritic_recall', {'id':'kr-1'}))['error']  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_error and e.compression_count == e.archived_total == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_actual_native_archive_namespace(tmp_path, monkeypatch):
     import json
     m = load()
     exe = Path('E:/hermes-performance-lab/bin/kritic-power.exe')
-    assert exe.is_file(), 'Required isolated native binary unavailable'
+    assert exe.is_file(), 'Required isolated native binary unavailable'  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'hermes'))
     monkeypatch.setenv('KRITIC_HOME', str(tmp_path / 'kritic'))
     monkeypatch.setenv('KRITIC_EXE', str(exe))
@@ -120,11 +120,11 @@ def test_actual_native_archive_namespace(tmp_path, monkeypatch):
     e.on_session_start('stage3-owned-namespace')
     original = [{'role':'system','content':'retain'}, {'role':'assistant','content':None,'tool_calls':[{'id':'c1','type':'function','function':{'name':'read_file','arguments':'{}'}}]}, {'role':'tool','tool_call_id':'c1','content':'essential diagnostic\n' * 2000}, {'role':'user','content':'continue'}]
     out, n = e.prune_tool_results_only(original)
-    assert n == 1 and e.last_error is None
+    assert n == 1 and e.last_error is None  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     rid = out[2]['content'].split(' as ', 1)[1].split('.', 1)[0]
     rec = json.loads(e.handle_tool_call('kritic_recall', {'id':rid,'format':'original','max_chars':100000,'max_output_bytes':200000}))
-    assert rec['found'][0]['original_content'] == original[2]['content']
+    assert rec['found'][0]['original_content'] == original[2]['content']  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     e.on_session_start('stage3-owned-other-namespace')
     wrong = json.loads(e.handle_tool_call('kritic_recall', {'id':rid,'format':'original'}))
-    assert not wrong.get('found') and 'no archived message' in wrong['error']
-    assert e.last_error and e.archived_total == 1 and e.compression_count == 0
+    assert not wrong.get('found') and 'no archived message' in wrong['error']  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_error and e.archived_total == 1 and e.compression_count == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101

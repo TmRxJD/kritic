@@ -6,6 +6,7 @@ quality rungs) in one place. Edit here, run `python scripts/write-specs.py`, the
 """
 import json
 from pathlib import Path
+from calibration_policy import advisory, calibrated as calibration_policy
 
 OUT = Path(__file__).resolve().parent.parent / "specs"
 PENDING = {"gate": "advisory", "why": "no independently evaluated held-out gate under this spec"}
@@ -31,10 +32,6 @@ def code(n, m, meaning):
     return {"name": n, "kind": {"kind": "code", "max_chars": m}, "meaning": meaning}
 
 
-def advisory(why):
-    return {"gate": "advisory", "why": why}
-
-
 # Gates come from measurement, never from this file: scripts/calibrate-specs.mjs writes
 # logs/calibration-specs.json. Its fitted results remain advisory because evaluation uses
 # the fitting rows; even historical promote=true reports cannot establish held-out quality.
@@ -48,17 +45,7 @@ CODE = "this repository and a private application (Rust, TypeScript, Python, Jav
 
 
 def calibrated(key, reason, cases, below=False, source=CODE):
-    r = RESULTS["results"].get(key)
-    if r is None:
-        return advisory(f"not calibrated: {key} is missing from logs/calibration-specs.json (run scripts/calibrate-specs.mjs)")
-    op = r.get("operatingPoint") or {}
-    evidence = (f"{RESULTS['date']}, scripts/calibrate-specs.mjs on {source}: "
-                f"{r['good']} good vs {r['bad']} bad ({cases}); AUC {r['auc']}; at 5% false rejects "
-                f"{round(op.get('caught', 0) * 100)}% caught")
-    # This legacy report fits thresholds and reports accuracy on the same rows.
-    # Even old reports with promote=true cannot justify a production rule.
-    return advisory(f"measured {evidence}: exploratory fitting only; independent grouped held-out "
-                    "evaluation with frozen thresholds and final deployed model is required before gating")
+    return calibration_policy(key, reason, cases, below, results=RESULTS, source=source)
 
 
 DEFECT_CHUNK = calibrated("code_chunk.defect", "Kev: likely defect", "clean code vs the same code with one operator mutated")

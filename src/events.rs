@@ -100,7 +100,10 @@ pub async fn serve(preferred: u16, log_path: PathBuf) {
             continue;
         };
         tokio::spawn(async move {
-            let Ok(ws) = tokio_tungstenite::accept_async(stream).await else {
+            // Native subscribers omit Origin. Reject browser origins, including null, so an
+            // unrelated web page cannot read this user's local progress/source metadata.
+            let Ok(ws) = tokio_tungstenite::accept_hdr_async(stream, reject_browser_origin).await
+            else {
                 return;
             };
             let (mut sink, mut incoming) = ws.split();
@@ -126,6 +129,24 @@ pub async fn serve(preferred: u16, log_path: PathBuf) {
             }
         });
     }
+}
+
+// Tungstenite's handshake callback requires its unboxed HTTP error response type.
+#[allow(clippy::result_large_err)]
+fn reject_browser_origin(
+    request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+    response: tokio_tungstenite::tungstenite::handshake::server::Response,
+) -> Result<
+    tokio_tungstenite::tungstenite::handshake::server::Response,
+    tokio_tungstenite::tungstenite::handshake::server::ErrorResponse,
+> {
+    if request.headers().contains_key("origin") {
+        return Err(tokio_tungstenite::tungstenite::http::Response::builder()
+            .status(403)
+            .body(Some("browser subscribers are not permitted".into()))
+            .expect("constant HTTP response"));
+    }
+    Ok(response)
 }
 
 /// Remove port files left by kritic processes that are gone. `cleanup` only runs on a clean exit,
@@ -178,4 +199,35 @@ fn process_alive(pid: u32) -> bool {
 pub fn cleanup(log_path: &std::path::Path) {
     let _ =
         std::fs::remove_file(port_file_dir(log_path).join(format!("{}.url", std::process::id())));
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn event_stream_rejects_browser_origins_but_accepts_native_clients() {
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        for origin in [Some("https://attacker.example"), Some("null"), None] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio_tungstenite::accept_hdr_async(stream, reject_browser_origin)
+                    .await
+                    .is_ok()
+            });
+            // Test-only listener bound above to loopback; no traffic leaves this machine.
+            // nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+            let mut request = format!("ws://{address}/").into_client_request().unwrap();
+            if let Some(value) = origin {
+                request
+                    .headers_mut()
+                    .insert("origin", value.parse().unwrap());
+            }
+            let result = tokio_tungstenite::connect_async(request).await;
+            assert_eq!(result.is_ok(), origin.is_none());
+            assert_eq!(server.await.unwrap(), origin.is_none());
+        }
+    }
 }

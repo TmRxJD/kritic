@@ -167,7 +167,7 @@ class DesktopApp:
                         "enabled": bool(d.is_enabled()), "inline": False, "selected": _selected(d),
                     })
                     wrappers.append(d)
-                except Exception:  # noqa: BLE001, S112  (control went away mid-scan)
+                except Exception:  # noqa: BLE001, S112  (control went away mid-scan)  # noqa: S112; transient UI enumeration or cleanup failure is best-effort  # nosec B112
                     continue
         assign_ids(controls)
         mark_skips(self.inp, controls)
@@ -222,7 +222,7 @@ def _selected(d) -> bool:
             return d.get_toggle_state() == 1
         if ct in ("TabItem", "ListItem", "RadioButton"):
             return bool(d.is_selected())
-    except Exception:  # noqa: BLE001, S110  (no selection pattern: not selected)
+    except Exception:  # noqa: BLE001, S110  (no selection pattern: not selected)  # noqa: S110; transient UI control failure is best-effort  # nosec B110
         pass
     return False
 

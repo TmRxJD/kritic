@@ -64,7 +64,7 @@ def transcript():
 def engine():
     ctx = Ctx()
     load_plugin().register(ctx)
-    assert isinstance(ctx.engine, ContextEngine)
+    assert isinstance(ctx.engine, ContextEngine)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     return ctx.engine
 
 
@@ -78,26 +78,26 @@ def test_recall_forwards_options_and_bounds_python_serialization(monkeypatch):
 
     monkeypatch.setattr(e, "_run", recall_result)
     result = e.handle_tool_call("kritic_recall", {"id": "kr-test", "format": "original", "max_chars": 0, "max_output_bytes": 256})
-    assert len(result.encode("utf-8")) <= 256
-    assert "error" in json.loads(result)
-    assert calls[0][1]["format"] == "original"
-    assert calls[0][1]["max_chars"] == 0
-    assert calls[0][1]["max_output_bytes"] == 256
+    assert len(result.encode("utf-8")) <= 256  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert "error" in json.loads(result)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert calls[0][1]["format"] == "original"  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert calls[0][1]["max_chars"] == 0  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert calls[0][1]["max_output_bytes"] == 256  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_contract_and_thresholds(env):
     e = engine()
-    assert e.name == "kritic"
+    assert e.name == "kritic"  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     e.update_model("claude-sonnet-5", 20000)
-    assert e.context_length == 20000 and e.threshold_tokens == 10000
+    assert e.context_length == 20000 and e.threshold_tokens == 10000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     e.update_from_response({"prompt_tokens": 9000, "completion_tokens": 10, "total_tokens": 9010})
-    assert not e.should_compress()
-    assert e.should_compress(12000)
-    assert e.should_compress_preflight(transcript()) is False
-    assert [t["name"] for t in e.get_tool_schemas()] == ["kritic_recall"]
+    assert not e.should_compress()  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.should_compress(12000)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.should_compress_preflight(transcript()) is False  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [t["name"] for t in e.get_tool_schemas()] == ["kritic_recall"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     clone = e.clone_for_agent()
     clone.update_model("other", 1000)
-    assert e.context_length == 20000, "a clone's budget is its own"
+    assert e.context_length == 20000, "a clone's budget is its own"  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_compress_is_lossless_and_recallable(env):
@@ -106,20 +106,20 @@ def test_compress_is_lossless_and_recallable(env):
     e.on_session_start("sess-1")
     msgs = transcript()
     out = e.compress(copy.deepcopy(msgs))
-    assert len(out) == len(msgs)
-    assert [m["role"] for m in out] == [m["role"] for m in msgs]
-    assert [m.get("tool_calls") for m in out] == [m.get("tool_calls") for m in msgs]
+    assert len(out) == len(msgs)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [m["role"] for m in out] == [m["role"] for m in msgs]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [m.get("tool_calls") for m in out] == [m.get("tool_calls") for m in msgs]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     stubs = [m for m in out if isinstance(m.get("content"), str) and m["content"].startswith("[kritic archived")]
-    assert stubs, "something was archived"
-    assert e.compression_count == 1 and e.last_error is None
+    assert stubs, "something was archived"  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.compression_count == 1 and e.last_error is None  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     stub = stubs[0]["content"]
     rid = stub.split(" as ", 1)[1].split(".", 1)[0]
     original = msgs[out.index(stubs[0])]["content"]
     got = json.loads(e.handle_tool_call("kritic_recall", {"id": rid}))
-    assert got["found"][0]["content"] == original
+    assert got["found"][0]["content"] == original  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     found = json.loads(e.handle_tool_call("kritic_recall", {"query": "f0.rs"}))
-    assert found["found"]
-    assert "error" in json.loads(e.handle_tool_call("nope", {}))
+    assert found["found"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert "error" in json.loads(e.handle_tool_call("nope", {}))  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_prune_and_usage_log(env):
@@ -127,14 +127,14 @@ def test_prune_and_usage_log(env):
     e.update_model("m", 1_000_000)
     e.on_session_start("sess-2")
     msgs = transcript()
-    assert msgs[3]["role"] == "tool"
+    assert msgs[3]["role"] == "tool"  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     msgs[3]["content"] = "x" * 9000  # an oversized tool result
     out, n = e.prune_tool_results_only(copy.deepcopy(msgs))
-    assert n == 1 and out[3]["content"].startswith("[kritic archived")
+    assert n == 1 and out[3]["content"].startswith("[kritic archived")  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     e.update_from_response({"prompt_tokens": 100, "completion_tokens": 5, "total_tokens": 105})
     log = env / "kritic" / "logs" / "hermes-usage.jsonl"
     row = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
-    assert row["session_id"] == "sess-2" and row["prompt_tokens"] == 100
+    assert row["session_id"] == "sess-2" and row["prompt_tokens"] == 100  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_invalid_explicit_kritic_exe_is_configuration_error(env, monkeypatch):
@@ -161,6 +161,6 @@ def test_fails_open_without_implicit_kritic(env, monkeypatch):
     e = ctx.engine
     e.update_model("m", 12000)
     msgs = transcript()
-    assert e.compress(msgs) == msgs
-    assert "not found" in e.last_error
-    assert json.loads(e.handle_tool_call("kritic_recall", {"id": "kr-1"}))["error"]
+    assert e.compress(msgs) == msgs  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert "not found" in e.last_error  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert json.loads(e.handle_tool_call("kritic_recall", {"id": "kr-1"}))["error"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
