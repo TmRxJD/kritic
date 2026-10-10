@@ -1,0 +1,17 @@
+name: Test-release defect
+description: Report a reproducible Kritic defect or misleading claim
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproducer and expected/actual result
+      description: Include minimal sanitized inputs, independent evidence, and check scope.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version, OS, capabilities, provider/model and test coverage
+      description: Include missing/skipped checks and whether the finding was a false positive or false negative. No secrets or private code.
+    validations:
+      required: true

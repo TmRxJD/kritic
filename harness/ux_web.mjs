@@ -17,12 +17,14 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { DESTRUCTIVE, collectCandidates, isLocal } from "./ui_test.mjs";
+import { compileIgnorePatterns } from "./ignore_patterns.mjs";
 
 const waitMs = () => cfg.settle_ms ?? 150; // after each load or action
 let browser = null;
 let context = null;
 let page = null;
 let cfg = {};
+let ignorePatterns = [];
 let inflight = 0;
 let current = new Map(); // control id -> data-kritic-id, refreshed by mapControls
 
@@ -59,7 +61,9 @@ function roleOf(c) {
 async function start(req) {
   const u = new URL(req.url);
   if (!req.allow_remote && !isLocal(u)) throw new Error(`refusing non-local URL ${u.origin} (set allow_remote)`);
+  const patterns = compileIgnorePatterns(req.ignore ?? []);
   cfg = req;
+  ignorePatterns = patterns;
   if (browser) await browser.close().catch(() => {}); // a second start replaces the session
   context = page = null;
   browser = await chromium.launch({ headless: !req.headed });
@@ -125,7 +129,7 @@ async function mapControls() {
     current.set(id, c.kritic);
     const out = { id, label: c.label, text: c.text, tooltip: c.tooltip, role, rect: c.rect,
       enabled: c.enabled, inline: c.inline, selected: c.selected };
-    if ((cfg.ignore || []).some((rx) => new RegExp(rx).test(c.label))) out.skip = "ignored";
+    if (ignorePatterns.some((pattern) => pattern.matcher(c.label || "").find())) out.skip = "ignored";
     else if (!cfg.allow_destructive && DESTRUCTIVE.test(`${c.label} ${c.hint} ${c.href}`)) out.skip = "destructive";
     else if (c.type === "file") out.skip = "file input";
     else if (c.href && !c.href.startsWith("javascript:")) {

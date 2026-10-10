@@ -8,9 +8,9 @@ use kritic::chunk::{chunk_text, digest};
 use kritic::config::Config;
 use kritic::critic::{CriticResult, critic, critic_diff, parse_diff};
 use kritic::files::resolve_paths;
-use kritic::spec;
 use kritic::kev::{Answer, Decider, Decision, Question, group_questions, parse_answer};
 use kritic::map::{self, Note};
+use kritic::spec;
 use kritic::tools::{ValidateInput, artifact_validate, context_trim, git_diff, route};
 use serde_json::{Value, json};
 
@@ -25,22 +25,43 @@ struct Fake {
 
 impl Fake {
     fn new() -> Self {
-        Fake { offline: false, calls: Mutex::new(0), states: Mutex::new(vec![]) }
+        Fake {
+            offline: false,
+            calls: Mutex::new(0),
+            states: Mutex::new(vec![]),
+        }
     }
     fn offline() -> Self {
-        Fake { offline: true, ..Fake::new() }
+        Fake {
+            offline: true,
+            ..Fake::new()
+        }
     }
 }
 
 fn noul(v: f64) -> Answer {
-    Answer { value: v, choice: None, probabilities: None, confidence: v.max(1.0 - v) }
+    Answer {
+        value: v,
+        choice: None,
+        probabilities: None,
+        confidence: v.max(1.0 - v),
+    }
 }
 fn choice(c: &str, p: f64) -> Answer {
-    Answer { value: p, choice: Some(c.into()), probabilities: Some(BTreeMap::from([(c.to_string(), p)])), confidence: p }
+    Answer {
+        value: p,
+        choice: Some(c.into()),
+        probabilities: Some(BTreeMap::from([(c.to_string(), p)])),
+        confidence: p,
+    }
 }
 
 impl Decider for Fake {
-    async fn decide(&self, state: &Value, qs: &BTreeMap<String, Question>) -> Result<Decision, String> {
+    async fn decide(
+        &self,
+        state: &Value,
+        qs: &BTreeMap<String, Question>,
+    ) -> Result<Decision, String> {
         *self.calls.lock().unwrap() += 1;
         self.states.lock().unwrap().push(state.clone());
         if self.offline {
@@ -53,18 +74,35 @@ impl Decider for Fake {
             let a = match id.as_str() {
                 "defect" => noul(if has("BUG") { 0.9 } else { 0.05 }),
                 "severity" => {
-                    let (label, p) = if has("BUG") { ("major", 0.8) } else if has("SEVLABEL") { ("critical", 0.3) } else { ("none", 0.8) };
-                    let mut probs = BTreeMap::from([("none".to_string(), 1.0 - p), (label.to_string(), p)]);
+                    let (label, p) = if has("BUG") {
+                        ("major", 0.8)
+                    } else if has("SEVLABEL") {
+                        ("critical", 0.3)
+                    } else {
+                        ("none", 0.8)
+                    };
+                    let mut probs =
+                        BTreeMap::from([("none".to_string(), 1.0 - p), (label.to_string(), p)]);
                     if label == "critical" {
                         probs.insert("minor".into(), 0.45);
                         probs.insert("none".into(), 0.25);
                     }
-                    Answer { value: p, choice: Some(label.into()), probabilities: Some(probs), confidence: p }
+                    Answer {
+                        value: p,
+                        choice: Some(label.into()),
+                        probabilities: Some(probs),
+                        confidence: p,
+                    }
                 }
                 "security" => noul(if has("EVAL") { 0.9 } else { 0.05 }),
                 "unfinished" => noul(if has("TODO") { 0.9 } else { 0.05 }),
                 "reviewer_text" => noul(if has("REVIEWER") { 0.9 } else { 0.02 }),
-                "quality" => Answer { value: 3.0, choice: None, probabilities: None, confidence: 0.6 },
+                "quality" => Answer {
+                    value: 3.0,
+                    choice: None,
+                    probabilities: None,
+                    confidence: 0.6,
+                },
                 "complete" => noul(if has("HALF") { 0.1 } else { 0.9 }),
                 "tier" => choice(if has("rename") { "haiku" } else { "opus" }, 0.7),
                 "relevant" => noul(if has("apple") { 0.9 } else { 0.05 }),
@@ -74,7 +112,12 @@ impl Decider for Fake {
             };
             answers.insert(id.clone(), a);
         }
-        Ok(Decision { answers, truncated: false, latency_ms: 1, input_tokens: 100 })
+        Ok(Decision {
+            answers,
+            truncated: false,
+            latency_ms: 1,
+            input_tokens: 100,
+        })
     }
 }
 
@@ -85,7 +128,10 @@ fn cfg() -> Config {
 }
 
 async fn run(files: &[(&str, &str)], task: &str) -> CriticResult {
-    let f: Vec<(String, String)> = files.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+    let f: Vec<(String, String)> = files
+        .iter()
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
     critic(&Fake::new(), &cfg(), task, &f, 0).await
 }
 
@@ -114,7 +160,10 @@ fn chunks_hard_split_long_lines() {
 
 #[test]
 fn digest_lists_definitions() {
-    let files = vec![("src/a.rs".to_string(), "pub fn alpha() {}\nlet y = 2;\nstruct Beta;\n".to_string())];
+    let files = vec![(
+        "src/a.rs".to_string(),
+        "pub fn alpha() {}\nlet y = 2;\nstruct Beta;\n".to_string(),
+    )];
     let d = digest(&files, 2000);
     assert!(d.contains("FILE a.rs") && d.contains("pub fn alpha") && d.contains("struct Beta"));
     assert!(!d.contains("let y"));
@@ -132,7 +181,11 @@ async fn parsers() {
     assert!(!ok(deterministic_checks("a:\n\tb: 1", "yaml").await));
     assert!(ok(deterministic_checks("a = \"b\"", "toml").await));
     assert!(!ok(deterministic_checks("a = ", "toml").await));
-    assert!(!ok(deterministic_checks("<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n", "code").await));
+    assert!(!ok(deterministic_checks(
+        "<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> b\n",
+        "code"
+    )
+    .await));
     assert!(!ok(deterministic_checks("bad \u{FFFD} byte", "text").await));
 }
 
@@ -166,12 +219,20 @@ fn path_filtering() {
     std::fs::create_dir(d.path().join("node_modules")).unwrap();
     std::fs::write(d.path().join("node_modules/b.js"), "y").unwrap();
     std::fs::write(d.path().join("img.png"), [0u8, 1]).unwrap();
-    let paths = vec!["a.py".into(), "node_modules/b.js".into(), "img.png".into(), "missing.ts".into()];
+    let paths = vec![
+        "a.py".into(),
+        "node_modules/b.js".into(),
+        "img.png".into(),
+        "missing.ts".into(),
+    ];
     let (ok, skipped) = resolve_paths(&paths, Some(d.path().to_str().unwrap()));
     assert_eq!(ok.len(), 1);
     let mut reasons: Vec<_> = skipped.iter().map(|s| s.reason.as_str()).collect();
     reasons.sort();
-    assert_eq!(reasons, ["binary/lockfile", "in ignored directory", "not found"]);
+    assert_eq!(
+        reasons,
+        ["binary/lockfile", "in ignored directory", "not found"]
+    );
 }
 
 // ------------------------------------------------------------------ kev plumbing
@@ -183,7 +244,18 @@ fn question_groups_fit_budget() {
         name: "t".into(),
         purpose: "budget test".into(),
         fields: vec![spec::code("code", 20_000, "Code for the budget test.")],
-        questions: (0..6).map(|i| spec::noul(&format!("q{i}"), "Is `code` ok?", "it is fine as written", "it has a problem", spec::advisory("test only, never gates"))).collect(),
+        questions: (0..6)
+            .map(|i| {
+                spec::noul(
+                    &format!("q{i}"),
+                    "Is `code` ok?",
+                    "it is fine as written",
+                    "it has a problem",
+                    spec::advisory("test only, never gates"),
+                )
+            })
+            .collect(),
+        calibrated_for: vec!["kev-4b".into()],
     };
     let qs: BTreeMap<String, Question> = spec.wire();
     let groups = group_questions(&state, &qs, 2900);
@@ -196,37 +268,90 @@ fn question_groups_fit_budget() {
 
 #[test]
 fn answers_are_validated_not_defaulted() {
-    let t = |ask| spec::DecisionSpec {
-        name: "t".into(),
-        purpose: "answer test".into(),
-        fields: vec![spec::text("x", 10, "A field for the answer test.")],
-        questions: vec![spec::QuestionSpec { id: "q".into(), ask, gate: spec::advisory("test only, never gates") }],
-    }
-    .wire()
-    .remove("q")
-    .unwrap();
-    let n = t(spec::Ask::Noul { instructions: "Is `x` ok?".into(), yes: "it is fine".into(), no: "it is not fine".into() });
+    let t = |ask| {
+        spec::DecisionSpec {
+            name: "t".into(),
+            purpose: "answer test".into(),
+            fields: vec![spec::text("x", 10, "A field for the answer test.")],
+            questions: vec![spec::QuestionSpec {
+                id: "q".into(),
+                ask,
+                gate: spec::advisory("test only, never gates"),
+            }],
+            calibrated_for: vec!["kev-4b".into()],
+        }
+        .wire()
+        .remove("q")
+        .unwrap()
+    };
+    let n = t(spec::Ask::Noul {
+        instructions: "Is `x` ok?".into(),
+        yes: "it is fine".into(),
+        no: "it is not fine".into(),
+    });
     assert!(parse_answer("a", &n, &json!({"type":"noul","noul":0.4,"confidence":0.6})).is_ok());
     assert!(parse_answer("a", &n, &json!({"type":"noul","noul":1.4,"confidence":0.6})).is_err());
-    assert!(parse_answer("a", &n, &json!({"type":"choice","choice":"x","confidence":0.6})).is_err());
+    assert!(
+        parse_answer(
+            "a",
+            &n,
+            &json!({"type":"choice","choice":"x","confidence":0.6})
+        )
+        .is_err()
+    );
     assert!(parse_answer("a", &n, &json!({"type":"noul","confidence":0.6})).is_err());
-    let c = t(spec::Ask::Choice { instructions: "Which is `x`?".into(), options: vec![("yes".into(), "the first kind".into()), ("no".into(), "the second kind".into())] });
-    assert!(parse_answer("c", &c, &json!({"type":"choice","choice":"maybe","probabilities":{"maybe":1.0},"confidence":1})).is_err());
+    let c = t(spec::Ask::Choice {
+        instructions: "Which is `x`?".into(),
+        options: vec![
+            ("yes".into(), "the first kind".into()),
+            ("no".into(), "the second kind".into()),
+        ],
+    });
+    assert!(
+        parse_answer(
+            "c",
+            &c,
+            &json!({"type":"choice","choice":"maybe","probabilities":{"maybe":1.0},"confidence":1})
+        )
+        .is_err()
+    );
     let ok = parse_answer("c", &c, &json!({"type":"choice","choice":"no","probabilities":{"yes":0.3,"no":0.7},"confidence":0.7})).unwrap();
     assert_eq!(ok.value, 0.7);
     let s = t(spec::Ask::Score {
         instructions: "How good is `x`?".into(),
-        rungs: vec![("a".into(), "the lowest rung".into()), ("b".into(), "the middle rung".into()), ("c".into(), "the highest rung".into())],
+        rungs: vec![
+            ("a".into(), "the lowest rung".into()),
+            ("b".into(), "the middle rung".into()),
+            ("c".into(), "the highest rung".into()),
+        ],
     });
-    assert!(parse_answer("s", &s, &json!({"type":"score","score":1.5,"confidence":0.5})).is_ok());
-    assert!(parse_answer("s", &s, &json!({"type":"score","score":2.5,"confidence":0.5})).is_err());
+    assert!(
+        parse_answer(
+            "s",
+            &s,
+            &json!({"type":"score","score":1.5,"confidence":0.5})
+        )
+        .is_ok()
+    );
+    assert!(
+        parse_answer(
+            "s",
+            &s,
+            &json!({"type":"score","score":2.5,"confidence":0.5})
+        )
+        .is_err()
+    );
 }
 
 // ------------------------------------------------------------------ critic
 
 #[tokio::test]
 async fn clean_code_approves() {
-    let r = run(&[("a.py", "def add(a, b):\n    return a + b\n")], "write add").await;
+    let r = run(
+        &[("a.py", "def add(a, b):\n    return a + b\n")],
+        "write add",
+    )
+    .await;
     assert!(r.kev_ok);
     assert_eq!(r.approval, Some(true), "{:?}", r.reasons);
     assert_eq!(r.completeness_basis, "code");
@@ -243,7 +368,11 @@ async fn each_rule_rejects_and_names_itself() {
     ] {
         let r = run(&[("a.py", &format!("# {marker}\nx = 1\n"))], "t").await;
         assert_eq!(r.approval, Some(false), "{marker}");
-        assert!(r.reasons.iter().any(|x| x.contains(needle)), "{marker}: {:?}", r.reasons);
+        assert!(
+            r.reasons.iter().any(|x| x.contains(needle)),
+            "{marker}: {:?}",
+            r.reasons
+        );
     }
 }
 
@@ -254,7 +383,11 @@ async fn likely_defect_is_reported_but_does_not_gate() {
     assert_eq!(r.approval, Some(true), "{:?}", r.reasons);
     assert!(r.p_correct_min.unwrap() < 0.2);
     assert_eq!(r.worst_severity.as_deref(), Some("major"));
-    assert!(!r.gates.iter().any(|g| g.ends_with(".defect")), "{:?}", r.gates);
+    assert!(
+        !r.gates.iter().any(|g| g.ends_with(".defect")),
+        "{:?}",
+        r.gates
+    );
     assert!(r.gates.contains(&"code_chunk.security".to_string()));
 }
 
@@ -277,9 +410,16 @@ async fn unit_states_never_carry_the_request() {
     let _ = critic(&f, &cfg(), task, &[("a.py".into(), "x = 1\n".into())], 0).await;
     let _ = critic_diff(&f, &cfg(), task, DIFF, 0).await;
     let states = f.states.lock().unwrap();
-    let with_task: Vec<&Value> = states.iter().filter(|s| s.to_string().contains("UNIQUE-TASK-TEXT")).collect();
+    let with_task: Vec<&Value> = states
+        .iter()
+        .filter(|s| s.to_string().contains("UNIQUE-TASK-TEXT"))
+        .collect();
     assert_eq!(with_task.len(), 2, "one completeness state per call");
-    assert!(with_task.iter().all(|s| s.get("task").is_some() && s.get("code").is_none() && s.get("change").is_none()));
+    assert!(
+        with_task.iter().all(|s| s.get("task").is_some()
+            && s.get("code").is_none()
+            && s.get("change").is_none())
+    );
 }
 
 #[tokio::test]
@@ -327,7 +467,16 @@ async fn validate_command_failure_rejects() {
     let r = artifact_validate(
         &Fake::new(),
         &cfg(),
-        ValidateInput { content: None, kind: None, paths: &paths, base_dir: d.path().to_str(), commands: &cmds, task: "t", use_model: false, revision: 0 },
+        ValidateInput {
+            content: None,
+            kind: None,
+            paths: &paths,
+            base_dir: d.path().to_str(),
+            commands: &cmds,
+            task: "t",
+            use_model: false,
+            revision: 0,
+        },
     )
     .await;
     assert!(!r.deterministic_ok);
@@ -342,7 +491,16 @@ async fn validate_parse_failure_and_missing_file_reject() {
     let r = artifact_validate(
         &Fake::new(),
         &cfg(),
-        ValidateInput { content: None, kind: None, paths: &paths, base_dir: d.path().to_str(), commands: &[], task: "t", use_model: true, revision: 0 },
+        ValidateInput {
+            content: None,
+            kind: None,
+            paths: &paths,
+            base_dir: d.path().to_str(),
+            commands: &[],
+            task: "t",
+            use_model: true,
+            revision: 0,
+        },
     )
     .await;
     assert_eq!(r.approval, Some(false));
@@ -356,7 +514,16 @@ async fn validate_offline_critic_gives_unknown() {
     let r = artifact_validate(
         &f,
         &cfg(),
-        ValidateInput { content: Some("x = 1\n"), kind: Some("python"), paths: &[], base_dir: None, commands: &[], task: "t", use_model: true, revision: 0 },
+        ValidateInput {
+            content: Some("x = 1\n"),
+            kind: Some("python"),
+            paths: &[],
+            base_dir: None,
+            commands: &[],
+            task: "t",
+            use_model: true,
+            revision: 0,
+        },
     )
     .await;
     assert!(r.deterministic_ok);
@@ -366,7 +533,13 @@ async fn validate_offline_critic_gives_unknown() {
 // ------------------------------------------------------------------ maps
 
 fn n(beat: f64, x: i64, y: i64, color: i64, dir: i64) -> Note {
-    Note { beat, x, y, color, dir }
+    Note {
+        beat,
+        x,
+        y,
+        color,
+        dir,
+    }
 }
 
 #[test]
@@ -389,7 +562,9 @@ fn map_stats_detect_problems() {
 
 #[test]
 fn alternating_swings_have_no_parity_breaks() {
-    let notes: Vec<Note> = (0..32).map(|i| n(i as f64, 1, 0, 0, if i % 2 == 0 { 1 } else { 0 })).collect();
+    let notes: Vec<Note> = (0..32)
+        .map(|i| n(i as f64, 1, 0, 0, if i % 2 == 0 { 1 } else { 0 }))
+        .collect();
     assert_eq!(map::stats("v3", &notes, 0, 0, 0).parity_breaks, 0);
 }
 
@@ -416,10 +591,18 @@ fn same_direction_after_a_long_gap_is_a_reset_not_a_parity_break() {
 #[test]
 fn parity_threshold_allows_ranked_rates() {
     // 6% parity breaks is within what ranked maps measured (max 6.3%); 10% is not.
-    let mut s = map::MapStats { note_count: 100, parity_breaks: 6, ..Default::default() };
+    let mut s = map::MapStats {
+        note_count: 100,
+        parity_breaks: 6,
+        ..Default::default()
+    };
     assert!(map::heuristic_issues(&s).is_empty());
     s.parity_breaks = 10;
-    assert!(map::heuristic_issues(&s).iter().any(|i| i.contains("parity breaks")));
+    assert!(
+        map::heuristic_issues(&s)
+            .iter()
+            .any(|i| i.contains("parity breaks"))
+    );
 }
 
 #[test]
@@ -433,8 +616,14 @@ fn parses_v4_with_omitted_zero_fields() {
     // {"b":4} has its index omitted (0); index 9 does not exist.
     assert_eq!((f.as_str(), notes.len(), bombs, invalid), ("v4", 4, 1, 1));
     assert_eq!((notes[3].beat, notes[3].x, notes[3].dir), (4.0, 1, 1));
-    assert_eq!((notes[0].x, notes[0].y, notes[0].color, notes[0].dir), (1, 0, 0, 1));
-    assert_eq!((notes[1].x, notes[1].y, notes[1].color, notes[1].dir), (2, 1, 1, 0));
+    assert_eq!(
+        (notes[0].x, notes[0].y, notes[0].color, notes[0].dir),
+        (1, 0, 0, 1)
+    );
+    assert_eq!(
+        (notes[1].x, notes[1].y, notes[1].color, notes[1].dir),
+        (2, 1, 1, 0)
+    );
     assert_eq!(notes[2].beat, 0.0);
 }
 
@@ -442,7 +631,11 @@ fn parses_v4_with_omitted_zero_fields() {
 fn unity_app_event_stream_that_never_connected_is_a_breakage() {
     let u = json!({"app_events": {"url": "ws://127.0.0.1:4733", "connected": false, "error": "refused"}, "log": {"counts": {}}});
     let b = kritic::unity::judge_unity(&u, None, None);
-    assert!(b.iter().any(|x| x.contains("never connected") && x.contains("refused")), "{b:?}");
+    assert!(
+        b.iter()
+            .any(|x| x.contains("never connected") && x.contains("refused")),
+        "{b:?}"
+    );
     let ok = json!({"app_events": {"url": "ws://127.0.0.1:4733", "connected": true}, "log": {"counts": {}}});
     assert!(kritic::unity::judge_unity(&ok, None, None).is_empty());
 }
@@ -466,12 +659,23 @@ async fn map_eval_clean_approves() {
 #[tokio::test]
 async fn map_eval_slice_flags_are_advisory_and_bad_json_fails() {
     let mut v: Value = serde_json::from_str(&clean_map()).unwrap();
-    v["colorNotes"].as_array_mut().unwrap().push(json!({"b": 99.0, "x": 1, "y": 0, "c": 0, "d": 8}));
+    v["colorNotes"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"b": 99.0, "x": 1, "y": 0, "c": 0, "d": 8}));
     // map_slice.awkward is advisory: measured AUC 0.685 on ranked vs broken stretches.
     let r = map::evaluate(&Fake::new(), &cfg(), &v.to_string(), Some(120.0), true).await;
-    assert!(r.flagged_slices.iter().any(|s| s.start_beat <= 99.0 && 99.0 < s.end_beat));
+    assert!(
+        r.flagged_slices
+            .iter()
+            .any(|s| s.start_beat <= 99.0 && 99.0 < s.end_beat)
+    );
     assert_eq!(r.approval, Some(true), "{:?}", r.reasons);
-    assert!(r.kev_advisory.iter().any(|a| a.contains("awkward")), "{:?}", r.kev_advisory);
+    assert!(
+        r.kev_advisory.iter().any(|a| a.contains("awkward")),
+        "{:?}",
+        r.kev_advisory
+    );
     let bad = map::evaluate(&Fake::new(), &cfg(), "{nope", None, false).await;
     assert_eq!(bad.approval, Some(false));
 }
@@ -481,10 +685,18 @@ async fn map_eval_is_deterministic_by_default_and_offline_keeps_the_verdict() {
     let f = Fake::new();
     let r = map::evaluate(&f, &cfg(), &clean_map(), None, false).await;
     assert_eq!(r.approval, Some(true));
-    assert_eq!(*f.calls.lock().unwrap(), 0, "no Kev calls unless kev_slices");
+    assert_eq!(
+        *f.calls.lock().unwrap(),
+        0,
+        "no Kev calls unless kev_slices"
+    );
     let off = map::evaluate(&Fake::offline(), &cfg(), &clean_map(), None, true).await;
     assert!(!off.kev_ok && off.error.is_some());
-    assert_eq!(off.approval, Some(true), "Kev is advisory here, so its absence does not change the verdict");
+    assert_eq!(
+        off.approval,
+        Some(true),
+        "Kev is advisory here, so its absence does not change the verdict"
+    );
 }
 
 // ------------------------------------------------------------------ route / trim
@@ -499,14 +711,23 @@ async fn route_suggests_with_fixed_basis() {
 
 #[tokio::test]
 async fn trim_ranks_and_budgets() {
-    let chunks = vec!["apple pie".to_string(), "car engine".to_string(), "apple tree".to_string()];
+    let chunks = vec![
+        "apple pie".to_string(),
+        "car engine".to_string(),
+        "apple tree".to_string(),
+    ];
     let r = context_trim(&Fake::new(), &cfg(), "fruit", &chunks, 1000, 0.2, None).await;
     assert_eq!(r.kept, vec![0, 2]);
     assert_eq!(r.dropped, vec![1]);
     let r = context_trim(&Fake::new(), &cfg(), "fruit", &chunks, 1000, 0.2, Some(1)).await;
     assert_eq!(r.kept.len(), 1);
     let too_many = vec!["x".to_string(); 65];
-    assert!(context_trim(&Fake::new(), &cfg(), "q", &too_many, 1000, 0.2, None).await.error.is_some());
+    assert!(
+        context_trim(&Fake::new(), &cfg(), "q", &too_many, 1000, 0.2, None)
+            .await
+            .error
+            .is_some()
+    );
 }
 
 // ------------------------------------------------------------------ diff mode
@@ -536,7 +757,14 @@ new file mode 100644
 fn parses_hunks_per_file_with_new_line_numbers() {
     let h = parse_diff(DIFF, 1300);
     let got: Vec<(String, usize)> = h.iter().map(|h| (h.file.clone(), h.new_start)).collect();
-    assert_eq!(got, vec![("src/a.py".into(), 1), ("src/a.py".into(), 10), ("src/b.py".into(), 1)]);
+    assert_eq!(
+        got,
+        vec![
+            ("src/a.py".into(), 1),
+            ("src/a.py".into(), 10),
+            ("src/b.py".into(), 1)
+        ]
+    );
     assert!(h.iter().all(|h| h.text.starts_with("@@")));
 }
 
@@ -546,7 +774,10 @@ fn long_hunks_are_sliced_with_header() {
     let d = format!("diff --git a/x b/x\n@@ -0,0 +1,300 @@\n{body}");
     let h = parse_diff(&d, 500);
     assert!(h.len() > 3);
-    assert!(h.iter().all(|h| h.text.len() <= 560 && h.text.starts_with("@@ -0,0 +1,300 @@")));
+    assert!(
+        h.iter()
+            .all(|h| h.text.len() <= 560 && h.text.starts_with("@@ -0,0 +1,300 @@"))
+    );
 }
 
 #[tokio::test]
@@ -556,15 +787,40 @@ async fn diff_mode_flags_the_bad_hunk() {
     assert_eq!(r.approval, Some(false));
     assert_eq!(r.flagged_chunks.len(), 1);
     assert_eq!(r.flagged_chunks[0].location, "src/a.py:+10");
-    assert!(r.reasons.iter().any(|x| x.contains("security vulnerability")), "{:?}", r.reasons);
+    assert!(
+        r.reasons
+            .iter()
+            .any(|x| x.contains("security vulnerability")),
+        "{:?}",
+        r.reasons
+    );
     let clean = DIFF.replace("# EVAL", "# ok");
-    assert_eq!(critic_diff(&Fake::new(), &cfg(), "t", &clean, 0).await.approval, Some(true));
-    assert!(critic_diff(&Fake::new(), &cfg(), "t", "", 0).await.error.is_some());
+    assert_eq!(
+        critic_diff(&Fake::new(), &cfg(), "t", &clean, 0)
+            .await
+            .approval,
+        Some(true)
+    );
+    assert!(
+        critic_diff(&Fake::new(), &cfg(), "t", "", 0)
+            .await
+            .error
+            .is_some()
+    );
 }
 
 fn sh(dir: &std::path::Path, args: &[&str]) {
-    let ok = std::process::Command::new("git").arg("-C").arg(dir).args(args).output().unwrap();
-    assert!(ok.status.success(), "{:?}", String::from_utf8_lossy(&ok.stderr));
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        ok.status.success(),
+        "{:?}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
 }
 
 #[tokio::test]
@@ -601,10 +857,23 @@ async fn low_mass_severity_label_does_not_reject() {
 #[test]
 fn app_events_must_be_loopback() {
     use kritic::tools::require_loopback_ws;
-    for ok in ["ws://127.0.0.1:4733", "ws://localhost:4733/", "ws://[::1]:4733", "wss://LOCALHOST:1"] {
+    for ok in [
+        "ws://127.0.0.1:4733",
+        "ws://localhost:4733/",
+        "ws://[::1]:4733",
+        "wss://LOCALHOST:1",
+    ] {
         assert!(require_loopback_ws(ok).is_ok(), "{ok}");
     }
-    for bad in ["ws://example.com:4733", "ws://127.0.0.1.evil.com:1", "ws://user@127.0.0.1:1", "http://127.0.0.1:4733", "ws://10.0.0.5:4733"] {
+    for bad in [
+        "ws://example.com:4733",
+        "ws://127.0.0.1.evil.com:1",
+        "ws://user@127.0.0.1:1",
+        "http://127.0.0.1:4733",
+        "ws://10.0.0.5:4733",
+        "ws://[::1]evil.example:4733",
+        "ws://localhost:invalid",
+    ] {
         assert!(require_loopback_ws(bad).is_err(), "{bad}");
     }
 }
@@ -624,7 +893,13 @@ fn desktop_fails_fast_on_busy_port_stall_and_leaks() {
     let (_, b, approval) = kritic::phase3::judge_desktop(&report, &[]);
     let all = b.join("\n");
     assert_eq!(approval, Some(false), "{all}");
-    for needle in ["port 4733 held by PID 14776", "stalled while starting", "9700 node.exe", "still alive after it ended", "port 4733 still listening"] {
+    for needle in [
+        "port 4733 held by PID 14776",
+        "stalled while starting",
+        "9700 node.exe",
+        "still alive after it ended",
+        "port 4733 still listening",
+    ] {
         assert!(all.contains(needle), "missing {needle:?} in:\n{all}");
     }
 }
@@ -638,7 +913,10 @@ fn hygiene_audit_reports_orphans_inherited_sockets_and_leftovers() {
     });
     let r = kritic::hygiene::judge_audit(&audit);
     assert_eq!(r.len(), 3, "{r:?}");
-    assert!(r[1].contains("inherited the listening handle (9700 node.exe)"), "{r:?}");
+    assert!(
+        r[1].contains("inherited the listening handle (9700 node.exe)"),
+        "{r:?}"
+    );
     assert!(kritic::hygiene::judge_audit(&serde_json::json!({})).is_empty());
 }
 
@@ -648,7 +926,14 @@ fn hygiene_audit_reports_orphans_inherited_sockets_and_leftovers() {
 async fn critic_past_its_deadline_reports_a_stall_instead_of_running_on() {
     let mut c = cfg();
     c.critic_deadline_s = 0;
-    let r = critic(&Fake::new(), &c, "t", &[("a.rs".into(), "fn a() {}\n".into())], 0).await;
+    let r = critic(
+        &Fake::new(),
+        &c,
+        "t",
+        &[("a.rs".into(), "fn a() {}\n".into())],
+        0,
+    )
+    .await;
     let e = r.error.expect("a stall is an error");
     assert!(e.contains("critic stalled") && e.contains("0 of 1"), "{e}");
 }
@@ -663,7 +948,9 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
         loop {
-            let Ok((mut s, _)) = listener.accept().await else { return };
+            let Ok((mut s, _)) = listener.accept().await else {
+                return;
+            };
             tokio::spawn(async move {
                 let mut buf = vec![0u8; 8192];
                 let n = s.read(&mut buf).await.unwrap_or(0);
@@ -678,6 +965,10 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     });
     let mut c = cfg();
     c.laya_url = format!("http://127.0.0.1:{port}");
+    // This fixture selects its fake local HTTP service explicitly; the product default is off.
+    c.backend = "local".into();
+    c.config_errors.clear();
+    c.kev_cpu_only = true; // no GPU locks, unloads or process termination in an offline test
     c.laya_exe = "kritic-test-no-such-laya.exe".into(); // the stall handler's stop must not touch a real laya
     c.kev_request_s = 1;
     let kev = KevClient::new(std::sync::Arc::new(c));
@@ -686,7 +977,11 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     let r = kev.decide(&json!({"code": "x"}), &qs).await;
     let e = r.expect_err("a silent laya is an error");
     assert!(e.contains("stalled") || e.contains("timed out"), "{e}");
-    assert!(t0.elapsed() < std::time::Duration::from_secs(10), "took {:?}", t0.elapsed());
+    assert!(
+        t0.elapsed() < std::time::Duration::from_secs(10),
+        "took {:?}",
+        t0.elapsed()
+    );
 }
 
 // ------------------------------------------------------------------ ux_critic (offline)
@@ -710,7 +1005,10 @@ mod ux_offline {
 
     impl FakeApp {
         fn new(screens: Vec<Screen>) -> Self {
-            FakeApp { screens: screens.into_iter().map(|(n, t, c)| (n, (t, c))).collect(), at: "home" }
+            FakeApp {
+                screens: screens.into_iter().map(|(n, t, c)| (n, (t, c))).collect(),
+                at: "home",
+            }
         }
         fn obs(&self) -> Obs {
             let (text, cs) = &self.screens[self.at];
@@ -723,11 +1021,21 @@ mod ux_offline {
                     role: "button".into(),
                     rect: [*x, 10.0, 80.0, 30.0],
                     enabled: !to.is_empty(),
-                    tooltip: if to.is_empty() { String::new() } else { "t".into() },
+                    tooltip: if to.is_empty() {
+                        String::new()
+                    } else {
+                        "t".into()
+                    },
                     ..Default::default()
                 })
                 .collect();
-            Obs { fingerprint: self.at.into(), text: text.to_string(), viewport: [1200.0, 900.0], controls, ..Default::default() }
+            Obs {
+                fingerprint: self.at.into(),
+                text: text.to_string(),
+                viewport: [1200.0, 900.0],
+                controls,
+                ..Default::default()
+            }
         }
     }
 
@@ -741,7 +1049,10 @@ mod ux_offline {
         }
         async fn act(&mut self, id: &str) -> Result<(), String> {
             let (_, cs) = &self.screens[self.at];
-            let (_, _, to) = cs.iter().find(|(l, _, _)| format!("button:{l}#1") == id).ok_or(format!("no {id}"))?;
+            let (_, _, to) = cs
+                .iter()
+                .find(|(l, _, _)| format!("button:{l}#1") == id)
+                .ok_or(format!("no {id}"))?;
             self.at = to;
             Ok(())
         }
@@ -750,8 +1061,18 @@ mod ux_offline {
     /// Presses the label containing a word from the goal, else the first control.
     struct Keyword;
     impl Navigator for Keyword {
-        async fn choose(&self, goal: &str, _p: &[String], _i: Option<&str>, labels: &[String], _seed: u64) -> Result<usize, String> {
-            Ok(labels.iter().position(|l| goal.split(' ').any(|w| w.len() > 3 && l.contains(w))).unwrap_or(0))
+        async fn choose(
+            &self,
+            goal: &str,
+            _p: &[String],
+            _i: Option<&str>,
+            labels: &[String],
+            _seed: u64,
+        ) -> Result<usize, String> {
+            Ok(labels
+                .iter()
+                .position(|l| goal.split(' ').any(|w| w.len() > 3 && l.contains(w)))
+                .unwrap_or(0))
         }
     }
 
@@ -780,17 +1101,39 @@ budget = 1
 
     fn buried() -> FakeApp {
         FakeApp::new(vec![
-            ("home", "Library", vec![("Editor", 10.0, "editor"), ("Export", 1100.0, "export1")]),
-            ("editor", "Editor", vec![("Library", 10.0, "home"), ("More", 100.0, "menu")]),
-            ("menu", "Editor menu", vec![("Library", 10.0, "home"), ("Composer", 100.0, "composer")]),
+            (
+                "home",
+                "Library",
+                vec![("Editor", 10.0, "editor"), ("Export", 1100.0, "export1")],
+            ),
+            (
+                "editor",
+                "Editor",
+                vec![("Library", 10.0, "home"), ("More", 100.0, "menu")],
+            ),
+            (
+                "menu",
+                "Editor menu",
+                vec![("Library", 10.0, "home"), ("Composer", 100.0, "composer")],
+            ),
             ("composer", "Composer", vec![("Library", 10.0, "home")]),
-            ("export1", "Export dialog", vec![("Export now", 10.0, "exported")]),
+            (
+                "export1",
+                "Export dialog",
+                vec![("Export now", 10.0, "exported")],
+            ),
             ("exported", "Exported", vec![("Library", 10.0, "home")]),
         ])
     }
 
     fn opts() -> Options {
-        Options { max_depth: 5, max_actions: 200, runs: 3, deadline: Instant::now() + Duration::from_secs(60), out_dir: std::env::temp_dir() }
+        Options {
+            max_depth: 5,
+            max_actions: 200,
+            runs: 3,
+            deadline: Instant::now() + Duration::from_secs(60),
+            out_dir: std::env::temp_dir(),
+        }
     }
 
     #[tokio::test]
@@ -804,9 +1147,21 @@ budget = 1
         assert_eq!(r.modes[0].best.optimal_steps, Some(0));
         assert_eq!(r.modes[1].best.optimal_steps, Some(3));
         assert_eq!(r.modes[1].best.path, vec!["Editor", "More", "Composer"]);
-        assert!(r.hard_fails.iter().any(|h| h.contains("mode \"Composer\" has no top-level entry")), "{:?}", r.hard_fails);
+        assert!(
+            r.hard_fails
+                .iter()
+                .any(|h| h.contains("mode \"Composer\" has no top-level entry")),
+            "{:?}",
+            r.hard_fails
+        );
         assert_eq!(r.tasks[1].best.optimal_steps, Some(2));
-        assert!(r.hard_fails.iter().any(|h| h.contains("task \"export\": takes 2 actions, budget 1")), "{:?}", r.hard_fails);
+        assert!(
+            r.hard_fails
+                .iter()
+                .any(|h| h.contains("task \"export\": takes 2 actions, budget 1")),
+            "{:?}",
+            r.hard_fails
+        );
         assert_eq!(r.exploration.screens, 6);
         assert!(r.exploration.truncated.is_none());
     }
@@ -815,9 +1170,21 @@ budget = 1
     async fn top_level_entries_pass_and_novice_is_recorded() {
         let spec = ux::parse_spec(SPEC, "t.toml").unwrap();
         let mut app = FakeApp::new(vec![
-            ("home", "Library", vec![("Library", 10.0, "home"), ("Composer", 100.0, "composer"), ("Export", 200.0, "exported")]),
+            (
+                "home",
+                "Library",
+                vec![
+                    ("Library", 10.0, "home"),
+                    ("Composer", 100.0, "composer"),
+                    ("Export", 200.0, "exported"),
+                ],
+            ),
             ("composer", "Composer", vec![("Library", 10.0, "home")]),
-            ("exported", "Library Exported", vec![("Library", 10.0, "home")]),
+            (
+                "exported",
+                "Library Exported",
+                vec![("Library", 10.0, "home")],
+            ),
         ]);
         let mut run = Run::new(&spec, opts());
         run.explore(&mut app).await;
@@ -835,9 +1202,21 @@ budget = 1
         let spec = ux::parse_spec(SPEC, "t.toml").unwrap();
         // the entry exists, but its label never tells the novice it is the Composer
         let mut app = FakeApp::new(vec![
-            ("home", "Library", vec![("Library", 10.0, "home"), ("Workspace B", 100.0, "composer"), ("Export", 200.0, "exported")]),
+            (
+                "home",
+                "Library",
+                vec![
+                    ("Library", 10.0, "home"),
+                    ("Workspace B", 100.0, "composer"),
+                    ("Export", 200.0, "exported"),
+                ],
+            ),
             ("composer", "Composer", vec![("Library", 10.0, "home")]),
-            ("exported", "Library Exported", vec![("Library", 10.0, "home")]),
+            (
+                "exported",
+                "Library Exported",
+                vec![("Library", 10.0, "home")],
+            ),
         ]);
         let mut run = Run::new(&spec, opts());
         run.explore(&mut app).await;
@@ -845,7 +1224,13 @@ budget = 1
         let r = run.finish(true);
         assert_eq!(r.tasks[0].best.optimal_steps, Some(1));
         assert_eq!(r.tasks[0].novice.as_ref().unwrap().successes, 0);
-        assert!(r.hard_fails.iter().any(|h| h.contains("primary task \"compose\": the novice failed 3 of 3")), "{:?}", r.hard_fails);
+        assert!(
+            r.hard_fails
+                .iter()
+                .any(|h| h.contains("primary task \"compose\": the novice failed 3 of 3")),
+            "{:?}",
+            r.hard_fails
+        );
         // not primary: the novice result is reported, never a failure
         assert!(r.tasks[1].fails.is_empty());
 
@@ -855,19 +1240,45 @@ budget = 1
         run.novice(&mut app, &Keyword, "kev", false).await;
         let r = run.finish(true);
         assert_eq!(r.tasks[0].novice.as_ref().unwrap().successes, 0);
-        assert!(r.hard_fails.iter().all(|h| !h.contains("novice")), "{:?}", r.hard_fails);
+        assert!(
+            r.hard_fails.iter().all(|h| !h.contains("novice")),
+            "{:?}",
+            r.hard_fails
+        );
         assert_eq!(r.novice, "kev, advisory");
     }
 
     #[tokio::test]
     async fn unreachable_and_trivially_done_tasks_fail_and_the_action_cap_is_reported() {
-        let spec = ux::parse_spec(&SPEC.replace("text = \"Exported\"", "text = \"Library\""), "t.toml").unwrap();
+        let spec = ux::parse_spec(
+            &SPEC.replace("text = \"Exported\"", "text = \"Library\""),
+            "t.toml",
+        )
+        .unwrap();
         let mut app = buried();
-        let mut run = Run::new(&spec, Options { max_actions: 2, ..opts() });
+        let mut run = Run::new(
+            &spec,
+            Options {
+                max_actions: 2,
+                ..opts()
+            },
+        );
         run.explore(&mut app).await;
         let r = run.finish(false);
-        assert!(r.hard_fails.iter().any(|h| h.contains("already holds on the home screen")), "{:?}", r.hard_fails);
-        assert!(r.hard_fails.iter().any(|h| h.contains("task \"compose\": unreachable") && h.contains("action cap 2")), "{:?}", r.hard_fails);
+        assert!(
+            r.hard_fails
+                .iter()
+                .any(|h| h.contains("already holds on the home screen")),
+            "{:?}",
+            r.hard_fails
+        );
+        assert!(
+            r.hard_fails
+                .iter()
+                .any(|h| h.contains("task \"compose\": unreachable") && h.contains("action cap 2")),
+            "{:?}",
+            r.hard_fails
+        );
         assert_eq!(r.exploration.actions, 2);
     }
 
@@ -897,10 +1308,17 @@ budget = 1
             {"id": "region", "impact": "moderate", "help": "x", "nodes": 1, "targets": ["main"]}
         ]))
         .unwrap();
-        let hits: Vec<(String, String)> = ux::audit(&controls, &axe).into_iter().map(|(r, _, k, _)| (r.to_string(), k)).collect();
+        let hits: Vec<(String, String)> = ux::audit(&controls, &axe, [1600.0, 900.0])
+            .into_iter()
+            .map(|(r, _, k, _)| (r.to_string(), k))
+            .collect();
         let has = |r: &str, k: &str| hits.contains(&(r.to_string(), k.to_string()));
         assert!(has("unlabelled", "icon") && !has("unlabelled", "ok"));
-        assert!(has("icon_no_tooltip", "icon") && has("icon_no_tooltip", "named-icon") && !has("icon_no_tooltip", "tipped-icon"));
+        assert!(
+            has("icon_no_tooltip", "icon")
+                && has("icon_no_tooltip", "named-icon")
+                && !has("icon_no_tooltip", "tipped-icon")
+        );
         assert!(has("small_target", "tiny") && !has("small_target", "ok"));
         assert!(has("disabled_no_reason", "dis") && !has("disabled_no_reason", "dis-why"));
         assert!(has("contrast", "#faint") && !hits.iter().any(|(r, _)| r == "region"));
@@ -908,11 +1326,28 @@ budget = 1
 
     #[test]
     fn scattered_steps_measure_against_the_screen_diagonal() {
-        let at = |x: f64, y: f64| Control { rect: [x, y, 40.0, 20.0], ..Default::default() };
-        let grouped = ux::mean_step_distance(&[at(100.0, 100.0), at(180.0, 100.0), at(260.0, 100.0)], [1280.0, 800.0]).unwrap();
-        let corners = ux::mean_step_distance(&[at(10.0, 10.0), at(1200.0, 760.0), at(1200.0, 10.0)], [1280.0, 800.0]).unwrap();
-        assert!(grouped < ux::SCATTERED && corners > ux::SCATTERED, "{grouped} {corners}");
-        assert_eq!(ux::mean_step_distance(&[at(1.0, 1.0)], [1280.0, 800.0]), None);
+        let at = |x: f64, y: f64| Control {
+            rect: [x, y, 40.0, 20.0],
+            ..Default::default()
+        };
+        let grouped = ux::mean_step_distance(
+            &[at(100.0, 100.0), at(180.0, 100.0), at(260.0, 100.0)],
+            [1280.0, 800.0],
+        )
+        .unwrap();
+        let corners = ux::mean_step_distance(
+            &[at(10.0, 10.0), at(1200.0, 760.0), at(1200.0, 10.0)],
+            [1280.0, 800.0],
+        )
+        .unwrap();
+        assert!(
+            grouped < ux::SCATTERED && corners > ux::SCATTERED,
+            "{grouped} {corners}"
+        );
+        assert_eq!(
+            ux::mean_step_distance(&[at(1.0, 1.0)], [1280.0, 800.0]),
+            None
+        );
     }
 
     #[test]
@@ -947,7 +1382,10 @@ primary = true
             assert!(e.contains(want), "missing {want:?} in:\n{e}");
         }
         let unknown = "[app]\nkind='web'\npurpose='p'\nurl='u'\nbogus=1\n[[tasks]]\nname='t'\ngoal='g'\ndone={text='x'}";
-        assert!(ux::parse_spec(unknown, "x").is_err(), "unknown keys are rejected");
+        assert!(
+            ux::parse_spec(unknown, "x").is_err(),
+            "unknown keys are rejected"
+        );
         let unity = "[app]\nkind='unity'\npurpose='p'\nexe='a.exe'\n[[tasks]]\nname='t'\ngoal='g'\ndone={text='x'}";
         assert!(ux::parse_spec(unity, "x").unwrap_err()[0].contains("app_events"));
     }

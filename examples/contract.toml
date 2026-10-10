@@ -1,0 +1,22 @@
+version = 1
+title = "Project acceptance checks"
+sources = ["README.md"]
+
+[[requirements]]
+id = "validation"
+description = "The project's validation command succeeds and is declared in CI"
+require_enforcement = true
+
+[[requirements.checks]]
+kind = "command"
+command = "cargo test --all-targets"
+
+[[requirements.enforcement]]
+path = ".github/workflows/ci.yml"
+pattern = "cargo test --all-targets"
+
+[[requirements]]
+id = "review-coverage"
+description = "The agent mapped every task and AGENTS.md clause to meaningful acceptance evidence"
+# Intentionally unverified until the project defines actual evidence. An empty requirement
+# demonstrates a coverage gap and prevents approval; it is not a production implementation stub.

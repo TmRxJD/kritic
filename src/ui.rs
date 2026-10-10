@@ -133,6 +133,8 @@ pub struct UiSummary {
     pub navigated: usize,
     pub errors: usize,
     pub no_effect: usize,
+    /// Heuristic interactions whose effect was not observed; these are coverage gaps, not proven broken controls.
+    pub unverified_effects: Vec<String>,
     pub skipped: usize,
     pub axe_serious: usize,
 }
@@ -167,8 +169,15 @@ fn is_noise(url: &str) -> bool {
 }
 
 /// Pure: turn a harness report into breakages + approval.
-pub fn judge(report: HarnessReport, opts: &UiOptions) -> (UiSummary, Vec<String>, Option<bool>, HarnessReport) {
-    let mut s = UiSummary { pages: report.pages.len(), interactions: report.interactions.len(), ..Default::default() };
+pub fn judge(
+    report: HarnessReport,
+    opts: &UiOptions,
+) -> (UiSummary, Vec<String>, Option<bool>, HarnessReport) {
+    let mut s = UiSummary {
+        pages: report.pages.len(),
+        interactions: report.interactions.len(),
+        ..Default::default()
+    };
     if !report.ok {
         return (s, Vec::new(), None, report);
     }
@@ -176,7 +185,13 @@ pub fn judge(report: HarnessReport, opts: &UiOptions) -> (UiSummary, Vec<String>
     b.extend(judge_interactions(&report.interactions, opts, &mut s));
     b.extend(judge_errors(&report));
     b.extend(judge_flows(&report.flows));
-    let approval = Some(b.is_empty());
+    let approval = if !b.is_empty() {
+        Some(false)
+    } else if report.pages.is_empty() || !s.unverified_effects.is_empty() {
+        None
+    } else {
+        Some(true)
+    };
     (s, b, approval, report)
 }
 
@@ -186,7 +201,9 @@ pub fn judge_flows(flows: &[Value]) -> Vec<String> {
         .iter()
         .filter(|f| f["passed"] != true)
         .map(|f| {
-            let step = f["steps"].as_array().and_then(|s| s.iter().find(|x| x["result"] == "fail"));
+            let step = f["steps"]
+                .as_array()
+                .and_then(|s| s.iter().find(|x| x["result"] == "fail"));
             match step {
                 Some(st) => format!(
                     "flow \"{}\" failed at step {} ({} {}): {}",
@@ -208,20 +225,43 @@ fn judge_pages(pages: &[PageReport], opts: &UiOptions, s: &mut UiSummary) -> Vec
         if let Some(e) = &p.error {
             b.push(format!("page failed to load: {} ({e})", p.url));
         } else if p.status.is_some_and(|st| st >= 400) {
-            b.push(format!("page returned HTTP {}: {}", p.status.unwrap_or(0), p.url));
+            b.push(format!(
+                "page returned HTTP {}: {}",
+                p.status.unwrap_or(0),
+                p.url
+            ));
         }
-        for v in p.axe.iter().filter(|v| matches!(v.impact.as_deref(), Some("serious" | "critical"))) {
+        for v in p
+            .axe
+            .iter()
+            .filter(|v| matches!(v.impact.as_deref(), Some("serious" | "critical")))
+        {
             s.axe_serious += 1;
             if opts.axe_blocking {
-                b.push(format!("a11y {} ({}): {} [{} nodes] on {}", v.id, v.impact.as_deref().unwrap_or("?"), v.help, v.nodes, p.url));
+                b.push(format!(
+                    "a11y {} ({}): {} [{} nodes] on {}",
+                    v.id,
+                    v.impact.as_deref().unwrap_or("?"),
+                    v.help,
+                    v.nodes,
+                    p.url
+                ));
             }
         }
     }
     b
 }
 
-fn judge_interactions(interactions: &[Interaction], opts: &UiOptions, s: &mut UiSummary) -> Vec<String> {
-    let ignored = |name: &str| opts.ignore.iter().any(|i| !i.is_empty() && name.contains(i.as_str()));
+fn judge_interactions(
+    interactions: &[Interaction],
+    opts: &UiOptions,
+    s: &mut UiSummary,
+) -> Vec<String> {
+    let ignored = |name: &str| {
+        opts.ignore
+            .iter()
+            .any(|i| !i.is_empty() && name.contains(i.as_str()))
+    };
     let mut b = Vec::new();
     for i in interactions {
         let problem = match i.result.as_str() {
@@ -239,11 +279,24 @@ fn judge_interactions(interactions: &[Interaction], opts: &UiOptions, s: &mut Ui
             }
             "no_effect" => {
                 s.no_effect += 1;
-                Some(format!("control has no observable effect (missing handler?): {} \"{}\" on {}", i.element.tag, i.element.name, i.page))
+                if !ignored(&i.element.name) {
+                    s.unverified_effects.push(format!(
+                        "interaction effect unverified: {} \"{}\" on {}; check application state independently",
+                        i.element.tag, i.element.name, i.page
+                    ));
+                }
+                None
             }
             _ => {
                 s.errors += 1;
-                Some(format!("{} on {} \"{}\" ({}): {}", i.result, i.element.tag, i.element.name, i.action, i.errors.join(" | ")))
+                Some(format!(
+                    "{} on {} \"{}\" ({}): {}",
+                    i.result,
+                    i.element.tag,
+                    i.element.name,
+                    i.action,
+                    i.errors.join(" | ")
+                ))
             }
         };
         if let Some(msg) = problem.filter(|_| !ignored(&i.element.name)) {
@@ -256,8 +309,11 @@ fn judge_interactions(interactions: &[Interaction], opts: &UiOptions, s: &mut Ui
 /// Page/console errors not already attributed to a control, failed requests, crashes, and
 /// persistence failures.
 fn judge_errors(report: &HarnessReport) -> Vec<String> {
-    let attributed: std::collections::HashSet<&str> =
-        report.interactions.iter().flat_map(|i| i.errors.iter().map(String::as_str)).collect();
+    let attributed: std::collections::HashSet<&str> = report
+        .interactions
+        .iter()
+        .flat_map(|i| i.errors.iter().map(String::as_str))
+        .collect();
     let text_of = |e: &Value, k: &str| e.get(k).and_then(Value::as_str).unwrap_or("?").to_string();
     let mut b: Vec<String> = report
         .page_errors
@@ -272,38 +328,54 @@ fn judge_errors(report: &HarnessReport) -> Vec<String> {
             .console_errors
             .iter()
             .map(|e| text_of(e, "text"))
-            .filter(|t| !t.starts_with("Failed to load resource") && !attributed.contains(t.as_str()))
+            .filter(|t| {
+                !t.starts_with("Failed to load resource") && !attributed.contains(t.as_str())
+            })
             .map(|t| format!("console error: {t}")),
     );
-    b.extend(report.failed_requests.iter().filter(|f| !is_noise(&f.url)).map(|f| {
-        let why = f.status.map(|x| format!("HTTP {x}")).or_else(|| f.failure.clone()).unwrap_or_default();
-        format!("request failed: {} ({why})", f.url)
-    }));
-    b.extend(report.crashes.iter().map(|c| format!("page crashed: {}", text_of(c, "page"))));
+    b.extend(
+        report
+            .failed_requests
+            .iter()
+            .filter(|f| !is_noise(&f.url))
+            .map(|f| {
+                let why = f
+                    .status
+                    .map(|x| format!("HTTP {x}"))
+                    .or_else(|| f.failure.clone())
+                    .unwrap_or_default();
+                format!("request failed: {} ({why})", f.url)
+            }),
+    );
+    b.extend(
+        report
+            .crashes
+            .iter()
+            .map(|c| format!("page crashed: {}", text_of(c, "page"))),
+    );
     b.extend(report.persistence.iter().filter(|p| !p.persisted).map(|p| {
-        let err = p.error.as_deref().map(|e| format!(", {e}")).unwrap_or_default();
-        format!("value did not persist across reload: {} (expected {:?}, got {:?}{err})", p.selector, p.expected, p.actual)
+        let err = p
+            .error
+            .as_deref()
+            .map(|e| format!(", {e}"))
+            .unwrap_or_default();
+        format!(
+            "value did not persist across reload: {} (expected {:?}, got {:?}{err})",
+            p.selector, p.expected, p.actual
+        )
     }));
     b
 }
 
-fn node_cmd(cfg: &Config) -> tokio::process::Command {
-    let mut c = tokio::process::Command::new(&cfg.node_exe);
-    c.arg(&cfg.harness).current_dir(cfg.harness.parent().unwrap_or(std::path::Path::new(".")));
-    if let Some(dir) = &cfg.playwright_browsers {
-        c.env("PLAYWRIGHT_BROWSERS_PATH", dir);
-    }
-    c
-}
-
 /// Run the harness with `input` on stdin; progress streams to the event bus; parse stdout.
 pub async fn run_harness(cfg: &Config, input: &Value) -> Result<HarnessReport, String> {
-    if !cfg.harness.exists() {
-        return Err(format!("UI harness not found at {} (set KRITIC_HARNESS)", cfg.harness.display()));
-    }
-    let out = crate::proc::run_streaming(node_cmd(cfg), input, cfg.ui_timeout_s, "ui_test").await?;
-    serde_json::from_str::<HarnessReport>(out.stdout.trim())
-        .map_err(|e| format!("harness output not valid: {e}; stderr: {}", out.stderr_tail.chars().take(300).collect::<String>()))
+    let v = tokio::time::timeout(
+        std::time::Duration::from_secs(cfg.ui_timeout_s),
+        crate::native::web::ui_test(cfg, input),
+    )
+    .await
+    .map_err(|_| format!("ui_test timed out after {}s", cfg.ui_timeout_s))?;
+    serde_json::from_value::<HarnessReport>(v).map_err(|e| format!("ui_test report not valid: {e}"))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -330,7 +402,12 @@ pub async fn ui_test(
         "flows": flows, "explore": explore,
     });
     let t0 = Instant::now();
-    let mut r = UiResult { tool: "ui_test".into(), deterministic: true, out_dir: out_dir.display().to_string(), ..Default::default() };
+    let mut r = UiResult {
+        tool: "ui_test".into(),
+        deterministic: true,
+        out_dir: out_dir.display().to_string(),
+        ..Default::default()
+    };
     match run_harness(cfg, &input).await {
         Err(e) => r.error = Some(e),
         Ok(report) => {
@@ -348,16 +425,26 @@ pub async fn ui_test(
     r
 }
 
-/// Screenshot a URL via the harness (for visual_critic).
-pub async fn screenshot(cfg: &Config, url: &str, out_path: &std::path::Path, full_page: bool, allow_remote: bool) -> Result<(), String> {
-    let input = json!({"mode": "screenshot", "url": url, "out_path": out_path, "full_page": full_page, "allow_remote": allow_remote});
-    if !cfg.harness.exists() {
-        return Err(format!("UI harness not found at {}", cfg.harness.display()));
-    }
-    let out = crate::proc::run_streaming(node_cmd(cfg), &input, 90, "visual_critic").await?;
-    let v: Value = serde_json::from_str(out.stdout.trim()).map_err(|e| format!("screenshot output not JSON: {e}"))?;
+/// Screenshot a URL (for visual_critic).
+pub async fn screenshot(
+    cfg: &Config,
+    url: &str,
+    out_path: &std::path::Path,
+    full_page: bool,
+    allow_remote: bool,
+) -> Result<(), String> {
+    let v = tokio::time::timeout(
+        std::time::Duration::from_secs(90),
+        crate::native::web::screenshot(cfg, url, out_path, full_page, allow_remote),
+    )
+    .await
+    .map_err(|_| "screenshot timed out after 90s".to_string())?;
     if v.get("ok").and_then(Value::as_bool) != Some(true) {
-        return Err(v.get("error").and_then(Value::as_str).unwrap_or("screenshot failed").to_string());
+        return Err(v
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("screenshot failed")
+            .to_string());
     }
     Ok(())
 }

@@ -4,3 +4,4 @@
 /harness/out/
 /harness/py/.venv/
 /harness/py/**/__pycache__/
+__pycache__/

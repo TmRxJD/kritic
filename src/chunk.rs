@@ -32,7 +32,13 @@ pub fn chunk_text(file: &str, text: &str, max_chars: usize) -> Vec<Chunk> {
     let mut start = 1usize;
     let flush = |buf: &mut String, start: &mut usize, end: usize, out: &mut Vec<Chunk>| {
         if !buf.trim().is_empty() {
-            out.push(Chunk { file: file.into(), start_line: *start, end_line: end, total_lines: total, text: std::mem::take(buf) });
+            out.push(Chunk {
+                file: file.into(),
+                start_line: *start,
+                end_line: end,
+                total_lines: total,
+                text: std::mem::take(buf),
+            });
         } else {
             buf.clear();
         }
@@ -44,7 +50,13 @@ pub fn chunk_text(file: &str, text: &str, max_chars: usize) -> Vec<Chunk> {
             flush(&mut buf, &mut start, n - 1, &mut out);
             let chars: Vec<char> = line.chars().collect();
             for piece in chars.chunks(max_chars) {
-                out.push(Chunk { file: file.into(), start_line: n, end_line: n, total_lines: total, text: piece.iter().collect() });
+                out.push(Chunk {
+                    file: file.into(),
+                    start_line: n,
+                    end_line: n,
+                    total_lines: total,
+                    text: piece.iter().collect(),
+                });
             }
             start = n + 1;
             continue;
@@ -77,13 +89,19 @@ fn def_regex() -> &'static Regex {
 pub fn digest(files: &[(String, String)], max_chars: usize) -> String {
     let mut out = String::new();
     for (path, text) in files {
-        let name = Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(path.clone());
+        let name = Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or(path.clone());
         out.push_str(&format!("FILE {name} ({} lines)\n", text.lines().count()));
         // Definitions plus the first line of each doc-comment block, so Kev sees intent, not just names.
         let mut prev_doc = false;
         let keep = |l: &str, prev_doc: &mut bool| {
             let t = l.trim_start();
-            let doc = t.starts_with("//!") || t.starts_with("///") || t.starts_with("\"\"\"") || t.starts_with("/**");
+            let doc = t.starts_with("//!")
+                || t.starts_with("///")
+                || t.starts_with("\"\"\"")
+                || t.starts_with("/**");
             let first_doc = doc && !*prev_doc;
             *prev_doc = doc;
             first_doc || def_regex().is_match(l)

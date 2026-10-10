@@ -23,7 +23,11 @@ struct Bus {
 
 fn bus() -> &'static Bus {
     static BUS: OnceLock<Bus> = OnceLock::new();
-    BUS.get_or_init(|| Bus { tx: broadcast::channel(1024).0, ready: Mutex::new(BTreeMap::new()), url: Mutex::new(None) })
+    BUS.get_or_init(|| Bus {
+        tx: broadcast::channel(1024).0,
+        ready: Mutex::new(BTreeMap::new()),
+        url: Mutex::new(None),
+    })
 }
 
 fn now() -> String {
@@ -44,7 +48,9 @@ pub fn emit(kind: &str, mut data: Value) {
 pub fn ready(component: &str, state: &str, detail: &str) {
     let v = json!({"component": component, "state": state, "detail": detail, "since": now()});
     if let Ok(mut m) = bus().ready.lock() {
-        if m.get(component).is_some_and(|old| old["state"] == state && old["detail"] == detail) {
+        if m.get(component)
+            .is_some_and(|old| old["state"] == state && old["detail"] == detail)
+        {
             return;
         }
         m.insert(component.to_string(), v.clone());
@@ -78,7 +84,9 @@ pub async fn serve(preferred: u16, log_path: PathBuf) {
             }
         },
     };
-    let Ok(addr) = listener.local_addr() else { return };
+    let Ok(addr) = listener.local_addr() else {
+        return;
+    };
     let u = format!("ws://127.0.0.1:{}/", addr.port());
     if let Ok(mut g) = bus().url.lock() {
         *g = Some(u.clone());
@@ -88,9 +96,16 @@ pub async fn serve(preferred: u16, log_path: PathBuf) {
     prune_stale_port_files(&dir);
     let _ = std::fs::write(dir.join(format!("{}.url", std::process::id())), &u);
     loop {
-        let Ok((stream, _)) = listener.accept().await else { continue };
+        let Ok((stream, _)) = listener.accept().await else {
+            continue;
+        };
         tokio::spawn(async move {
-            let Ok(ws) = tokio_tungstenite::accept_async(stream).await else { return };
+            // Native subscribers omit Origin. Reject browser origins, including null, so an
+            // unrelated web page cannot read this user's local progress/source metadata.
+            let Ok(ws) = tokio_tungstenite::accept_hdr_async(stream, reject_browser_origin).await
+            else {
+                return;
+            };
             let (mut sink, mut incoming) = ws.split();
             let mut rx = bus().tx.subscribe();
             if sink.send(snapshot().to_string().into()).await.is_err() {
@@ -116,13 +131,36 @@ pub async fn serve(preferred: u16, log_path: PathBuf) {
     }
 }
 
+// Tungstenite's handshake callback requires its unboxed HTTP error response type.
+#[allow(clippy::result_large_err)]
+fn reject_browser_origin(
+    request: &tokio_tungstenite::tungstenite::handshake::server::Request,
+    response: tokio_tungstenite::tungstenite::handshake::server::Response,
+) -> Result<
+    tokio_tungstenite::tungstenite::handshake::server::Response,
+    tokio_tungstenite::tungstenite::handshake::server::ErrorResponse,
+> {
+    if request.headers().contains_key("origin") {
+        return Err(tokio_tungstenite::tungstenite::http::Response::builder()
+            .status(403)
+            .body(Some("browser subscribers are not permitted".into()))
+            .expect("constant HTTP response"));
+    }
+    Ok(response)
+}
+
 /// Remove port files left by kritic processes that are gone. `cleanup` only runs on a clean exit,
 /// and a session's server is usually killed rather than shut down (seen: 56 stale files).
 fn prune_stale_port_files(dir: &std::path::Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let path = entry.path();
-        let pid = path.file_stem().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok());
+        let pid = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.parse::<u32>().ok());
         if path.extension().is_some_and(|e| e == "url") && pid.is_some_and(|p| !process_alive(p)) {
             let _ = std::fs::remove_file(&path);
         }
@@ -159,5 +197,37 @@ fn process_alive(pid: u32) -> bool {
 
 /// Remove this process's port file (best effort, at shutdown).
 pub fn cleanup(log_path: &std::path::Path) {
-    let _ = std::fs::remove_file(port_file_dir(log_path).join(format!("{}.url", std::process::id())));
+    let _ =
+        std::fs::remove_file(port_file_dir(log_path).join(format!("{}.url", std::process::id())));
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn event_stream_rejects_browser_origins_but_accepts_native_clients() {
+        use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+        for origin in [Some("https://attacker.example"), Some("null"), None] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio_tungstenite::accept_hdr_async(stream, reject_browser_origin)
+                    .await
+                    .is_ok()
+            });
+            // Test-only listener bound above to loopback; no traffic leaves this machine.
+            // nosemgrep: javascript.lang.security.detect-insecure-websocket.detect-insecure-websocket
+            let mut request = format!("ws://{address}/").into_client_request().unwrap();
+            if let Some(value) = origin {
+                request
+                    .headers_mut()
+                    .insert("origin", value.parse().unwrap());
+            }
+            let result = tokio_tungstenite::connect_async(request).await;
+            assert_eq!(result.is_ok(), origin.is_none());
+            assert_eq!(server.await.unwrap(), origin.is_none());
+        }
+    }
 }

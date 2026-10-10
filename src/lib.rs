@@ -4,7 +4,10 @@
 
 pub mod checks;
 pub mod chunk;
+pub mod cli;
 pub mod config;
+pub mod context;
+pub mod contract;
 pub mod critic;
 pub mod events;
 pub mod files;
@@ -13,10 +16,13 @@ pub mod hygiene;
 pub mod kev;
 pub mod map;
 pub mod metrics;
+pub mod native;
 pub mod phase3;
 pub mod plugins;
 pub mod proc;
+pub mod provider;
 pub mod scan;
+pub mod scout;
 pub mod server;
 pub mod spec;
 pub mod tools;

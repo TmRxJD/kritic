@@ -1,3 +1,7 @@
+> TEST RELEASE: validate workflow paths and every observation independently. With both reviewer
+> backends off, auto novice is off; deterministic exploration/rules still run. Cloud or different
+> vision models are advisory; do not inherit local novice calibration. Enable inference only explicitly.
+
 # ux_critic: UIs judged by workflow
 
 `ux_critic` asks whether a user can find each mode and core action, and how many steps each
@@ -51,7 +55,7 @@ selected, skip}], text, events}`, `act(id)`, and `close`. Every call is bound by
 (default 15 s): a stall ends the run with an error instead of waiting. The process tree is killed
 if it doesn't close, and desktop/Unity runs report what they left alive (`hygiene`).
 
-- **web** (`harness/ux_web.mjs`): Playwright. Reset is a fresh browser context (no storage). The
+- **web** (native CDP; legacy fixture harness retained): Chrome/Edge. Reset is a fresh browser context (no storage). The
   fingerprint is the path and hash, the controls and their state, and the visible text with digits
   folded (a ticking counter is not a new screen).
 - **desktop** (`harness/py/ux_adapter.py`): UI Automation; reset relaunches. Tooltips are UIA HelpText.
@@ -129,3 +133,9 @@ The **Kev text novice** (fallback) scored modes 9/12 vs 5/12, depth 2/3 vs 0/3, 
   on web, a relaunch per action on desktop. Keep `max_actions` modest and use `ignore`.
 - `ux_critic` only knows what the spec declares. A task list that omits the real workflows
   measures nothing, and changing budgets or `done` checks to pass is gaming it.
+
+`ui_test` retains raw `no_effect` observations, but unobserved effects are listed under
+`summary.unverified_effects` and yield `approval: null` rather than a proven broken control.
+Canvas/audio/application-only state can change without a detected DOM effect. Independently assert
+the intended state; an ambient animation/screenshot difference alone cannot prove the action caused it.
+Real exceptions, failed requests and explicit failed flow assertions still reject.

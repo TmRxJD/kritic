@@ -28,9 +28,46 @@ pub struct RouteResult {
     /// Fixed text describing the chosen tier (Kev does not write reasons).
     pub basis: Option<String>,
     pub note: String,
+    /// Exact coding model for Codex routing; classification backends are never executors.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_model: Option<String>,
 }
 
 pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &str) -> RouteResult {
+    route_spec(d, task, hints, artifact_type, "route").await
+}
+
+/// Conservative Codex-only tier selection; low-confidence or unavailable advice stays on Sol.
+pub async fn route_codex<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+) -> RouteResult {
+    let mut result = route_spec(d, task, hints, artifact_type, "route_codex").await;
+    result.coding_model = Some(codex_model(result.suggestion.as_deref(), result.confidence).into());
+    result.note = "Codex performs all work: Sol standard, Astra hard, Luna basic. Kev/JEV only classifies. Uncertain/unavailable routing stays on Sol; recommendations are not calibrated gates.".into();
+    result
+}
+
+pub fn codex_model(tier: Option<&str>, confidence: Option<f64>) -> &'static str {
+    if !confidence.is_some_and(|p| p.is_finite() && (0.75..=1.0).contains(&p)) {
+        return "gpt-6.1-sol";
+    }
+    match tier {
+        Some("luna") => "gpt-6-luna",
+        Some("astra") => "gpt-6-astra",
+        _ => "gpt-6.1-sol",
+    }
+}
+
+async fn route_spec<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+    name: &str,
+) -> RouteResult {
     let mut r = RouteResult {
         tool: "route".into(),
         advisory: true,
@@ -41,7 +78,7 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
         r.error = Some("empty task".into());
         return r;
     }
-    let spec = crate::spec::get("route");
+    let spec = crate::spec::get(name);
     let mut described = task.to_string();
     if !hints.trim().is_empty() {
         described.push_str(&format!("\nHints: {hints}"));
@@ -59,13 +96,22 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
     match d.decide(&state, &spec.wire()).await {
         Err(e) => r.error = Some(e),
         Ok(dec) => {
-            let a = &dec.answers["tier"];
+            let Some(a) = dec.answers.get("tier") else {
+                r.error = Some("routing decision is missing the tier answer".into());
+                return r;
+            };
+            if dec.truncated || !a.value.is_finite() || !(0.0..=1.0).contains(&a.value) {
+                r.error = Some("routing decision is truncated or has an invalid confidence".into());
+                return r;
+            }
             r.kev_ok = true;
             r.suggestion = a.choice.clone();
             r.confidence = Some(a.value);
             r.probabilities = a.probabilities.clone();
             r.basis = match (a.choice.as_deref(), spec.question("tier").map(|q| &q.ask)) {
-                (Some(c), Some(crate::spec::Ask::Choice { options, .. })) => options.iter().find(|(k, _)| k == c).map(|(_, d)| d.clone()),
+                (Some(c), Some(crate::spec::Ask::Choice { options, .. })) => {
+                    options.iter().find(|(k, _)| k == c).map(|(_, d)| d.clone())
+                }
                 _ => None,
             };
         }
@@ -110,7 +156,8 @@ pub async fn context_trim<D: Decider>(
     let mut r = TrimResult {
         tool: "context_trim".into(),
         advisory: true,
-        note: "Extractive only: chunks are kept or dropped whole; no summaries are generated.".into(),
+        note: "Extractive only: chunks are kept or dropped whole; no summaries are generated."
+            .into(),
         ..Default::default()
     };
     if chunks.len() > 64 {
@@ -141,11 +188,20 @@ pub async fn context_trim<D: Decider>(
     r.kev_ok = true;
     let mut order: Vec<usize> = (0..chunks.len()).collect();
     order.sort_by(|a, b| scores[*b].total_cmp(&scores[*a]));
-    r.ranked = order.iter().map(|&i| Ranked { index: i, relevance: (scores[i] * 1000.0).round() / 1000.0 }).collect();
+    r.ranked = order
+        .iter()
+        .map(|&i| Ranked {
+            index: i,
+            relevance: (scores[i] * 1000.0).round() / 1000.0,
+        })
+        .collect();
     let mut kept = Vec::new();
     let mut used = 0;
     for &i in &order {
-        if scores[i] < min_relevance || used + chunks[i].len() > budget_chars || top_n.is_some_and(|n| kept.len() >= n) {
+        if scores[i] < min_relevance
+            || used + chunks[i].len() > budget_chars
+            || top_n.is_some_and(|n| kept.len() >= n)
+        {
             continue;
         }
         kept.push(i);
@@ -153,7 +209,11 @@ pub async fn context_trim<D: Decider>(
     }
     kept.sort_unstable();
     r.dropped = (0..chunks.len()).filter(|i| !kept.contains(i)).collect();
-    r.trimmed_context = kept.iter().map(|&i| chunks[i].as_str()).collect::<Vec<_>>().join("\n\n");
+    r.trimmed_context = kept
+        .iter()
+        .map(|&i| chunks[i].as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     r.chars_kept = used;
     r.kept = kept;
     r
@@ -183,18 +243,35 @@ pub async fn load_files(paths: &[String], base_dir: Option<&str>) -> LoadedFiles
         let kind = kind_for_path(&p);
         match read_lossy(&p) {
             Ok(text) => {
-                checks.push(FileCheck { path: p.display().to_string(), kind: kind.into(), checks: deterministic_checks(&text, kind).await });
+                checks.push(FileCheck {
+                    path: p.display().to_string(),
+                    kind: kind.into(),
+                    checks: deterministic_checks(&text, kind).await,
+                });
                 files.push((p.display().to_string(), text));
             }
             Err(e) => checks.push(FileCheck {
                 path: p.display().to_string(),
                 kind: kind.into(),
-                checks: vec![Check { check: "read".into(), status: Status::Fail, detail: Some(e.to_string()) }],
+                checks: vec![Check {
+                    check: "read".into(),
+                    status: Status::Fail,
+                    detail: Some(e.to_string()),
+                }],
             }),
         }
     }
-    let missing = skipped.iter().filter(|s| s.reason == "not found").map(|s| s.path.clone()).collect();
-    LoadedFiles { files, checks, skipped, missing }
+    let missing = skipped
+        .iter()
+        .filter(|s| s.reason == "not found")
+        .map(|s| s.path.clone())
+        .collect();
+    LoadedFiles {
+        files,
+        checks,
+        skipped,
+        missing,
+    }
 }
 
 // ------------------------------------------------------------------ git diff
@@ -211,7 +288,11 @@ async fn git(base: &std::path::Path, args: &[&str], paths: &[String]) -> Result<
         .await
         .map_err(|e| format!("git not available: {e}"))?;
     if !out.status.success() {
-        return Err(format!("git {} failed: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim()));
+        return Err(format!(
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -220,16 +301,43 @@ async fn git(base: &std::path::Path, args: &[&str], paths: &[String]) -> Result<
 /// new-file diffs. Untracked files go through the same filters as `paths` (binaries, vendored
 /// dirs, size limit).
 pub async fn git_diff(base_dir: Option<&str>, paths: &[String]) -> Result<String, String> {
-    let base = base_dir.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    let mut diff = git(&base, &["diff", "HEAD", "--no-color", "--no-ext-diff", "-U3"], paths).await?;
-    let untracked = git(&base, &["ls-files", "--others", "--exclude-standard"], paths).await?;
-    let names: Vec<String> = untracked.lines().filter(|l| !l.trim().is_empty()).map(String::from).collect();
+    let base = base_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let mut diff = git(
+        &base,
+        &["diff", "HEAD", "--no-color", "--no-ext-diff", "-U3"],
+        paths,
+    )
+    .await?;
+    let untracked = git(
+        &base,
+        &["ls-files", "--others", "--exclude-standard"],
+        paths,
+    )
+    .await?;
+    let names: Vec<String> = untracked
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(String::from)
+        .collect();
     let (usable, _) = resolve_paths(&names, base.to_str());
+    // resolve_paths canonicalizes, so strip the canonical base: a short-name base
+    // (C:\Users\RUNNER~1\...) never prefixes the long-name paths of the files under it.
+    let canon_base = crate::files::dunce_canonical(&base);
     for p in usable {
         let Ok(text) = read_lossy(&p) else { continue };
-        let rel = p.strip_prefix(&base).unwrap_or(&p).display().to_string().replace('\\', "/");
+        let rel = p
+            .strip_prefix(&canon_base)
+            .or_else(|_| p.strip_prefix(&base))
+            .unwrap_or(&p)
+            .display()
+            .to_string()
+            .replace('\\', "/");
         let n = text.lines().count();
-        diff.push_str(&format!("diff --git a/{rel} b/{rel}\nnew file mode 100644\n@@ -0,0 +1,{n} @@\n"));
+        diff.push_str(&format!(
+            "diff --git a/{rel} b/{rel}\nnew file mode 100644\n@@ -0,0 +1,{n} @@\n"
+        ));
         for l in text.lines() {
             diff.push('+');
             diff.push_str(l);
@@ -269,8 +377,16 @@ pub struct ValidateInput<'a> {
     pub revision: u32,
 }
 
-pub async fn artifact_validate<D: Decider>(d: &D, cfg: &Config, inp: ValidateInput<'_>) -> ValidateResult {
-    let mut r = ValidateResult { tool: "artifact_validate".into(), advisory: true, ..Default::default() };
+pub async fn artifact_validate<D: Decider>(
+    d: &D,
+    cfg: &Config,
+    inp: ValidateInput<'_>,
+) -> ValidateResult {
+    let mut r = ValidateResult {
+        tool: "artifact_validate".into(),
+        advisory: true,
+        ..Default::default()
+    };
     let mut files = Vec::new();
     if !inp.paths.is_empty() {
         let lf = load_files(inp.paths, inp.base_dir).await;
@@ -280,29 +396,73 @@ pub async fn artifact_validate<D: Decider>(d: &D, cfg: &Config, inp: ValidateInp
         files = lf.files;
     } else if let Some(c) = inp.content {
         let kind = inp.kind.unwrap_or("text");
-        r.files.push(FileCheck { path: "<content>".into(), kind: kind.into(), checks: deterministic_checks(c, kind).await });
+        r.files.push(FileCheck {
+            path: "<content>".into(),
+            kind: kind.into(),
+            checks: deterministic_checks(c, kind).await,
+        });
         files.push(("<content>".into(), c.to_string()));
     } else if inp.commands.is_empty() {
         r.approval = Some(false);
         r.reasons.push("give paths, content, or commands".into());
         return r;
     }
-    let dir = inp.base_dir.map(PathBuf::from).unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let dir = inp
+        .base_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     for cmd in inp.commands {
-        r.commands.push(run_command(cmd, &dir, cfg.command_timeout_s).await);
+        r.commands
+            .push(run_command(cmd, &dir, cfg.command_timeout_s).await);
     }
     for f in &r.files {
         for c in f.checks.iter().filter(|c| c.status == Status::Fail) {
-            r.reasons.push(format!("{}: {} failed{}", f.path, c.check, c.detail.as_deref().map(|d| format!(" ({d})")).unwrap_or_default()));
+            r.reasons.push(format!(
+                "{}: {} failed{}",
+                f.path,
+                c.check,
+                c.detail
+                    .as_deref()
+                    .map(|d| format!(" ({d})"))
+                    .unwrap_or_default()
+            ));
         }
     }
     for m in &r.missing_files {
         r.reasons.push(format!("missing file: {m}"));
     }
     for c in r.commands.iter().filter(|c| c.status == Status::Fail) {
-        r.reasons.push(format!("command failed (exit {:?}): {}", c.exit_code, c.command));
+        r.reasons.push(format!(
+            "command failed (exit {:?}): {}",
+            c.exit_code, c.command
+        ));
     }
     r.deterministic_ok = r.reasons.is_empty();
+    let mut gaps = Vec::new();
+    if r.files.is_empty() && r.commands.is_empty() {
+        gaps.push("no artifacts or commands were checked".to_string());
+    }
+    if !r.skipped.is_empty() {
+        gaps.push(format!(
+            "{} artifacts skipped; coverage is incomplete",
+            r.skipped.len()
+        ));
+    }
+    if files.iter().any(|(_, content)| content.trim().is_empty()) {
+        gaps.push("empty artifact content does not establish acceptance".into());
+    }
+    if r.files
+        .iter()
+        .flat_map(|f| &f.checks)
+        .any(|c| c.status == Status::Skipped)
+        || r.commands.iter().any(|c| c.status == Status::Skipped)
+    {
+        gaps.push("requested checks were skipped".into());
+    }
+    if inp.use_model && files.is_empty() {
+        gaps.push("model review requested but no reviewable artifacts".into());
+    }
+
     if inp.use_model && !files.is_empty() {
         let c = critic(d, cfg, inp.task, &files, inp.revision).await;
         r.critic = Some(c);
@@ -314,13 +474,22 @@ pub async fn artifact_validate<D: Decider>(d: &D, cfg: &Config, inp: ValidateInp
             None => Some(true),
             Some(c) => {
                 if !c.kev_ok {
-                    r.reasons.push(format!("critic offline: {}", c.error.as_deref().unwrap_or("?")));
+                    r.reasons.push(format!(
+                        "critic offline: {}",
+                        c.error.as_deref().unwrap_or("?")
+                    ));
                 }
                 r.reasons.extend(c.reasons.iter().cloned());
                 c.approval
             }
         }
     };
+    if !gaps.is_empty() {
+        if r.approval == Some(true) {
+            r.approval = None;
+        }
+        r.reasons.extend(gaps);
+    }
     r
 }
 
@@ -329,6 +498,26 @@ pub async fn artifact_validate<D: Decider>(d: &D, cfg: &Config, inp: ValidateInp
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct StatusResult {
     pub tool: String,
+    pub capabilities: BTreeMap<String, bool>,
+    pub enabled_tools: Vec<String>,
+    pub cloud_provider: String,
+    /// Configuration is not a paid connectivity test. Use doctor --online explicitly.
+    pub cloud_verification: String,
+    pub vision_backend: String,
+    /// `kev.backend` as configured (auto, local, cloud, off).
+    pub backend_setting: String,
+    /// The backend Kev questions go to (local or cloud), or null when none is usable.
+    pub backend: Option<String>,
+    /// Why no backend is usable, with what to do about it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend_error: Option<String>,
+    /// The model answering Kev questions (kev-4b locally, typesafe-ai/jev in the cloud).
+    pub decision_model: Option<String>,
+    /// Whether the built-in gates were calibrated for that model; when false, Kev results are
+    /// reported but carry no verdict.
+    pub gates_calibrated: bool,
+    /// A gateway key is configured (the key itself is never shown).
+    pub cloud_key_configured: bool,
     pub laya_up: bool,
     pub laya_url: String,
     pub health: Option<Value>,
@@ -362,10 +551,40 @@ pub struct StatusResult {
 
 pub async fn status(k: &KevClient, start: bool) -> StatusResult {
     let cfg = &k.cfg;
-    let start_error = if start { k.ensure_up().await.err() } else { None };
-    let health = k.health().await;
+    let resolved = k.resolve_backend().await;
+    let start_error = match (&resolved, start) {
+        (Ok(crate::kev::Backend::Local), true) => k.ensure_up().await.err(),
+        _ => None,
+    };
+    let health = if matches!(resolved, Ok(crate::kev::Backend::Local)) {
+        k.health().await
+    } else {
+        None
+    };
+    let decision_model = resolved.as_ref().ok().map(|b| k.model_for(b).to_string());
     StatusResult {
         tool: "status".into(),
+        capabilities: cfg.capabilities.clone(),
+        enabled_tools: crate::config::TOOL_NAMES
+            .iter()
+            .filter(|n| cfg.tool_enabled(n))
+            .map(|n| n.to_string())
+            .collect(),
+        cloud_provider: cfg.cloud_provider.clone(),
+        cloud_verification: "not_probed (doctor --online makes an API call)".into(),
+        vision_backend: cfg.vision_backend.clone(),
+        backend_setting: cfg.backend.clone(),
+        backend: resolved.as_ref().ok().map(|b| b.label().to_string()),
+        backend_error: resolved.as_ref().err().cloned(),
+        gates_calibrated: resolved.is_ok()
+            && crate::spec::builtin().values().all(|s| {
+                s.gates_apply_for(
+                    &k.model_identity()
+                        .unwrap_or_else(|| cfg.decision_identity()),
+                )
+            }),
+        decision_model,
+        cloud_key_configured: cfg.cloud_key().is_some(),
         laya_up: health.is_some(),
         laya_url: cfg.laya_url.clone(),
         health,
@@ -380,9 +599,18 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
             .values()
             .flat_map(|spec| {
                 spec.questions.iter().filter_map(move |q| match &q.gate {
-                    crate::spec::Gate::Rule { measure, fails_when, threshold, .. } => {
-                        Some(format!("{}.{}: fails when {:?} is {:?} {threshold}", spec.name, q.id, measure, fails_when).to_lowercase())
-                    }
+                    crate::spec::Gate::Rule {
+                        measure,
+                        fails_when,
+                        threshold,
+                        ..
+                    } => Some(
+                        format!(
+                            "{}.{}: fails when {:?} is {:?} {threshold}",
+                            spec.name, q.id, measure, fails_when
+                        )
+                        .to_lowercase(),
+                    ),
                     crate::spec::Gate::Advisory { .. } => None,
                 })
             })
@@ -434,22 +662,47 @@ pub fn audit(cfg: &Config, tool: &str, result: &impl Serialize) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if path.metadata().map(|m| m.len() > 2_000_000).unwrap_or(false) {
+    if path
+        .metadata()
+        .map(|m| m.len() > 2_000_000)
+        .unwrap_or(false)
+    {
         let _ = std::fs::rename(path, path.with_extension("old.jsonl"));
     }
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
         let _ = writeln!(f, "{rec}");
     }
 }
 
 /// Source files under `base` (for whole-project quality scans), skipping vendored/build dirs.
 pub fn source_files(base: &std::path::Path, limit: usize) -> Vec<String> {
-    const EXT: &[&str] = &["rs", "py", "ts", "tsx", "js", "jsx", "mjs", "cjs", "go", "cs", "java", "kt", "swift", "c", "cpp", "h", "gleam", "svelte", "vue"];
-    const SKIP: &[&str] = &["node_modules", "target", "dist", "build", ".git", ".venv", "venv", "__pycache__", ".next", "coverage", "graphify-out"];
+    const EXT: &[&str] = &[
+        "rs", "py", "ts", "tsx", "js", "jsx", "mjs", "cjs", "go", "cs", "java", "kt", "swift", "c",
+        "cpp", "h", "gleam", "svelte", "vue",
+    ];
+    const SKIP: &[&str] = &[
+        "node_modules",
+        "target",
+        "dist",
+        "build",
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".next",
+        "coverage",
+        "graphify-out",
+    ];
     let mut out = Vec::new();
     let mut stack = vec![base.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
         let mut entries: Vec<_> = rd.flatten().collect();
         entries.sort_by_key(|e| e.file_name());
         for e in entries {
@@ -459,7 +712,11 @@ pub fn source_files(base: &std::path::Path, limit: usize) -> Vec<String> {
                 if !n.starts_with('.') && !SKIP.contains(&n.as_str()) {
                     stack.push(p);
                 }
-            } else if p.extension().and_then(|x| x.to_str()).is_some_and(|x| EXT.contains(&x)) {
+            } else if p
+                .extension()
+                .and_then(|x| x.to_str())
+                .is_some_and(|x| EXT.contains(&x))
+            {
                 out.push(p.display().to_string());
                 if out.len() >= limit {
                     return out;
@@ -470,16 +727,24 @@ pub fn source_files(base: &std::path::Path, limit: usize) -> Vec<String> {
     out
 }
 
-/// A WebSocket URL on this machine: ws:// or wss:// to 127.0.0.1, localhost or [::1].
+/// A WebSocket URL restricted to loopback; plaintext transport never reaches a remote host.
 pub fn require_loopback_ws(url: &str) -> Result<(), String> {
-    let rest = url.strip_prefix("ws://").or_else(|| url.strip_prefix("wss://")).ok_or_else(|| format!("app_events must be a ws:// or wss:// URL, got {url}"))?;
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    if authority.contains('@') {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "app_events URL is invalid".to_string())?;
+    if !matches!(parsed.scheme(), "ws" | "wss") {
+        return Err("app_events must use a WebSocket scheme".into());
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
         return Err(format!("app_events must not carry credentials: {url}"));
     }
-    let host = if let Some(v6) = authority.strip_prefix('[') { v6.split(']').next().unwrap_or("") } else { authority.split(':').next().unwrap_or("") };
-    match host.to_ascii_lowercase().as_str() {
-        "127.0.0.1" | "localhost" | "::1" => Ok(()),
-        _ => Err(format!("refusing non-local app_events {url} (send steps would push commands to it); pass allow_remote_app_events for your own remote app")),
+    match parsed
+        .host_str()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "127.0.0.1" | "localhost" | "[::1]" => Ok(()),
+        _ => Err(format!(
+            "refusing non-local app_events {url} (send steps would push commands to it); pass allow_remote_app_events for your own remote app"
+        )),
     }
 }

@@ -1,15 +1,10 @@
-<!-- Paste into ~/.claude/CLAUDE.md (every project) or a repo's CLAUDE.md. -->
+# Kritic — TEST RELEASE
 
-## End-of-task review (kritic, advisory)
-
-kritic is a local MCP server: deterministic checkers (tests you name, parsers, scanners, linters,
-Playwright, UI Automation, a resource sampler) produce findings; the Kev-4B typed-decision model only
-triages and scores them; approval is computed in code. It never overrides the user or the tests.
-
-- Run it ONLY when a task that changed code/config/UI files is finished. No mid-edit or per-file runs.
-- Load the `kritic` skill and follow it: `critic_score(git_diff=true, ...)` + `artifact_validate(paths,
-  commands=[the project's test/tsc/lint])`, plus the specialist tools the change calls for.
-- `approval: false` → command and parser failures are real; Kev flags are locations: read the code and
-  fix only issues you can name. At most 2 revisions, then list what's left.
-- Never fabricate scores. `kev_ok: false` → say "critic offline (<error>)" and report the checks.
-- Final message gets one line: `kritic: A9.1 C8.7 Q7.0 · sev none · tests pass · approved · 0 revisions`.
+Use the Kritic skill to test its viability at the end of relevant tasks. Never inherently trust
+critics: independently verify findings, execution evidence, requirement coverage and false positives.
+Default to deterministic checks; models are optional and no GPU/API is required. Inspect status
+and available tools first. Empty/skipped/weak checks cannot establish task acceptance.
+If Kritic has a reproducible defect, fix it directly with a regression test and open a focused
+PR to https://github.com/TmRxJD/kritic. Keep the user's changes separate and do not expose private
+code/credentials. Report exact blockers if you cannot contribute. An approval flag never authorizes
+publishing the user's project. See the shipped skill, CONTRIBUTING.md and SECURITY.md.

@@ -51,7 +51,13 @@ pub struct Vocabulary {
 
 impl Vocabulary {
     pub fn new(name: &str, terms: &[(&str, &str)]) -> Self {
-        Vocabulary { name: name.into(), terms: terms.iter().map(|(t, d)| (t.to_string(), d.to_string())).collect() }
+        Vocabulary {
+            name: name.into(),
+            terms: terms
+                .iter()
+                .map(|(t, d)| (t.to_string(), d.to_string()))
+                .collect(),
+        }
     }
     pub fn has(&self, term: &str) -> bool {
         self.terms.iter().any(|(t, _)| t == term)
@@ -72,24 +78,47 @@ pub struct Field {
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Ask {
     /// Yes/no with a probability. One condition, and both answers defined.
-    Noul { instructions: String, yes: String, no: String },
+    Noul {
+        instructions: String,
+        yes: String,
+        no: String,
+    },
     /// One of named options, each defined.
-    Choice { instructions: String, options: Vec<(String, String)> },
+    Choice {
+        instructions: String,
+        options: Vec<(String, String)>,
+    },
     /// An ordered scale, lowest first, each rung "label" + definition.
-    Score { instructions: String, rungs: Vec<(String, String)> },
+    Score {
+        instructions: String,
+        rungs: Vec<(String, String)>,
+    },
 }
 
 impl Ask {
     pub fn instructions(&self) -> &str {
         match self {
-            Ask::Noul { instructions, .. } | Ask::Choice { instructions, .. } | Ask::Score { instructions, .. } => instructions,
+            Ask::Noul { instructions, .. }
+            | Ask::Choice { instructions, .. }
+            | Ask::Score { instructions, .. } => instructions,
         }
     }
     /// All text Kev sees for this question (instructions and answer definitions).
     fn all_text(&self) -> String {
         match self {
-            Ask::Noul { instructions, yes, no } => format!("{instructions} {yes} {no}"),
-            Ask::Choice { instructions, options: o } | Ask::Score { instructions, rungs: o } => {
+            Ask::Noul {
+                instructions,
+                yes,
+                no,
+            } => format!("{instructions} {yes} {no}"),
+            Ask::Choice {
+                instructions,
+                options: o,
+            }
+            | Ask::Score {
+                instructions,
+                rungs: o,
+            } => {
                 let defs: Vec<String> = o.iter().map(|(k, d)| format!("{k} {d}")).collect();
                 format!("{instructions} {}", defs.join(" "))
             }
@@ -160,6 +189,15 @@ pub struct DecisionSpec {
     pub purpose: String,
     pub fields: Vec<Field>,
     pub questions: Vec<QuestionSpec>,
+    /// The decision models the `Rule` gates were calibrated on. Under any other model (for example
+    /// cloud Jev) every gate is reported but advisory: a threshold measured on one model's
+    /// probabilities says nothing about another's.
+    #[serde(default = "default_calibrated_for")]
+    pub calibrated_for: Vec<String>,
+}
+
+fn default_calibrated_for() -> Vec<String> {
+    vec!["kev-4b".to_string()]
 }
 
 /// Most fields a yes/no question may read, and a choice or score. Measured: a question that
@@ -199,7 +237,10 @@ impl DecisionSpec {
 
     /// Fields a question names in backticks (instructions and answer definitions).
     pub fn reads(ask: &Ask) -> BTreeSet<String> {
-        backticks().captures_iter(&ask.all_text()).map(|c| c[1].to_string()).collect()
+        backticks()
+            .captures_iter(&ask.all_text())
+            .map(|c| c[1].to_string())
+            .collect()
     }
 
     /// Every rule a spec must satisfy. Empty means valid.
@@ -231,7 +272,11 @@ impl DecisionSpec {
                 e.push(at("meaning must be a real sentence"));
             }
             match &f.kind {
-                FieldKind::Text { max_chars } | FieldKind::Code { max_chars } if *max_chars == 0 => e.push(at("max_chars is 0")),
+                FieldKind::Text { max_chars } | FieldKind::Code { max_chars }
+                    if *max_chars == 0 =>
+                {
+                    e.push(at("max_chars is 0"))
+                }
                 FieldKind::Band { vocabulary } => {
                     if vocabulary.terms.len() < 2 {
                         e.push(at("vocabulary needs at least two terms"));
@@ -264,11 +309,15 @@ impl DecisionSpec {
             }
             let ins = q.ask.instructions();
             if ins.matches('?').count() != 1 || !ins.trim_end().ends_with('?') {
-                e.push(at("instructions must be exactly one question ending in '?'"));
+                e.push(at(
+                    "instructions must be exactly one question ending in '?'",
+                ));
             }
             let reads = Self::reads(&q.ask);
             if reads.is_empty() {
-                e.push(at("names no state field (write fields in backticks, e.g. `change`)"));
+                e.push(at(
+                    "names no state field (write fields in backticks, e.g. `change`)",
+                ));
             }
             for r in &reads {
                 if self.field(r).is_none() {
@@ -306,23 +355,49 @@ impl DecisionSpec {
                         }
                     }
                     if reads.len() > MAX_READS_OTHER {
-                        e.push(at(&format!("reads {} fields; at most {MAX_READS_OTHER} (combine in code)", reads.len())));
+                        e.push(at(&format!(
+                            "reads {} fields; at most {MAX_READS_OTHER} (combine in code)",
+                            reads.len()
+                        )));
                     }
                 }
             }
             // A question over a band field must speak that field's vocabulary.
             for r in &reads {
-                if let Some(Field { kind: FieldKind::Band { vocabulary }, .. }) = self.field(r)
-                    && !vocabulary.terms.iter().any(|(t, _)| q.ask.all_text().contains(t.as_str()))
+                if let Some(Field {
+                    kind: FieldKind::Band { vocabulary },
+                    ..
+                }) = self.field(r)
+                    && !vocabulary
+                        .terms
+                        .iter()
+                        .any(|(t, _)| q.ask.all_text().contains(t.as_str()))
                 {
-                    e.push(at(&format!("reads band `{r}` but uses none of its terms ({})", vocabulary.name)));
+                    e.push(at(&format!(
+                        "reads band `{r}` but uses none of its terms ({})",
+                        vocabulary.name
+                    )));
                 }
             }
-            if let Gate::Rule { measure, option, threshold, reason, calibration, good_tail, fails_when } = &q.gate {
+            if let Gate::Rule {
+                measure,
+                option,
+                threshold,
+                reason,
+                calibration,
+                good_tail,
+                fails_when,
+            } = &q.gate
+            {
                 if !good_tail.is_empty() {
                     let rates: Vec<f64> = good_tail.iter().map(|(r, _)| *r).collect();
-                    if rates.first() != Some(&0.05) || rates.last() != Some(&0.0) || rates.windows(2).any(|w| w[1] >= w[0]) {
-                        e.push(at("good_tail rates must run from 0.05 down to 0, strictly decreasing"));
+                    if rates.first() != Some(&0.05)
+                        || rates.last() != Some(&0.0)
+                        || rates.windows(2).any(|w| w[1] >= w[0])
+                    {
+                        e.push(at(
+                            "good_tail rates must run from 0.05 down to 0, strictly decreasing",
+                        ));
                     }
                     if (good_tail[0].1 - threshold).abs() > 1e-9 {
                         e.push(at("good_tail at 0.05 must equal the gate's threshold"));
@@ -332,7 +407,9 @@ impl DecisionSpec {
                         Cmp::Below => w[1].1 <= w[0].1,
                     });
                     if !monotone {
-                        e.push(at("good_tail thresholds must get stricter as the rate falls"));
+                        e.push(at(
+                            "good_tail thresholds must get stricter as the rate falls",
+                        ));
                     }
                 }
                 if !dated().is_match(calibration) || calibration.trim().len() < 40 {
@@ -368,11 +445,17 @@ impl DecisionSpec {
     pub fn state(&self, values: &[(&str, String)]) -> Result<Value, String> {
         let mut out = Map::new();
         for (name, v) in values {
-            let f = self.field(name).ok_or_else(|| format!("spec `{}`: `{name}` is not a declared field", self.name))?;
+            let f = self
+                .field(name)
+                .ok_or_else(|| format!("spec `{}`: `{name}` is not a declared field", self.name))?;
             match &f.kind {
                 FieldKind::Text { max_chars } | FieldKind::Code { max_chars } => {
                     if v.chars().count() > *max_chars {
-                        return Err(format!("spec `{}`: `{name}` is {} chars > {max_chars}; chunk it before asking", self.name, v.chars().count()));
+                        return Err(format!(
+                            "spec `{}`: `{name}` is {} chars > {max_chars}; chunk it before asking",
+                            self.name,
+                            v.chars().count()
+                        ));
                     }
                     if v.trim().is_empty() {
                         return Err(format!("spec `{}`: `{name}` is empty", self.name));
@@ -381,11 +464,17 @@ impl DecisionSpec {
                 FieldKind::Band { vocabulary } => {
                     let term = v.split(':').next().unwrap_or("").trim();
                     if !vocabulary.has(term) {
-                        return Err(format!("spec `{}`: `{name}` = {v:?} does not start with a {} term", self.name, vocabulary.name));
+                        return Err(format!(
+                            "spec `{}`: `{name}` = {v:?} does not start with a {} term",
+                            self.name, vocabulary.name
+                        ));
                     }
                 }
             }
-            if out.insert(name.to_string(), Value::String(v.clone())).is_some() {
+            if out
+                .insert(name.to_string(), Value::String(v.clone()))
+                .is_some()
+            {
                 return Err(format!("spec `{}`: `{name}` given twice", self.name));
             }
         }
@@ -399,25 +488,50 @@ impl DecisionSpec {
 
     /// The questions in laya's wire format, every answer defined.
     pub fn wire(&self) -> BTreeMap<String, Question> {
-        self.questions.iter().map(|q| (q.id.clone(), wire_question(&q.ask))).collect()
+        self.questions
+            .iter()
+            .map(|q| (q.id.clone(), wire_question(&q.ask)))
+            .collect()
     }
 
     /// Only the named questions (for calls that ask a subset).
     pub fn wire_subset(&self, ids: &[&str]) -> BTreeMap<String, Question> {
-        self.questions.iter().filter(|q| ids.contains(&q.id.as_str())).map(|q| (q.id.clone(), wire_question(&q.ask))).collect()
+        self.questions
+            .iter()
+            .filter(|q| ids.contains(&q.id.as_str()))
+            .map(|q| (q.id.clone(), wire_question(&q.ask)))
+            .collect()
     }
 
     /// The failure reason if question `id`'s gate fails for `answer`; None when it passes or
     /// is advisory.
     pub fn check(&self, id: &str, answer: &Answer) -> Option<String> {
+        if !self.gates_apply() {
+            return None;
+        }
         let q = self.question(id)?;
-        let Gate::Rule { measure, option, fails_when, threshold, reason, .. } = &q.gate else { return None };
+        let Gate::Rule {
+            measure,
+            option,
+            fails_when,
+            threshold,
+            reason,
+            ..
+        } = &q.gate
+        else {
+            return None;
+        };
         let v = measured(*measure, option.as_deref(), answer)?;
         let fails = match fails_when {
             Cmp::Above => v > *threshold,
             Cmp::Below => v < *threshold,
         };
-        fails.then(|| format!("{reason} ({id} {v:.2} {} {threshold:.2})", if *fails_when == Cmp::Above { ">" } else { "<" }))
+        fails.then(|| {
+            format!(
+                "{reason} ({id} {v:.2} {} {threshold:.2})",
+                if *fails_when == Cmp::Above { ">" } else { "<" }
+            )
+        })
     }
 
     /// `check` for one value (a single unit, or a value that is not a max over units).
@@ -428,25 +542,78 @@ impl DecisionSpec {
     /// The threshold for a change judged as the worst of `units` units: the good-case tail entry
     /// whose rate is at most 0.05 / units (the strictest one when the data runs out).
     pub fn threshold_for(&self, id: &str, units: usize) -> Option<f64> {
-        let Gate::Rule { threshold, good_tail, .. } = &self.question(id)?.gate else { return None };
+        let Gate::Rule {
+            threshold,
+            good_tail,
+            ..
+        } = &self.question(id)?.gate
+        else {
+            return None;
+        };
         if good_tail.is_empty() || units <= 1 {
             return Some(*threshold);
         }
         let target = 0.05 / units as f64;
-        Some(good_tail.iter().find(|(rate, _)| *rate <= target + 1e-12).or(good_tail.last()).map_or(*threshold, |(_, t)| *t))
+        Some(
+            good_tail
+                .iter()
+                .find(|(rate, _)| *rate <= target + 1e-12)
+                .or(good_tail.last())
+                .map_or(*threshold, |(_, t)| *t),
+        )
     }
 
     /// `check` for the worst value over `units` units, at the family-wise threshold.
+    /// Whether this spec's gates may decide under the active model. With no model known yet
+    /// (offline tests, fakes) the calibrated default applies.
+    pub fn gates_apply(&self) -> bool {
+        !self.calibrated_for.is_empty()
+    }
+
+    pub fn gates_apply_for(&self, model: &str) -> bool {
+        self.calibrated_for.iter().any(|m| m == model) && !model.starts_with("cloud:")
+    }
+
+    /// Clone a spec with gates made advisory for this exact decision's provenance.
+    pub fn for_model(&self, model: &str) -> Self {
+        let mut spec = self.clone();
+        if !self.gates_apply_for(model) {
+            spec.calibrated_for.clear();
+        }
+        spec
+    }
+
+    pub fn uncalibrated_note(&self) -> Option<String> {
+        (!self.gates_apply()).then(|| format!("{}: model judgments are advisory; no calibration for this provider/model/quantization", self.name))
+    }
+
     pub fn check_units(&self, id: &str, v: f64, units: usize) -> Option<String> {
+        if !self.gates_apply() {
+            return None;
+        }
         let q = self.question(id)?;
-        let Gate::Rule { fails_when, reason, .. } = &q.gate else { return None };
+        let Gate::Rule {
+            fails_when, reason, ..
+        } = &q.gate
+        else {
+            return None;
+        };
         let t = self.threshold_for(id, units)?;
         let fails = match fails_when {
             Cmp::Above => v > t,
             Cmp::Below => v < t,
         };
-        let over = if units > 1 { format!(", threshold for {units} units") } else { String::new() };
-        fails.then(|| format!("{reason} ({id} {v:.2} {} {t:.2}{over})", if *fails_when == Cmp::Above { ">" } else { "<" }))
+        let over = if units > 1 {
+            format!(", threshold for {units} units")
+        } else {
+            String::new()
+        };
+        fails.then(|| {
+            format!(
+                "{reason} ({id} {v:.2} {} {t:.2}{over})",
+                if *fails_when == Cmp::Above { ">" } else { "<" }
+            )
+        })
     }
 
     pub fn gates(&self, id: &str) -> bool {
@@ -462,26 +629,50 @@ impl DecisionSpec {
 fn measured(m: Measure, option: Option<&str>, a: &Answer) -> Option<f64> {
     match m {
         Measure::Yes | Measure::Rung => Some(a.value),
-        Measure::Option => a.probabilities.as_ref().and_then(|p| p.get(option?)).copied(),
+        Measure::Option => a
+            .probabilities
+            .as_ref()
+            .and_then(|p| p.get(option?))
+            .copied(),
     }
 }
 
 fn wire_question(ask: &Ask) -> Question {
     match ask {
-        Ask::Noul { instructions, yes, no } => Question {
+        Ask::Noul {
+            instructions,
+            yes,
+            no,
+        } => Question {
             kind: "noul",
             instructions: instructions.clone(),
             criteria: Some(json!({"true": yes, "false": no})),
         },
-        Ask::Choice { instructions, options } => Question {
+        Ask::Choice {
+            instructions,
+            options,
+        } => Question {
             kind: "choice",
             instructions: instructions.clone(),
-            criteria: Some(Value::Object(options.iter().map(|(k, d)| (k.clone(), Value::String(d.clone()))).collect())),
+            criteria: Some(Value::Object(
+                options
+                    .iter()
+                    .map(|(k, d)| (k.clone(), Value::String(d.clone())))
+                    .collect(),
+            )),
         },
-        Ask::Score { instructions, rungs } => Question {
+        Ask::Score {
+            instructions,
+            rungs,
+        } => Question {
             kind: "score",
             instructions: instructions.clone(),
-            criteria: Some(Value::Array(rungs.iter().map(|(k, d)| Value::String(format!("{k}: {d}"))).collect())),
+            criteria: Some(Value::Array(
+                rungs
+                    .iter()
+                    .map(|(k, d)| Value::String(format!("{k}: {d}")))
+                    .collect(),
+            )),
         },
     }
 }
@@ -491,9 +682,14 @@ fn wire_question(ask: &Ask) -> Question {
 /// Parse and lint a spec from JSON. Errors list every schema and lint problem at once, so a
 /// spec author (human or agent) fixes them in one pass instead of one per compile.
 pub fn load(json_text: &str) -> Result<DecisionSpec, Vec<String>> {
-    let spec: DecisionSpec = serde_json::from_str(json_text).map_err(|e| vec![format!("schema: {e}")])?;
+    let spec: DecisionSpec =
+        serde_json::from_str(json_text).map_err(|e| vec![format!("schema: {e}")])?;
     let errors = spec.lint();
-    if errors.is_empty() { Ok(spec) } else { Err(errors) }
+    if errors.is_empty() {
+        Ok(spec)
+    } else {
+        Err(errors)
+    }
 }
 
 /// The JSON Schema every spec file (and plugin `[kev]` block) must satisfy.
@@ -507,8 +703,20 @@ macro_rules! builtin_specs {
     };
 }
 builtin_specs!(
-    "code_chunk", "code_change", "completeness", "completeness_digest", "map_slice", "security_triage",
-    "function_maintainability", "resource_fit", "route", "context_relevance", "ux_novice_step",
+    "code_chunk",
+    "code_change",
+    "completeness",
+    "completeness_digest",
+    "map_slice",
+    "security_triage",
+    "function_maintainability",
+    "resource_fit",
+    "route",
+    "route_codex",
+    "context_relevance",
+    "ux_novice_step",
+    "file_relevance",
+    "task_requirements",
 );
 
 /// Every built-in spec, parsed and linted. A bad spec file is a build-time test failure and a
@@ -519,10 +727,21 @@ pub fn builtin() -> &'static BTreeMap<String, DecisionSpec> {
         BUILTIN
             .iter()
             .map(|(name, text)| {
-                let spec = load(text).unwrap_or_else(|e| panic!("built-in spec {name} is invalid:
-  {}", e.join("
-  ")));
-                assert_eq!(&spec.name, name, "spec file {name}.json declares name {}", spec.name);
+                let spec = load(text).unwrap_or_else(|e| {
+                    panic!(
+                        "built-in spec {name} is invalid:
+  {}",
+                        e.join(
+                            "
+  "
+                        )
+                    )
+                });
+                assert_eq!(
+                    &spec.name, name,
+                    "spec file {name}.json declares name {}",
+                    spec.name
+                );
                 (spec.name.clone(), spec)
             })
             .collect()
@@ -531,7 +750,9 @@ pub fn builtin() -> &'static BTreeMap<String, DecisionSpec> {
 
 /// A built-in spec by name.
 pub fn get(name: &str) -> &'static DecisionSpec {
-    builtin().get(name).unwrap_or_else(|| panic!("no built-in spec {name}"))
+    builtin()
+        .get(name)
+        .unwrap_or_else(|| panic!("no built-in spec {name}"))
 }
 
 /// Lint every built-in spec without panicking (for tests and `status`).
@@ -549,28 +770,62 @@ pub fn lint_builtin() -> Vec<String> {
 // ------------------------------------------------------------------ builders
 
 pub fn text(name: &str, max_chars: usize, meaning: &str) -> Field {
-    Field { name: name.into(), kind: FieldKind::Text { max_chars }, meaning: meaning.into() }
+    Field {
+        name: name.into(),
+        kind: FieldKind::Text { max_chars },
+        meaning: meaning.into(),
+    }
 }
 pub fn code(name: &str, max_chars: usize, meaning: &str) -> Field {
-    Field { name: name.into(), kind: FieldKind::Code { max_chars }, meaning: meaning.into() }
+    Field {
+        name: name.into(),
+        kind: FieldKind::Code { max_chars },
+        meaning: meaning.into(),
+    }
 }
 pub fn band(name: &str, vocabulary: &Vocabulary, meaning: &str) -> Field {
-    Field { name: name.into(), kind: FieldKind::Band { vocabulary: vocabulary.clone() }, meaning: meaning.into() }
+    Field {
+        name: name.into(),
+        kind: FieldKind::Band {
+            vocabulary: vocabulary.clone(),
+        },
+        meaning: meaning.into(),
+    }
 }
 pub fn noul(id: &str, instructions: &str, yes: &str, no: &str, gate: Gate) -> QuestionSpec {
-    QuestionSpec { id: id.into(), ask: Ask::Noul { instructions: instructions.into(), yes: yes.into(), no: no.into() }, gate }
+    QuestionSpec {
+        id: id.into(),
+        ask: Ask::Noul {
+            instructions: instructions.into(),
+            yes: yes.into(),
+            no: no.into(),
+        },
+        gate,
+    }
 }
 pub fn choice(id: &str, instructions: &str, options: &[(&str, &str)], gate: Gate) -> QuestionSpec {
     QuestionSpec {
         id: id.into(),
-        ask: Ask::Choice { instructions: instructions.into(), options: options.iter().map(|(k, d)| (k.to_string(), d.to_string())).collect() },
+        ask: Ask::Choice {
+            instructions: instructions.into(),
+            options: options
+                .iter()
+                .map(|(k, d)| (k.to_string(), d.to_string()))
+                .collect(),
+        },
         gate,
     }
 }
 pub fn score(id: &str, instructions: &str, rungs: &[(&str, &str)], gate: Gate) -> QuestionSpec {
     QuestionSpec {
         id: id.into(),
-        ask: Ask::Score { instructions: instructions.into(), rungs: rungs.iter().map(|(k, d)| (k.to_string(), d.to_string())).collect() },
+        ask: Ask::Score {
+            instructions: instructions.into(),
+            rungs: rungs
+                .iter()
+                .map(|(k, d)| (k.to_string(), d.to_string()))
+                .collect(),
+        },
         gate,
     }
 }
@@ -578,8 +833,24 @@ pub fn advisory(why: &str) -> Gate {
     Gate::Advisory { why: why.into() }
 }
 pub fn yes_above(threshold: f64, reason: &str, calibration: &str) -> Gate {
-    Gate::Rule { measure: Measure::Yes, option: None, fails_when: Cmp::Above, threshold, reason: reason.into(), calibration: calibration.into(), good_tail: vec![] }
+    Gate::Rule {
+        measure: Measure::Yes,
+        option: None,
+        fails_when: Cmp::Above,
+        threshold,
+        reason: reason.into(),
+        calibration: calibration.into(),
+        good_tail: vec![],
+    }
 }
 pub fn yes_below(threshold: f64, reason: &str, calibration: &str) -> Gate {
-    Gate::Rule { measure: Measure::Yes, option: None, fails_when: Cmp::Below, threshold, reason: reason.into(), calibration: calibration.into(), good_tail: vec![] }
+    Gate::Rule {
+        measure: Measure::Yes,
+        option: None,
+        fails_when: Cmp::Below,
+        threshold,
+        reason: reason.into(),
+        calibration: calibration.into(),
+        good_tail: vec![],
+    }
 }

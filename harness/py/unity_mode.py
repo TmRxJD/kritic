@@ -13,7 +13,7 @@ from __future__ import annotations
 import csv
 import re
 import shutil
-import subprocess
+import subprocess  # noqa: S404; intended local tool invocation  # nosec B404
 import time
 from pathlib import Path
 
@@ -70,7 +70,7 @@ def presentmon_exe(bin_dir: str | None) -> str | None:
 
 
 def start_presentmon(exe: str, process_name: str, seconds: int, csv_path: Path) -> subprocess.Popen:
-    return subprocess.Popen(
+    return subprocess.Popen(  # noqa: S603; explicit argv, operator-selected executable or fixed test harness  # nosec B603
         # Present-to-present timing only. Tracking frames to the display, GPU work or input needs
         # events a non-elevated session does not reliably get; when they are missing PresentMon
         # emits no rows at all (seen 2026-09-27: 0 frames from a 700 fps app). The metrics used

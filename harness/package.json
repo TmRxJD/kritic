@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@axe-core/playwright": "4.13.0",
-    "playwright": "1.63.0"
+    "playwright": "1.63.0",
+    "re2js": "2.8.6"
   }
 }

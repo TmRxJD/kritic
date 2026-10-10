@@ -1,3 +1,7 @@
+> TEST RELEASE: verify every claim and requirement independently. Fix Kritic defects with
+> regressions and submit PRs; do not weaken checks or fabricate coverage. Empty/skipped/unverified
+> checks and uncalibrated model gates cannot establish acceptance.
+
 # Extending kritic
 
 **For project-specific evaluators, use a repo plugin instead of changing kritic.** Drop a manifest
@@ -17,8 +21,9 @@ Follow this contract so the tool behaves like the others.
    approval is `null`, with the reason in the result. Never default to a clean result.
 4. **Keep responses small.** Save the full result with `tools::save_full` (`full_result`) and trim
    lists to `tools::MAX_ITEMS` in the MCP response.
-5. **Take the GPU lock** (`self.gpu("<tool>").await`) around any Kev or vision call. It
-   serializes across processes (`runs/gpu.lock`), so concurrent sessions never co-load models.
+5. **Resolve the actual inference backend first.** Take the GPU lock only for selected local
+   GPU inference. Cloud/off/CPU-only paths must not acquire GPU leases or unload shared models.
+   Fallbacks must acquire the guard for the backend they actually execute.
 6. **Emit lifecycle and progress.** `started`/`finished` in the wrapper; `crate::events::emit("progress", ..)`
    for long loops; harness subprocesses print `{"event": ...}` JSON lines on stderr, and
    `proc::run_streaming` forwards them to the WebSocket.

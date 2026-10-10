@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build kritic and install it into $KRITIC_HOME (default ~/.kritic):
 #   bin/kritic[.exe]   the MCP server
-#   bin/harness/       the Playwright and desktop harnesses (found beside the binary)
+#   bin/harness/       optional desktop/Python harnesses; web checks use native CDP (found beside the binary)
 #   kritic.toml        created from examples/kritic.toml if absent
 #
 #   scripts/install.sh [--no-harness] [--with-models] [--backend <laya backend>]
@@ -22,7 +22,12 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-EXE=kritic; case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE=kritic.exe ;; esac
+EXE=kritic
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    EXE=kritic.exe
+    ;;
+esac
 
 cargo build --release --quiet
 TARGET="$(cargo metadata --format-version 1 --no-deps | python -c 'import sys,json;print(json.load(sys.stdin)["target_directory"])')"
@@ -39,11 +44,10 @@ if [ "$HARNESS" = 1 ]; then
   rm -rf "$HOME_DIR/bin/harness"
   mkdir -p "$HOME_DIR/bin/harness"
   (cd harness && tar --exclude=node_modules --exclude=.venv --exclude=__pycache__ --exclude=out -cf - .) | (cd "$HOME_DIR/bin/harness" && tar -xf -)
-  (cd "$HOME_DIR/bin/harness" && npm install --silent --no-audit --no-fund && npx --yes playwright install chromium)
   if command -v uv >/dev/null; then
     (cd "$HOME_DIR/bin/harness/py" && uv sync --quiet)
   else
-    echo "note: uv not found; desktop_test, resource_critic and hygiene_critic need it (https://docs.astral.sh/uv/)"
+    echo "note: uv not found; optional desktop_test needs it; resource/hygiene checks run natively (https://docs.astral.sh/uv/)"
   fi
   echo "installed harness -> $HOME_DIR/bin/harness"
 fi
@@ -55,6 +59,7 @@ fi
 
 if [ "$MODELS" = 1 ]; then
   KRITIC_HOME="$HOME_DIR" scripts/fetch-models.sh "${BACKEND_ARGS[@]}"
+  echo "models downloaded; explicitly select review.backend = local to enable inference"
 fi
 
 SHOWN="$DEST"; command -v cygpath >/dev/null && SHOWN="$(cygpath -m "$DEST")"
@@ -62,5 +67,5 @@ cat <<MSG
 
 Register it with Claude Code (user scope, every project):
   claude mcp add --scope user kritic -- "$SHOWN"
-Then start a new session and ask Claude to call kritic's status tool with start=true.
+Then start a new session and call status(start=false). Models are off by default.
 MSG

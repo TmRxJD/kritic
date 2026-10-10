@@ -4,7 +4,11 @@
 //! Everything that decides approval is measured against deterministic done-checks the repo
 //! declares in `.kritic/ux.toml`, never a model's opinion:
 //! - a rule audit of every observed screen (labels, tooltips, target size, contrast, disabled
-//!   controls that say why, a top-level entry for every mode);
+//!   controls that say why, overlapping or off-screen controls, a top-level entry for every mode);
+//! - continuity: a screen has to be the same screen every time it is reached. Each replay of a
+//!   path is compared with the first visit (controls, text, and the screenshots pixel for
+//!   pixel); a difference is a finding with both pictures, and enough of them fail the run,
+//!   because every measurement after a state leak is about a different app;
 //! - an exhaustive breadth-first exploration (screen fingerprint -> action -> fingerprint) that
 //!   gives each task its `optimal_steps`, the shortest path to a screen passing its done-check;
 //! - a deliberately weak novice (vision model on a set-of-marks screenshot, or Kev through the
@@ -69,6 +73,10 @@ pub struct AppSpec {
     /// Wait after each load or action before observing (web default 150 ms).
     #[serde(default)]
     pub settle_ms: Option<u64>,
+    /// unity / desktop: how long to wait for an app that reports it is busy (loading) before the
+    /// wait counts as a failure. Default 45 s.
+    #[serde(default)]
+    pub busy_timeout_s: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema, Default)]
@@ -114,6 +122,16 @@ pub struct SpecFile {
     /// Regexes on control labels: never pressed by exploration or the novice (still audited).
     #[serde(default)]
     pub ignore: Vec<String>,
+    /// Regexes on text that changes while the screen stays the same (a status line, a counter, a
+    /// loading message). Such text is left out of a screen's identity and of continuity
+    /// comparisons; without it every tick of a clock is a new screen and the action budget goes on
+    /// phantom duplicates.
+    #[serde(default)]
+    pub volatile: Vec<String>,
+    /// Parts of the window that legitimately animate (a native video or preview surface), as
+    /// [x0, y0, x1, y1] fractions of the window. They are masked out of screenshot comparisons.
+    #[serde(default)]
+    pub volatile_regions: Vec<[f64; 4]>,
     pub app: AppSpec,
     #[serde(default)]
     pub modes: Vec<ModeSpec>,
@@ -132,10 +150,15 @@ pub struct Done {
 impl Done {
     /// Every predicate given must hold on the observation.
     pub fn holds(&self, o: &Obs) -> bool {
-        self.control.as_ref().is_none_or(|r| o.controls.iter().any(|c| r.is_match(&c.label)))
+        self.control
+            .as_ref()
+            .is_none_or(|r| o.controls.iter().any(|c| r.is_match(&c.label)))
             && self.text.as_ref().is_none_or(|r| r.is_match(&o.text))
             && self.url.as_ref().is_none_or(|r| r.is_match(&o.url))
-            && self.event.as_ref().is_none_or(|r| o.events.iter().any(|e| r.is_match(e)))
+            && self
+                .event
+                .as_ref()
+                .is_none_or(|r| o.events.iter().any(|e| r.is_match(e)))
     }
 }
 
@@ -157,6 +180,8 @@ pub struct Spec {
     pub modes: Vec<Goal>,
     pub tasks: Vec<Goal>,
     pub ignore: Vec<String>,
+    pub volatile: Vec<String>,
+    pub volatile_regions: Vec<[f64; 4]>,
 }
 
 pub const DEFAULT_BUDGET: usize = 3;
@@ -169,7 +194,10 @@ fn rx(errors: &mut Vec<String>, at: &str, pattern: &Option<String>) -> Option<Re
     match Regex::new(p) {
         Ok(r) => Some(r),
         Err(e) => {
-            errors.push(format!("{at}: invalid regex {p:?}: {}", e.to_string().lines().last().unwrap_or("")));
+            errors.push(format!(
+                "{at}: invalid regex {p:?}: {}",
+                e.to_string().lines().last().unwrap_or("")
+            ));
             None
         }
     }
@@ -177,7 +205,9 @@ fn rx(errors: &mut Vec<String>, at: &str, pattern: &Option<String>) -> Option<Re
 
 fn done(errors: &mut Vec<String>, at: &str, d: &DoneSpec, app: &AppSpec) -> Done {
     if d.control.is_none() && d.text.is_none() && d.url.is_none() && d.event.is_none() {
-        errors.push(format!("{at}.done: give at least one of control, text, url, event"));
+        errors.push(format!(
+            "{at}.done: give at least one of control, text, url, event"
+        ));
     }
     if d.url.is_some() && app.kind != "web" {
         errors.push(format!("{at}.done.url: only for kind = \"web\""));
@@ -199,23 +229,34 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
     let mut errors = Vec::new();
     let app = &f.app;
     if !KINDS.contains(&app.kind.as_str()) {
-        errors.push(format!("app.kind: {:?} is not one of web, desktop, unity", app.kind));
+        errors.push(format!(
+            "app.kind: {:?} is not one of web, desktop, unity",
+            app.kind
+        ));
     }
     if app.purpose.trim().is_empty() {
         errors.push("app.purpose: say what the app is for".into());
     }
     match app.kind.as_str() {
         "web" if app.url.is_none() => errors.push("app.url: required for kind = \"web\"".into()),
-        "desktop" | "unity" if app.exe.is_none() => errors.push(format!("app.exe: required for kind = \"{}\"", app.kind)),
+        "desktop" | "unity" if app.exe.is_none() => {
+            errors.push(format!("app.exe: required for kind = \"{}\"", app.kind))
+        }
         _ => {}
     }
     if app.kind == "unity" && app.app_events.is_none() {
-        errors.push("app.app_events: required for kind = \"unity\" (the adapter drives the app over it)".into());
+        errors.push(
+            "app.app_events: required for kind = \"unity\" (the adapter drives the app over it)"
+                .into(),
+        );
     }
     rx(&mut errors, "app.window_title_re", &app.window_title_re);
     rx(&mut errors, "app.ready_event", &app.ready_event);
     for (i, p) in f.ignore.iter().enumerate() {
         rx(&mut errors, &format!("ignore[{i}]"), &Some(p.clone()));
+    }
+    for (i, p) in f.volatile.iter().enumerate() {
+        rx(&mut errors, &format!("volatile[{i}]"), &Some(p.clone()));
     }
     if f.tasks.is_empty() {
         errors.push("tasks: declare at least one task".into());
@@ -228,7 +269,13 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}: name must be non-empty and unique"));
         }
         let d = done(&mut errors, &at, &m.done, app);
-        modes.push(Goal { name: m.name.clone(), goal: format!("open {}", m.name), done: d, budget: 1, primary: true });
+        modes.push(Goal {
+            name: m.name.clone(),
+            goal: format!("open {}", m.name),
+            done: d,
+            budget: 1,
+            primary: true,
+        });
     }
     let mut tasks = Vec::new();
     for (i, t) in f.tasks.iter().enumerate() {
@@ -237,7 +284,9 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}: name must be non-empty and unique"));
         }
         if t.goal.trim().is_empty() {
-            errors.push(format!("{at}.goal: say what the user wants, in plain words"));
+            errors.push(format!(
+                "{at}.goal: say what the user wants, in plain words"
+            ));
         }
         let budget = t.budget.unwrap_or(DEFAULT_BUDGET);
         if budget == 0 {
@@ -247,24 +296,44 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             errors.push(format!("{at}.budget: a primary task takes at most {PRIMARY_MAX_BUDGET} steps (got {budget}); restructure the UI rather than raising it"));
         }
         let d = done(&mut errors, &at, &t.done, app);
-        tasks.push(Goal { name: t.name.clone(), goal: t.goal.clone(), done: d, budget, primary: t.primary });
+        tasks.push(Goal {
+            name: t.name.clone(),
+            goal: t.goal.clone(),
+            done: d,
+            budget,
+            primary: t.primary,
+        });
     }
     if errors.is_empty() {
-        Ok(Spec { path: path.into(), text: text.into(), app: f.app, modes, tasks, ignore: f.ignore })
+        Ok(Spec {
+            path: path.into(),
+            text: text.into(),
+            app: f.app,
+            modes,
+            tasks,
+            ignore: f.ignore,
+            volatile: f.volatile,
+            volatile_regions: f.volatile_regions,
+        })
     } else {
         Err(errors)
     }
 }
 
 pub fn load_spec(path: &Path) -> Result<Spec, Vec<String>> {
-    let text = std::fs::read_to_string(path).map_err(|e| vec![format!("cannot read {}: {e}", path.display())])?;
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| vec![format!("cannot read {}: {e}", path.display())])?;
     let mut spec = parse_spec(&text, &path.display().to_string())?;
     // a web url without a scheme is a file beside the spec (the calibration fixtures)
     if let Some(u) = spec.app.url.as_mut().filter(|u| !u.contains("://")) {
         let file = path.parent().unwrap_or(Path::new(".")).join(&*u);
-        let abs = std::fs::canonicalize(&file).map_err(|e| vec![format!("app.url: {}: {e}", file.display())])?;
+        let abs = std::fs::canonicalize(&file)
+            .map_err(|e| vec![format!("app.url: {}: {e}", file.display())])?;
         let s = abs.display().to_string();
-        *u = format!("file:///{}", s.trim_start_matches(r"\\?\").replace('\\', "/"));
+        *u = format!(
+            "file:///{}",
+            s.trim_start_matches(r"\\?\").replace('\\', "/")
+        );
     }
     Ok(spec)
 }
@@ -308,10 +377,17 @@ impl Control {
         self.enabled && self.skip.is_none()
     }
     pub fn shown(&self) -> String {
-        if self.label.trim().is_empty() { "(no label)".into() } else { self.label.clone() }
+        if self.label.trim().is_empty() {
+            "(no label)".into()
+        } else {
+            self.label.clone()
+        }
     }
     fn centre(&self) -> (f64, f64) {
-        (self.rect[0] + self.rect[2] / 2.0, self.rect[1] + self.rect[3] / 2.0)
+        (
+            self.rect[0] + self.rect[2] / 2.0,
+            self.rect[1] + self.rect[3] / 2.0,
+        )
     }
 }
 
@@ -339,7 +415,52 @@ pub struct Obs {
     /// App events since the last reset.
     #[serde(default)]
     pub events: Vec<String>,
+    /// Each visible text on its own (`text` joins them), so two visits can be compared piece by piece.
+    #[serde(default)]
+    pub texts: Vec<String>,
+    /// What the app says it is still waiting for (a loading veil, a preview starting); empty when it is
+    /// ready. The adapter waits for it to clear, so a value here means the wait ran out.
+    #[serde(default)]
+    pub busy: String,
+    /// How much this screenshot differs from the one it was asked to compare with.
+    #[serde(default)]
+    pub pixel_diff: Option<PixelDiff>,
 }
+
+/// Two screenshots compared: the fraction of pixels that changed and the box holding every change.
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema, Default)]
+pub struct PixelDiff {
+    pub fraction: f64,
+    /// x0, y0, x1, y1 in screenshot pixels.
+    #[serde(default)]
+    pub bbox: [f64; 4],
+    #[serde(default)]
+    pub sizes_differ: bool,
+}
+
+/// A screen that was not the same screen when it was reached again, or was seen mid-load.
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct Continuity {
+    /// replay_differs | looks_different | seen_busy
+    pub kind: String,
+    pub screen: usize,
+    pub path: Vec<String>,
+    pub detail: String,
+    /// What the second visit has that the first did not, and the reverse, and what changed in place.
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub changed: Vec<String>,
+    /// The two pictures to open side by side: the first visit and the repeat.
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub pixel_diff: Option<PixelDiff>,
+}
+
+/// A replay whose screenshot changes by more than this, with no structural difference, is
+/// reported as looking different: something drew or failed to draw that no control describes.
+const VISUAL_DIFF: f64 = 0.30;
+/// This share of the screens a run expanded changing between visits fails the run.
+const UNSTABLE_SHARE: f64 = 0.1;
 
 impl Obs {
     pub fn actionable(&self) -> Vec<&Control> {
@@ -359,7 +480,14 @@ pub trait Adapter: Send {
 /// Picks the next control for the novice: an index into `labels`. `pressed` is what it already
 /// pressed this run, in order: a first-time user still remembers their own clicks.
 pub trait Navigator: Sync {
-    fn choose(&self, goal: &str, pressed: &[String], image: Option<&str>, labels: &[String], seed: u64) -> impl Future<Output = Result<usize, String>> + Send;
+    fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> impl Future<Output = Result<usize, String>> + Send;
 }
 
 // ------------------------------------------------------------------ harness process adapter
@@ -378,30 +506,43 @@ pub struct ProcAdapter {
 
 impl ProcAdapter {
     /// Start the harness for `spec.app.kind` and send it `start`.
-    pub async fn launch(cfg: &Config, spec: &Spec, start: Value, stall_s: f64) -> Result<Self, String> {
-        let mut cmd = if spec.app.kind == "web" {
-            let script = cfg.harness.with_file_name("ux_web.mjs");
-            let mut c = tokio::process::Command::new(&cfg.node_exe);
-            c.arg(script).current_dir(cfg.harness.parent().unwrap_or(Path::new(".")));
-            if let Some(dir) = &cfg.playwright_browsers {
-                c.env("PLAYWRIGHT_BROWSERS_PATH", dir);
-            }
-            c
-        } else {
-            let mut c = tokio::process::Command::new(&cfg.uv_exe);
-            c.args(["run", "--quiet", "--project"]).arg(&cfg.harness_py).arg("python").arg(cfg.harness_py.join("ux_adapter.py")).current_dir(&cfg.harness_py);
-            c
-        };
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
-        let mut child = cmd.spawn().map_err(|e| format!("cannot start ux adapter: {e}"))?;
+    pub async fn launch(
+        cfg: &Config,
+        spec: &Spec,
+        start: Value,
+        stall_s: f64,
+    ) -> Result<Self, String> {
+        let mut cmd = tokio::process::Command::new(&cfg.uv_exe);
+        cmd.args(["run", "--quiet", "--project"])
+            .arg(&cfg.harness_py)
+            .arg("python")
+            .arg(cfg.harness_py.join("ux_adapter.py"))
+            .current_dir(&cfg.harness_py);
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| format!("cannot start ux adapter: {e}"))?;
         let stdin = child.stdin.take();
         let out = BufReader::new(child.stdout.take().ok_or("no stdout")?).lines();
-        let err = child.stderr.take().map(|e| crate::proc::relay_stderr(e, "ux_critic"));
+        let err = child
+            .stderr
+            .take()
+            .map(|e| crate::proc::relay_stderr(e, "ux_critic"));
         let ready_s = spec.app.ready_timeout_s.unwrap_or(120.0);
         let stall = Duration::from_secs_f64(stall_s.max(1.0));
         // launching or relaunching an app waits for it to be ready, then the stall limit applies
-        let slow = if spec.app.kind == "web" { stall.max(Duration::from_secs(30)) } else { Duration::from_secs_f64(ready_s + stall_s) };
-        let mut a = ProcAdapter { child, stdin, out, err, stall, slow };
+        let slow = Duration::from_secs_f64(ready_s + stall_s);
+        let mut a = ProcAdapter {
+            child,
+            stdin,
+            out,
+            err,
+            stall,
+            slow,
+        };
         a.call(start, a.slow.max(Duration::from_secs(60))).await?;
         Ok(a)
     }
@@ -410,22 +551,47 @@ impl ProcAdapter {
         let op = req["op"].as_str().unwrap_or("?").to_string();
         let stdin = self.stdin.as_mut().ok_or("adapter closed")?;
         let line = format!("{req}\n");
-        stdin.write_all(line.as_bytes()).await.map_err(|e| format!("adapter gone ({op}): {e}"))?;
+        stdin
+            .write_all(line.as_bytes())
+            .await
+            .map_err(|e| format!("adapter gone ({op}): {e}"))?;
         stdin.flush().await.map_err(|e| e.to_string())?;
         match tokio::time::timeout(limit, self.out.next_line()).await {
-            Err(_) => Err(format!("adapter stalled: no reply to {op} within {:.0}s", limit.as_secs_f64())),
+            Err(_) => Err(format!(
+                "adapter stalled: no reply to {op} within {:.0}s",
+                limit.as_secs_f64()
+            )),
             Ok(Err(e)) => Err(format!("adapter output unreadable ({op}): {e}")),
-            Ok(Ok(None)) => Err(format!("adapter exited during {op}: {}", self.stderr_tail().await)),
+            Ok(Ok(None)) => Err(format!(
+                "adapter exited during {op}: {}",
+                self.stderr_tail().await
+            )),
             Ok(Ok(Some(l))) => {
-                let v: Value = serde_json::from_str(&l).map_err(|e| format!("adapter reply to {op} is not JSON ({e}): {l:.200}"))?;
-                if v["ok"] == true { Ok(v) } else { Err(format!("{op}: {}", v["error"].as_str().unwrap_or("failed"))) }
+                let v: Value = serde_json::from_str(&l)
+                    .map_err(|e| format!("adapter reply to {op} is not JSON ({e}): {l:.200}"))?;
+                if v["ok"] == true {
+                    Ok(v)
+                } else {
+                    Err(format!("{op}: {}", v["error"].as_str().unwrap_or("failed")))
+                }
             }
         }
     }
 
     async fn stderr_tail(&mut self) -> String {
         match self.err.take() {
-            Some(h) => tokio::time::timeout(Duration::from_secs(3), h).await.ok().and_then(Result::ok).unwrap_or_default().chars().rev().take(400).collect::<Vec<_>>().into_iter().rev().collect(),
+            Some(h) => tokio::time::timeout(Duration::from_secs(3), h)
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or_default()
+                .chars()
+                .rev()
+                .take(400)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect(),
             None => String::new(),
         }
     }
@@ -433,19 +599,86 @@ impl ProcAdapter {
     /// Ask the harness to close the app and exit; returns its closing report (desktop/unity:
     /// processes and ports the run left alive). Kills the process tree if it doesn't exit.
     pub async fn close(mut self) -> Option<Value> {
-        let report = self.call(json!({"op": "close"}), Duration::from_secs(30)).await.ok();
+        let report = self
+            .call(json!({"op": "close"}), Duration::from_secs(30))
+            .await
+            .ok();
         self.stdin = None;
-        if tokio::time::timeout(Duration::from_secs(10), self.child.wait()).await.is_err() {
+        if tokio::time::timeout(Duration::from_secs(10), self.child.wait())
+            .await
+            .is_err()
+        {
             kill_tree(&mut self.child);
         }
         report.and_then(|v| v.get("hygiene").cloned())
     }
 }
 
+/// The adapter for a spec: web runs in-process over CDP; desktop and Unity run the harness.
+pub enum AppAdapter {
+    Web(Box<crate::native::web::WebSession>),
+    Proc(Box<ProcAdapter>),
+}
+
+impl AppAdapter {
+    pub async fn launch(
+        cfg: &Config,
+        spec: &Spec,
+        start: Value,
+        stall_s: f64,
+    ) -> Result<Self, String> {
+        if spec.app.kind == "web" {
+            crate::native::web::WebSession::start(cfg, &start)
+                .await
+                .map(|session| AppAdapter::Web(Box::new(session)))
+        } else {
+            ProcAdapter::launch(cfg, spec, start, stall_s)
+                .await
+                .map(|adapter| AppAdapter::Proc(Box::new(adapter)))
+        }
+    }
+
+    /// Close the app; returns the harness's hygiene report, if it made one.
+    pub async fn close(self) -> Option<Value> {
+        match self {
+            AppAdapter::Web(w) => {
+                w.close().await;
+                None
+            }
+            AppAdapter::Proc(p) => p.close().await,
+        }
+    }
+}
+
+impl Adapter for AppAdapter {
+    async fn reset(&mut self) -> Result<(), String> {
+        match self {
+            AppAdapter::Web(w) => w.reset().await,
+            AppAdapter::Proc(p) => p.reset().await,
+        }
+    }
+    async fn observe(&mut self, opts: Value) -> Result<Obs, String> {
+        match self {
+            AppAdapter::Web(w) => w.observe(opts).await,
+            AppAdapter::Proc(p) => p.observe(opts).await,
+        }
+    }
+    async fn act(&mut self, id: &str) -> Result<(), String> {
+        match self {
+            AppAdapter::Web(w) => w.act(id).await,
+            AppAdapter::Proc(p) => p.act(id).await,
+        }
+    }
+}
+
 fn kill_tree(child: &mut tokio::process::Child) {
     if let Some(pid) = child.id() {
         if cfg!(windows) {
-            let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+            let _ = std::process::Command::new("taskkill")
+                .args(["/T", "/F", "/PID", &pid.to_string()])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
         }
         let _ = child.start_kill();
     }
@@ -473,7 +706,9 @@ impl Adapter for ProcAdapter {
     }
     async fn act(&mut self, id: &str) -> Result<(), String> {
         let limit = self.stall;
-        self.call(json!({"op": "act", "id": id}), limit).await.map(|_| ())
+        self.call(json!({"op": "act", "id": id}), limit)
+            .await
+            .map(|_| ())
     }
 }
 
@@ -484,7 +719,14 @@ pub struct VisionNav<'a> {
 }
 
 impl Navigator for VisionNav<'_> {
-    async fn choose(&self, goal: &str, pressed: &[String], image: Option<&str>, labels: &[String], seed: u64) -> Result<usize, String> {
+    async fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> Result<usize, String> {
         let image = image.ok_or("no marked screenshot for the vision novice")?;
         crate::vision::pick(self.cfg, Path::new(image), goal, pressed, labels, seed).await
     }
@@ -517,18 +759,41 @@ pub fn sample(weights: &[f64], seed: u64) -> usize {
 }
 
 impl<D: Decider> Navigator for KevNav<'_, D> {
-    async fn choose(&self, goal: &str, pressed: &[String], _image: Option<&str>, labels: &[String], seed: u64) -> Result<usize, String> {
+    async fn choose(
+        &self,
+        goal: &str,
+        pressed: &[String],
+        _image: Option<&str>,
+        labels: &[String],
+        seed: u64,
+    ) -> Result<usize, String> {
         let spec = crate::spec::get("ux_novice_step");
         let mut weights = Vec::with_capacity(labels.len());
         let mut goal: String = goal.chars().take(300).collect();
         if !pressed.is_empty() {
-            let done: String = pressed.join(", ").chars().rev().take(150).collect::<Vec<_>>().into_iter().rev().collect();
+            let done: String = pressed
+                .join(", ")
+                .chars()
+                .rev()
+                .take(150)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
             goal.push_str(&format!(" (already pressed: {done})"));
         }
         for l in labels {
-            let state = spec.state(&[("goal", goal.clone()), ("control", l.chars().take(120).collect())])?;
+            let state = spec.state(&[
+                ("goal", goal.clone()),
+                ("control", l.chars().take(120).collect()),
+            ])?;
             let d = self.d.decide(&state, &spec.wire()).await?;
-            weights.push(d.answers.get("next_step").map(|a| a.value).ok_or("Kev gave no next_step answer")?);
+            weights.push(
+                d.answers
+                    .get("next_step")
+                    .map(|a| a.value)
+                    .ok_or("Kev gave no next_step answer")?,
+            );
         }
         Ok(sample(&weights, seed))
     }
@@ -651,6 +916,9 @@ pub struct UxResult {
     pub tasks: Vec<TaskResult>,
     pub rules: Vec<RuleFinding>,
     pub rule_counts: BTreeMap<String, usize>,
+    /// Screens that were not the same screen when reached again, or were measured half-loaded, each
+    /// with the two pictures to compare. The reviewer opens every pair.
+    pub continuity: Vec<Continuity>,
     pub screens: Vec<ScreenResult>,
     pub exploration: Exploration,
     /// vision model, Kev spec, or "off"; with the reason when the novice did not run.
@@ -685,6 +953,10 @@ struct Screen {
     url: String,
     screenshot: Option<String>,
     controls: usize,
+    /// Each control's id and state (label, enabled, selected) and each visible text as first seen,
+    /// so a repeat visit can be compared piece by piece.
+    state: Vec<(String, String)>,
+    texts: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -708,6 +980,10 @@ pub struct Run<'s> {
     rules: BTreeMap<(String, String), RuleFinding>,
     truncated: Option<String>,
     problems: Vec<String>,
+    continuity: Vec<Continuity>,
+    volatile: Vec<Regex>,
+    /// Screens whose replay was compared with their first visit.
+    expanded: usize,
     error: Option<String>,
     novice: Vec<Option<NoviceResult>>,
     novice_model: String,
@@ -721,28 +997,135 @@ fn path_labels(p: &[Control]) -> Vec<String> {
     p.iter().map(Control::shown).collect()
 }
 
+/// A screen's controls as (id, state), the state being what a person would notice changing.
+fn screen_state(o: &Obs) -> Vec<(String, String)> {
+    o.controls
+        .iter()
+        .map(|c| {
+            (
+                c.id.clone(),
+                format!(
+                    "{}|{}|{}",
+                    c.label,
+                    if c.enabled { "on" } else { "off" },
+                    if c.selected { "selected" } else { "" }
+                ),
+            )
+        })
+        .collect()
+}
+
 /// Rule audit of one screen. Pure: (rule, severity, key, detail).
-pub fn audit(controls: &[Control], axe: &[AxeViolation]) -> Vec<(&'static str, &'static str, String, String)> {
-    const FIELDS: [&str; 6] = ["textbox", "combobox", "checkbox", "radio", "Edit", "ComboBox"];
+pub fn audit(
+    controls: &[Control],
+    axe: &[AxeViolation],
+    viewport: [f64; 2],
+) -> Vec<(&'static str, &'static str, String, String)> {
+    const FIELDS: [&str; 6] = [
+        "textbox", "combobox", "checkbox", "radio", "Edit", "ComboBox",
+    ];
     let mut out = Vec::new();
     for c in controls {
         let no_text = c.text.trim().is_empty() && !FIELDS.contains(&c.role.as_str());
         if c.enabled && c.label.trim().is_empty() {
-            out.push(("unlabelled", "error", c.id.clone(), format!("enabled {} with no accessible label", c.role)));
+            out.push((
+                "unlabelled",
+                "error",
+                c.id.clone(),
+                format!("enabled {} with no accessible label", c.role),
+            ));
         }
         if no_text && c.tooltip.trim().is_empty() {
-            out.push(("icon_no_tooltip", "warn", c.id.clone(), format!("icon-only {} with no tooltip", c.role)));
+            out.push((
+                "icon_no_tooltip",
+                "warn",
+                c.id.clone(),
+                format!("icon-only {} with no tooltip", c.role),
+            ));
         }
         if !c.inline && (c.rect[2] < 24.0 || c.rect[3] < 24.0) {
-            out.push(("small_target", "warn", c.id.clone(), format!("target {}x{} px, under 24x24", c.rect[2], c.rect[3])));
+            out.push((
+                "small_target",
+                "warn",
+                c.id.clone(),
+                format!("target {}x{} px, under 24x24", c.rect[2], c.rect[3]),
+            ));
         }
         if !c.enabled && c.tooltip.trim().is_empty() {
-            out.push(("disabled_no_reason", "warn", c.id.clone(), format!("disabled {} with no tooltip saying why", c.role)));
+            out.push((
+                "disabled_no_reason",
+                "warn",
+                c.id.clone(),
+                format!("disabled {} with no tooltip saying why", c.role),
+            ));
         }
     }
+    out.extend(layout_findings(controls, viewport));
     for v in axe.iter().filter(|v| v.id == "color-contrast") {
         for t in &v.targets {
             out.push(("contrast", "error", t.clone(), v.help.clone()));
+        }
+    }
+    out
+}
+
+/// Controls drawn over one another, and controls drawn off the window. Both are invisible to a
+/// reviewer reading labels and obvious to anyone looking: a button half under another, a label
+/// clipped by the window edge.
+fn layout_findings(
+    controls: &[Control],
+    viewport: [f64; 2],
+) -> Vec<(&'static str, &'static str, String, String)> {
+    const EDGE: f64 = 2.0;
+    let mut out = Vec::new();
+    let real: Vec<&Control> = controls
+        .iter()
+        .filter(|c| c.rect[2] > 0.0 && c.rect[3] > 0.0)
+        .collect();
+    if viewport[0] > 0.0 && viewport[1] > 0.0 {
+        for c in &real {
+            let [x, y, w, h] = c.rect;
+            if x < -EDGE || y < -EDGE || x + w > viewport[0] + EDGE || y + h > viewport[1] + EDGE {
+                out.push((
+                    "offscreen",
+                    "warn",
+                    c.id.clone(),
+                    format!("{} at {x:.0},{y:.0} ({w:.0}x{h:.0}) reaches outside the {:.0}x{:.0} window", c.shown(), viewport[0], viewport[1]),
+                ));
+            }
+        }
+    }
+    for (i, a) in real.iter().enumerate() {
+        for b in &real[i + 1..] {
+            let (ax1, ay1) = (a.rect[0] + a.rect[2], a.rect[1] + a.rect[3]);
+            let (bx1, by1) = (b.rect[0] + b.rect[2], b.rect[1] + b.rect[3]);
+            let w = ax1.min(bx1) - a.rect[0].max(b.rect[0]);
+            let h = ay1.min(by1) - a.rect[1].max(b.rect[1]);
+            if w <= 0.0 || h <= 0.0 {
+                continue;
+            }
+            let smaller = (a.rect[2] * a.rect[3]).min(b.rect[2] * b.rect[3]);
+            let share = w * h / smaller;
+            // A control wholly inside another is a part of it, not a collision.
+            let inside = |p: &Control, q: &Control| {
+                p.rect[0] >= q.rect[0] - EDGE
+                    && p.rect[1] >= q.rect[1] - EDGE
+                    && p.rect[0] + p.rect[2] <= q.rect[0] + q.rect[2] + EDGE
+                    && p.rect[1] + p.rect[3] <= q.rect[1] + q.rect[3] + EDGE
+            };
+            if share > 0.3 && !inside(a, b) && !inside(b, a) {
+                out.push((
+                    "overlap",
+                    if share > 0.6 { "error" } else { "warn" },
+                    format!("{} x {}", a.id, b.id),
+                    format!(
+                        "{} and {} overlap by {:.0}% of the smaller",
+                        a.shown(),
+                        b.shown(),
+                        share * 100.0
+                    ),
+                ));
+            }
         }
     }
     out
@@ -754,10 +1137,13 @@ pub fn mean_step_distance(path: &[Control], viewport: [f64; 2]) -> Option<f64> {
     if path.len() < 2 || diag <= 0.0 {
         return None;
     }
-    let d: f64 = path.windows(2).map(|w| {
-        let (a, b) = (w[0].centre(), w[1].centre());
-        ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
-    }).sum();
+    let d: f64 = path
+        .windows(2)
+        .map(|w| {
+            let (a, b) = (w[0].centre(), w[1].centre());
+            ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+        })
+        .sum();
     Some(((d / (path.len() - 1) as f64 / diag) * 1000.0).round() / 1000.0)
 }
 
@@ -780,6 +1166,13 @@ impl<'s> Run<'s> {
             rules: BTreeMap::new(),
             truncated: None,
             problems: vec![],
+            continuity: vec![],
+            volatile: spec
+                .volatile
+                .iter()
+                .filter_map(|p| Regex::new(p).ok())
+                .collect(),
+            expanded: 0,
             error: None,
             novice: vec![None; spec.tasks.len()],
             novice_model: "off".into(),
@@ -799,23 +1192,52 @@ impl<'s> Run<'s> {
     }
 
     fn check_goals(&mut self, o: &Obs, path: &[Control], screen: usize) {
-        let hits: Vec<usize> = self.goals().enumerate().filter(|(i, g)| self.best[*i].is_none() && g.done.holds(o)).map(|(i, _)| i).collect();
+        let hits: Vec<usize> = self
+            .goals()
+            .enumerate()
+            .filter(|(i, g)| self.best[*i].is_none() && g.done.holds(o))
+            .map(|(i, _)| i)
+            .collect();
         for i in hits {
-            self.best[i] = Some(Best { path: path.to_vec(), screen });
+            self.best[i] = Some(Best {
+                path: path.to_vec(),
+                screen,
+            });
         }
     }
 
     fn add_screen(&mut self, o: Obs, depth: usize, path: Vec<Control>) -> usize {
         let id = self.screens.len();
-        for (rule, sev, key, detail) in audit(&o.controls, &o.axe) {
+        for (rule, sev, key, detail) in audit(&o.controls, &o.axe, o.viewport) {
             self.rules
                 .entry((rule.to_string(), key.clone()))
-                .or_insert_with(|| RuleFinding { rule: rule.into(), severity: sev.into(), control: key, detail, screens: vec![] })
+                .or_insert_with(|| RuleFinding {
+                    rule: rule.into(),
+                    severity: sev.into(),
+                    control: key,
+                    detail,
+                    screens: vec![],
+                })
                 .screens
                 .push(id);
         }
         self.check_goals(&o, &path, id);
         self.by_fp.insert(o.fingerprint.clone(), id);
+        if !o.busy.is_empty() {
+            self.continuity.push(Continuity {
+                kind: "seen_busy".into(),
+                screen: id,
+                path: path_labels(&path),
+                detail: format!("still waiting for: {} (the wait ran out), so this screen was measured half-loaded", o.busy),
+                added: vec![],
+                removed: vec![],
+                changed: vec![],
+                before: o.screenshot.clone(),
+                after: None,
+                pixel_diff: None,
+            });
+        }
+        let state = screen_state(&o);
         self.screens.push(Screen {
             fingerprint: o.fingerprint,
             depth,
@@ -824,6 +1246,8 @@ impl<'s> Run<'s> {
             url: o.url,
             screenshot: o.screenshot,
             controls: o.controls.len(),
+            state,
+            texts: o.texts,
         });
         id
     }
@@ -854,9 +1278,7 @@ impl<'s> Run<'s> {
             a.reset().await?;
             replay(a, &path).await?;
             let here = a.observe(json!({})).await?;
-            if here.fingerprint != self.screens[s].fingerprint {
-                self.problems.push(format!("screen {s} looked different on replay (the app is not deterministic from reset)"));
-            }
+            self.check_continuity(a, s, &here).await?;
             for c in here.actionable() {
                 if self.actions >= self.opts.max_actions {
                     self.truncated = Some(format!("action cap {} reached", self.opts.max_actions));
@@ -868,12 +1290,14 @@ impl<'s> Run<'s> {
                 }
                 a.reset().await?;
                 if let Err(e) = replay(a, &path).await {
-                    self.problems.push(format!("replay to screen {s} failed: {e}"));
+                    self.problems
+                        .push(format!("replay to screen {s} failed: {e}"));
                     continue;
                 }
                 self.actions += 1;
                 if let Err(e) = a.act(&c.id).await {
-                    self.problems.push(format!("pressing {} on screen {s} failed: {e}", c.shown()));
+                    self.problems
+                        .push(format!("pressing {} on screen {s} failed: {e}", c.shown()));
                     continue;
                 }
                 let o = a.observe(json!({})).await?;
@@ -895,9 +1319,144 @@ impl<'s> Run<'s> {
         Ok(())
     }
 
+    /// Compare a screen reached again with the first time it was reached: its controls and text piece
+    /// by piece, and (when there is a first screenshot) the two pictures pixel by pixel. A difference
+    /// means state leaked between visits: the app is not the same app each time it is reset, and
+    /// every other measurement here is about whichever one it happened to be.
+    async fn check_continuity<A: Adapter>(
+        &mut self,
+        a: &mut A,
+        s: usize,
+        here: &Obs,
+    ) -> Result<(), String> {
+        self.expanded += 1;
+        let (added, removed, changed) = self.diff_against(s, here);
+        let structural = !(added.is_empty() && removed.is_empty() && changed.is_empty());
+        let first = self.screens[s].screenshot.clone();
+        // The picture of the repeat, compared with the first, whether or not anything structural changed:
+        // a half-drawn viewport or a leftover overlay is often invisible to the control tree.
+        let mut after = None;
+        let mut pixel_diff = None;
+        if let Some(before) = &first {
+            let shot = self.opts.out_dir.join(format!("screen-{s:03}.replay.png"));
+            let o = a.observe(json!({"shot": shot, "compare": before})).await?;
+            pixel_diff = o.pixel_diff;
+            after = o.screenshot;
+        }
+        let visual = pixel_diff
+            .as_ref()
+            .is_some_and(|d| d.fraction > VISUAL_DIFF);
+        let fingerprint_moved = here.fingerprint != self.screens[s].fingerprint;
+        if !structural && !visual && !fingerprint_moved {
+            if let Some(f) = &after {
+                let _ = std::fs::remove_file(f);
+            }
+            return Ok(());
+        }
+        let kind = if structural {
+            "replay_differs"
+        } else {
+            "looks_different"
+        };
+        let mut detail = if structural {
+            format!(
+                "reached again by the same path it looks different: {} added, {} removed, {} changed",
+                added.len(),
+                removed.len(),
+                changed.len()
+            )
+        } else if visual {
+            format!(
+                "reached again by the same path its controls are the same but {:.0}% of the picture differs",
+                pixel_diff.as_ref().map_or(0.0, |d| d.fraction) * 100.0
+            )
+        } else {
+            "reached again by the same path it has a different fingerprint, but nothing that can be named differs".into()
+        };
+        if !here.busy.is_empty() {
+            detail.push_str(&format!("; the app was still waiting for: {}", here.busy));
+        }
+        self.problems.push(format!("screen {s}: {detail}"));
+        self.continuity.push(Continuity {
+            kind: kind.into(),
+            screen: s,
+            path: path_labels(&self.screens[s].path),
+            detail,
+            added,
+            removed,
+            changed,
+            before: first,
+            after,
+            pixel_diff,
+        });
+        Ok(())
+    }
+
+    /// What a repeat visit has that the first lacked, lacks that the first had, and has changed in
+    /// place. Text the spec calls volatile is left out.
+    fn diff_against(&self, s: usize, here: &Obs) -> (Vec<String>, Vec<String>, Vec<String>) {
+        let before = &self.screens[s];
+        let now = screen_state(here);
+        let old: HashMap<&str, &str> = before
+            .state
+            .iter()
+            .map(|(i, st)| (i.as_str(), st.as_str()))
+            .collect();
+        let new: HashMap<&str, &str> = now
+            .iter()
+            .map(|(i, st)| (i.as_str(), st.as_str()))
+            .collect();
+        let label = |id: &str| id.rsplit('/').next().unwrap_or(id).to_string();
+        let mut added: Vec<String> = now
+            .iter()
+            .filter(|(i, _)| !old.contains_key(i.as_str()))
+            .map(|(i, _)| format!("control {}", label(i)))
+            .collect();
+        let mut removed: Vec<String> = before
+            .state
+            .iter()
+            .filter(|(i, _)| !new.contains_key(i.as_str()))
+            .map(|(i, _)| format!("control {}", label(i)))
+            .collect();
+        let changed: Vec<String> = now
+            .iter()
+            .filter_map(|(i, st)| {
+                old.get(i.as_str())
+                    .filter(|o| **o != st.as_str())
+                    .map(|o| format!("control {}: {} -> {}", label(i), o, st))
+            })
+            .collect();
+        let stable = |t: &&String| !self.volatile.iter().any(|r| r.is_match(t));
+        let old_text: std::collections::HashSet<&String> =
+            before.texts.iter().filter(stable).collect();
+        let new_text: std::collections::HashSet<&String> =
+            here.texts.iter().filter(stable).collect();
+        added.extend(
+            new_text
+                .difference(&old_text)
+                .map(|t| format!("text \"{t}\"")),
+        );
+        removed.extend(
+            old_text
+                .difference(&new_text)
+                .map(|t| format!("text \"{t}\"")),
+        );
+        for v in [&mut added, &mut removed] {
+            v.sort();
+            v.truncate(12);
+        }
+        (added, removed, changed.into_iter().take(12).collect())
+    }
+
     /// Whether any task can be tried by the novice (reachable, and not already done at home).
     pub fn wants_novice(&self) -> bool {
-        self.error.is_none() && self.spec.tasks.iter().enumerate().any(|(i, _)| self.task_best(i).is_some_and(|b| !b.path.is_empty()))
+        self.error.is_none()
+            && self
+                .spec
+                .tasks
+                .iter()
+                .enumerate()
+                .any(|(i, _)| self.task_best(i).is_some_and(|b| !b.path.is_empty()))
     }
 
     fn task_best(&self, t: usize) -> Option<&Best> {
@@ -907,8 +1466,18 @@ impl<'s> Run<'s> {
     /// Seeded novice runs for every task worth trying. `gates`: whether its failures may fail a
     /// primary task. Calibrated 2026-09-28 (README): the vision novice never failed a good-variant
     /// task; the Kev text novice failed two good variants 2 of 3 times, so it is advisory.
-    pub async fn novice<A: Adapter, N: Navigator>(&mut self, a: &mut A, nav: &N, model: &str, gates: bool) {
-        self.novice_model = if gates { model.into() } else { format!("{model}, advisory") };
+    pub async fn novice<A: Adapter, N: Navigator>(
+        &mut self,
+        a: &mut A,
+        nav: &N,
+        model: &str,
+        gates: bool,
+    ) {
+        self.novice_model = if gates {
+            model.into()
+        } else {
+            format!("{model}, advisory")
+        };
         self.novice_gates = gates;
         for t in 0..self.spec.tasks.len() {
             if !self.task_best(t).is_some_and(|b| !b.path.is_empty()) {
@@ -931,19 +1500,44 @@ impl<'s> Run<'s> {
             let ok: Vec<&NoviceRun> = runs.iter().filter(|r| r.success).collect();
             let successes = ok.len();
             let rate = (successes as f64 / runs.len().max(1) as f64 * 1000.0).round() / 1000.0;
-            let within_budget = ok.iter().filter(|r| r.steps <= self.spec.tasks[t].budget).count();
-            let mean_steps = (!ok.is_empty()).then(|| (ok.iter().map(|r| r.steps as f64).sum::<f64>() / successes as f64 * 100.0).round() / 100.0);
-            self.novice[t] = Some(NoviceResult { model: model.into(), runs, successes, success_rate: rate, within_budget, mean_steps });
+            let within_budget = ok
+                .iter()
+                .filter(|r| r.steps <= self.spec.tasks[t].budget)
+                .count();
+            let mean_steps = (!ok.is_empty()).then(|| {
+                (ok.iter().map(|r| r.steps as f64).sum::<f64>() / successes as f64 * 100.0).round()
+                    / 100.0
+            });
+            self.novice[t] = Some(NoviceResult {
+                model: model.into(),
+                runs,
+                successes,
+                success_rate: rate,
+                within_budget,
+                mean_steps,
+            });
         }
     }
 
-    async fn novice_run<A: Adapter, N: Navigator>(&mut self, a: &mut A, nav: &N, t: usize, seed: u64) -> Result<NoviceRun, String> {
+    async fn novice_run<A: Adapter, N: Navigator>(
+        &mut self,
+        a: &mut A,
+        nav: &N,
+        t: usize,
+        seed: u64,
+    ) -> Result<NoviceRun, String> {
         let task = &self.spec.tasks[t];
         let dir = self.opts.out_dir.join("novice");
         let marks = |step: usize| json!({"marks": dir.join(format!("t{t}-r{seed}-s{step}.png"))});
         a.reset().await?;
         let mut o = a.observe(marks(0)).await?;
-        let mut run = NoviceRun { seed, success: false, steps: 0, tried: vec![], screenshots: vec![] };
+        let mut run = NoviceRun {
+            seed,
+            success: false,
+            steps: 0,
+            tried: vec![],
+            screenshots: vec![],
+        };
         for step in 0..task.budget + 3 {
             run.screenshots.extend(o.marked.clone());
             let options: Vec<Control> = o.actionable().into_iter().cloned().collect();
@@ -951,11 +1545,20 @@ impl<'s> Run<'s> {
                 break;
             }
             let labels: Vec<String> = options.iter().map(Control::shown).collect();
-            let i = nav.choose(&task.goal, &run.tried, o.marked.as_deref(), &labels, seed * 1000 + step as u64).await?;
+            let i = nav
+                .choose(
+                    &task.goal,
+                    &run.tried,
+                    o.marked.as_deref(),
+                    &labels,
+                    seed * 1000 + step as u64,
+                )
+                .await?;
             run.tried.push(labels[i].clone());
             run.steps = step + 1;
             if let Err(e) = a.act(&options[i].id).await {
-                self.problems.push(format!("novice pressing {} failed: {e}", labels[i]));
+                self.problems
+                    .push(format!("novice pressing {} failed: {e}", labels[i]));
             }
             o = a.observe(marks(step + 1)).await?;
             if task.done.holds(&o) {
@@ -974,7 +1577,12 @@ impl<'s> Run<'s> {
 
     fn goal_result(&self, i: usize, name: &str) -> GoalResult {
         let b = self.best[i].as_ref();
-        GoalResult { name: name.into(), optimal_steps: b.map(|b| b.path.len()), path: b.map(|b| path_labels(&b.path)).unwrap_or_default(), screen: b.map(|b| b.screen) }
+        GoalResult {
+            name: name.into(),
+            optimal_steps: b.map(|b| b.path.len()),
+            path: b.map(|b| path_labels(&b.path)).unwrap_or_default(),
+            screen: b.map(|b| b.screen),
+        }
     }
 
     pub fn finish(mut self, novice_requested: bool) -> UxResult {
@@ -984,27 +1592,49 @@ impl<'s> Run<'s> {
         // reporting every mode and task as unreachable.
         let measured = self.error.is_none() && !self.screens.is_empty();
         let scope = match (&self.truncated, &self.error) {
-            (_, Some(e)) if !measured => format!("not measured: the run failed before exploring ({e})"),
-            (_, Some(e)) => format!("explored to depth {depth} until the run failed, so not exhaustively ({e})"),
+            (_, Some(e)) if !measured => {
+                format!("not measured: the run failed before exploring ({e})")
+            }
+            (_, Some(e)) => {
+                format!("explored to depth {depth} until the run failed, so not exhaustively ({e})")
+            }
             (Some(t), _) => format!("explored to depth {depth}, stopped early: {t}"),
             (None, _) => format!("explored exhaustively to depth {depth}"),
         };
         let mut hard = Vec::new();
-        let modes: Vec<ModeResult> = spec.modes.iter().enumerate().map(|(i, m)| {
-            let best = self.goal_result(i, &m.name);
-            let top = best.optimal_steps.is_some_and(|s| s <= 1);
-            match best.optimal_steps {
-                None if !measured => {}
-                None => hard.push(format!("mode \"{}\": no screen passes its done-check ({scope})", m.name)),
-                Some(s) if s > 1 => hard.push(format!("mode \"{}\" has no top-level entry: {s} actions from the home screen ({})", m.name, best.path.join(" > "))),
-                _ => {}
-            }
-            ModeResult { best, top_level: top }
-        }).collect();
+        let modes: Vec<ModeResult> = spec
+            .modes
+            .iter()
+            .enumerate()
+            .map(|(i, m)| {
+                let best = self.goal_result(i, &m.name);
+                let top = best.optimal_steps.is_some_and(|s| s <= 1);
+                match best.optimal_steps {
+                    None if !measured => {}
+                    None => hard.push(format!(
+                        "mode \"{}\": no screen passes its done-check ({scope})",
+                        m.name
+                    )),
+                    Some(s) if s > 1 => hard.push(format!(
+                        "mode \"{}\" has no top-level entry: {s} actions from the home screen ({})",
+                        m.name,
+                        best.path.join(" > ")
+                    )),
+                    _ => {}
+                }
+                ModeResult {
+                    best,
+                    top_level: top,
+                }
+            })
+            .collect();
         let mut tasks = Vec::new();
         for (t, g) in spec.tasks.iter().enumerate() {
             let best = self.goal_result(spec.modes.len() + t, &g.name);
-            let path = self.task_best(t).map(|b| b.path.clone()).unwrap_or_default();
+            let path = self
+                .task_best(t)
+                .map(|b| b.path.clone())
+                .unwrap_or_default();
             let mut fails = Vec::new();
             match best.optimal_steps {
                 None if !measured => fails.push(scope.clone()),
@@ -1014,7 +1644,10 @@ impl<'s> Run<'s> {
                 _ => {}
             }
             let msd = mean_step_distance(&path, self.viewport);
-            let at = self.task_best(t).map(|b| vec![b.screen]).unwrap_or_default();
+            let at = self
+                .task_best(t)
+                .map(|b| vec![b.screen])
+                .unwrap_or_default();
             if let Some(d) = msd.filter(|d| *d > SCATTERED) {
                 self.rules.insert(("scattered".into(), g.name.clone()), RuleFinding {
                     rule: "scattered".into(),
@@ -1025,14 +1658,26 @@ impl<'s> Run<'s> {
                 });
             }
             let novice = self.novice[t].clone();
-            if g.primary && self.novice_gates && let Some(n) = &novice {
+            if g.primary
+                && self.novice_gates
+                && let Some(n) = &novice
+            {
                 let failed = n.runs.len() - n.successes;
                 if !n.runs.is_empty() && failed * 3 >= n.runs.len() * 2 {
-                    fails.push(format!("the novice failed {failed} of {} runs: the entry is not discoverable", n.runs.len()));
+                    fails.push(format!(
+                        "the novice failed {failed} of {} runs: the entry is not discoverable",
+                        n.runs.len()
+                    ));
                 }
             }
             if measured {
-                hard.extend(fails.iter().map(|f| format!("{}task \"{}\": {f}", if g.primary { "primary " } else { "" }, g.name)));
+                hard.extend(fails.iter().map(|f| {
+                    format!(
+                        "{}task \"{}\": {f}",
+                        if g.primary { "primary " } else { "" },
+                        g.name
+                    )
+                }));
             }
             tasks.push(TaskResult {
                 goal: g.goal.clone(),
@@ -1051,20 +1696,57 @@ impl<'s> Run<'s> {
             *counts.entry(r.rule.clone()).or_insert(0) += 1;
         }
         for (rule, n) in &counts {
-            let errs: Vec<&str> = rules.iter().filter(|r| &r.rule == rule && r.severity == "error").map(|r| r.control.as_str()).collect();
+            let errs: Vec<&str> = rules
+                .iter()
+                .filter(|r| &r.rule == rule && r.severity == "error")
+                .map(|r| r.control.as_str())
+                .collect();
             if !errs.is_empty() {
-                hard.push(format!("rule {rule}: {n} finding(s), e.g. {}", errs.iter().take(4).cloned().collect::<Vec<_>>().join(", ")));
+                hard.push(format!(
+                    "rule {rule}: {n} finding(s), e.g. {}",
+                    errs.iter().take(4).cloned().collect::<Vec<_>>().join(", ")
+                ));
             }
         }
-        let screens: Vec<ScreenResult> = self.screens.iter().enumerate().map(|(id, s)| ScreenResult {
-            id,
-            depth: s.depth,
-            title: s.title.clone(),
-            url: s.url.clone(),
-            screenshot: s.screenshot.clone(),
-            controls: s.controls,
-            path: path_labels(&s.path),
-        }).collect();
+        let changed: Vec<&Continuity> = self
+            .continuity
+            .iter()
+            .filter(|c| c.kind != "seen_busy")
+            .collect();
+        // The home screen differing from itself is the clearest sign that reset does not restore the start
+        // state, so it fails alone; elsewhere it takes a tenth of the screens to call it a pattern.
+        let home_changed = changed.iter().any(|c| c.screen == 0);
+        if home_changed
+            || (changed.len() >= 2 && changed.len() as f64 >= self.expanded as f64 * UNSTABLE_SHARE)
+        {
+            hard.push(format!(
+                "the app is not the same from reset to reset: {} of {} screens changed between visits, e.g. screen {}: {}",
+                changed.len(),
+                self.expanded,
+                changed[0].screen,
+                changed[0].detail
+            ));
+        }
+        if let Some(c) = self.continuity.iter().find(|c| c.kind == "seen_busy") {
+            hard.push(format!(
+                "the app was measured while still loading (screen {}): {}",
+                c.screen, c.detail
+            ));
+        }
+        let screens: Vec<ScreenResult> = self
+            .screens
+            .iter()
+            .enumerate()
+            .map(|(id, s)| ScreenResult {
+                id,
+                depth: s.depth,
+                title: s.title.clone(),
+                url: s.url.clone(),
+                screenshot: s.screenshot.clone(),
+                controls: s.controls,
+                path: path_labels(&s.path),
+            })
+            .collect();
         let approval = if self.error.is_some() || self.screens.is_empty() {
             None
         } else if !hard.is_empty() {
@@ -1087,6 +1769,7 @@ impl<'s> Run<'s> {
             tasks,
             rule_counts: counts,
             rules,
+            continuity: self.continuity,
             exploration: Exploration {
                 actions: self.actions,
                 max_actions: self.opts.max_actions,
@@ -1118,11 +1801,30 @@ async fn replay<A: Adapter>(a: &mut A, path: &[Control]) -> Result<(), String> {
 /// What the `ux-critic` reviewer agent needs: the purpose, declared modes and tasks, the report,
 /// and every screenshot to open. Called once `full_result` is known.
 pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
-    let shots: Vec<&str> = r.screens.iter().filter_map(|s| s.screenshot.as_deref()).take(40).collect();
-    let novice: Vec<&str> = r.tasks.iter().filter_map(|t| t.novice.as_ref()).flat_map(|n| n.runs.iter().filter(|x| !x.success)).flat_map(|x| x.screenshots.iter().map(String::as_str)).take(20).collect();
+    let shots: Vec<&str> = r
+        .screens
+        .iter()
+        .filter_map(|s| s.screenshot.as_deref())
+        .take(40)
+        .collect();
+    let novice: Vec<&str> = r
+        .tasks
+        .iter()
+        .filter_map(|t| t.novice.as_ref())
+        .flat_map(|n| n.runs.iter().filter(|x| !x.success))
+        .flat_map(|x| x.screenshots.iter().map(String::as_str))
+        .take(20)
+        .collect();
+    let pairs: Vec<Value> = r
+        .continuity
+        .iter()
+        .take(12)
+        .map(|c| json!({"screen": c.screen, "kind": c.kind, "detail": c.detail, "before": c.before, "after": c.after, "pixel_diff": c.pixel_diff}))
+        .collect();
     json!({
         "agent": "ux-critic",
         "agent_file": "~/.claude/agents/ux-critic.md",
+        "continuity_pairs": pairs,
         "purpose": spec.app.purpose,
         "modes": spec.modes.iter().map(|m| &m.name).collect::<Vec<_>>(),
         "tasks": spec.tasks.iter().map(|t| json!({"name": t.name, "goal": t.goal, "primary": t.primary, "budget": t.budget})).collect::<Vec<_>>(),
@@ -1130,20 +1832,30 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
         "screenshots": shots,
         "failed_novice_screenshots": novice,
         "prompt": format!(
-            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. Hard fails: {}.",
+            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. {}Hard fails: {}.",
             spec.app.kind, spec.app.purpose, r.full_result.as_deref().unwrap_or("(not saved)"),
+            if r.continuity.is_empty() { String::new() } else { format!("Continuity: {} screen(s) were not the same when reached again; open each before/after pair in continuity_pairs side by side and say what a person would see change (layout shift, leftover or missing elements, a half-drawn area, a loading state, overlap), not only what the control list says. ", r.continuity.len()) },
             if r.hard_fails.is_empty() { "none".to_string() } else { r.hard_fails.join("; ") }),
     })
 }
 
 /// The `start` request for the adapter harness.
-pub fn start_request(spec: &Spec, url: Option<&str>, allow_destructive: bool, allow_remote: bool, headed: bool, stall_s: f64, out_dir: &Path) -> Value {
+pub fn start_request(
+    spec: &Spec,
+    url: Option<&str>,
+    allow_destructive: bool,
+    allow_remote: bool,
+    headed: bool,
+    stall_s: f64,
+    out_dir: &Path,
+) -> Value {
     let a = &spec.app;
     json!({
         "op": "start", "kind": a.kind, "url": url.or(a.url.as_deref()), "viewport": a.viewport.map(|[w, h]| json!({"width": w, "height": h})),
         "exe": a.exe, "args": a.args, "cwd": a.cwd, "env": a.env, "window_title_re": a.window_title_re,
         "app_events": a.app_events, "ready_event": a.ready_event, "ready_timeout_s": a.ready_timeout_s.unwrap_or(120.0), "shot_dir": a.shot_dir,
-        "settle_ms": a.settle_ms, "ignore": spec.ignore, "allow_destructive": allow_destructive, "allow_remote": allow_remote,
+        "settle_ms": a.settle_ms, "busy_timeout_s": a.busy_timeout_s.unwrap_or(45.0),
+        "volatile": spec.volatile, "volatile_regions": spec.volatile_regions, "ignore": spec.ignore, "allow_destructive": allow_destructive, "allow_remote": allow_remote,
         "headed": headed, "stall_s": stall_s, "out_dir": out_dir,
     })
 }
@@ -1151,5 +1863,12 @@ pub fn start_request(spec: &Spec, url: Option<&str>, allow_destructive: bool, al
 /// Default exploration depth: two beyond the largest budget, so an over-budget task is measured
 /// rather than reported unreachable; at most 6.
 pub fn default_depth(spec: &Spec) -> usize {
-    (spec.tasks.iter().map(|t| t.budget).max().unwrap_or(DEFAULT_BUDGET) + 2).min(6)
+    (spec
+        .tasks
+        .iter()
+        .map(|t| t.budget)
+        .max()
+        .unwrap_or(DEFAULT_BUDGET)
+        + 2)
+    .min(6)
 }

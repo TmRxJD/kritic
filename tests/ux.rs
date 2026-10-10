@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use kritic::config::Config;
 use kritic::kev::KevClient;
-use kritic::ux::{self, KevNav, Options, ProcAdapter, Run, UxResult, VisionNav};
+use kritic::ux::{self, AppAdapter, KevNav, Options, Run, UxResult, VisionNav};
 use serde_json::json;
 
 fn live() -> bool {
@@ -23,7 +23,10 @@ fn fixtures() -> PathBuf {
 
 fn file_url(p: &Path) -> String {
     let s = std::fs::canonicalize(p).unwrap().display().to_string();
-    format!("file:///{}", s.trim_start_matches(r"\\?\").replace('\\', "/"))
+    format!(
+        "file:///{}",
+        s.trim_start_matches(r"\\?\").replace('\\', "/")
+    )
 }
 
 async fn run(cfg: &Config, pair: &str, variant: &str, novice: &str) -> UxResult {
@@ -39,12 +42,15 @@ async fn run(cfg: &Config, pair: &str, variant: &str, novice: &str) -> UxResult 
     let url = file_url(&fixtures().join(format!("{pair}-{variant}.html")));
     let start = ux::start_request(&spec, Some(&url), false, false, false, 15.0, &out_dir);
     let mut r = Run::new(&spec, opts);
-    let mut a = ProcAdapter::launch(cfg, &spec, start, 15.0).await.expect("adapter");
+    let mut a = AppAdapter::launch(cfg, &spec, start, 15.0)
+        .await
+        .expect("adapter");
     r.explore(&mut a).await;
     if novice != "off" && r.wants_novice() {
         if novice == "vision" {
             kritic::gpu::stop_laya(cfg).await;
-            r.novice(&mut a, &VisionNav { cfg }, &cfg.vision_model, true).await;
+            r.novice(&mut a, &VisionNav { cfg }, &cfg.vision_model, true)
+                .await;
         } else {
             kritic::gpu::unload_vision(cfg).await;
             let kev = KevClient::new(std::sync::Arc::new(cfg.clone()));
@@ -56,7 +62,10 @@ async fn run(cfg: &Config, pair: &str, variant: &str, novice: &str) -> UxResult 
 }
 
 fn novice_rate(r: &UxResult) -> (usize, usize) {
-    r.tasks.iter().filter_map(|t| t.novice.as_ref()).fold((0, 0), |(s, n), x| (s + x.successes, n + x.runs.len()))
+    r.tasks
+        .iter()
+        .filter_map(|t| t.novice.as_ref())
+        .fold((0, 0), |(s, n), x| (s + x.successes, n + x.runs.len()))
 }
 
 fn rules(r: &UxResult, rule: &str) -> usize {
@@ -71,14 +80,19 @@ async fn calibrate_fixture_pairs() {
     }
     let cfg = Config::from_env();
     let novice = std::env::var("KRITIC_UX_NOVICE").unwrap_or_else(|_| "vision".into());
-    let pairs = std::env::var("KRITIC_UX_PAIRS").unwrap_or_else(|_| "modes,labels,depth,group".into());
+    let pairs =
+        std::env::var("KRITIC_UX_PAIRS").unwrap_or_else(|_| "modes,labels,depth,group".into());
     let mut table = Vec::new();
     for pair in pairs.split(',') {
         let good = run(&cfg, pair, "good", &novice).await;
         let bad = run(&cfg, pair, "bad", &novice).await;
         for r in [&good, &bad] {
             assert!(r.error.is_none(), "{pair}: {:?}", r.error);
-            assert!(r.exploration.truncated.is_none(), "{pair}: exploration truncated: {:?}", r.exploration);
+            assert!(
+                r.exploration.truncated.is_none(),
+                "{pair}: exploration truncated: {:?}",
+                r.exploration
+            );
         }
         let row = |r: &UxResult| {
             let (s, n) = novice_rate(r);
@@ -100,33 +114,73 @@ async fn calibrate_fixture_pairs() {
         eprintln!("{pair}\n  good {g}\n  bad  {b}");
         table.push(json!({"pair": pair, "good": g, "bad": b}));
         // deterministic separation, pair by pair (independent of the novice)
-        let det = |r: &UxResult| r.hard_fails.iter().filter(|h| !h.contains("novice")).count();
-        assert_eq!(det(&good), 0, "{pair} good has deterministic hard fails: {:?}", good.hard_fails);
+        let det = |r: &UxResult| {
+            r.hard_fails
+                .iter()
+                .filter(|h| !h.contains("novice"))
+                .count()
+        };
+        assert_eq!(
+            det(&good),
+            0,
+            "{pair} good has deterministic hard fails: {:?}",
+            good.hard_fails
+        );
         match pair {
             "modes" => {
-                assert!(bad.hard_fails.iter().any(|h| h.contains("mode \"Composer\" has no top-level entry")), "{:?}", bad.hard_fails);
-                assert!(bad.tasks.iter().any(|t| t.best.name == "select a section" && !t.within_budget));
+                assert!(
+                    bad.hard_fails
+                        .iter()
+                        .any(|h| h.contains("mode \"Composer\" has no top-level entry")),
+                    "{:?}",
+                    bad.hard_fails
+                );
+                assert!(
+                    bad.tasks
+                        .iter()
+                        .any(|t| t.best.name == "select a section" && !t.within_budget)
+                );
             }
             "labels" => {
-                assert_eq!((rules(&good, "unlabelled"), rules(&good, "icon_no_tooltip")), (0, 0));
-                assert!(rules(&bad, "unlabelled") >= 9 && rules(&bad, "icon_no_tooltip") >= 9, "{:?}", bad.rule_counts);
+                assert_eq!(
+                    (rules(&good, "unlabelled"), rules(&good, "icon_no_tooltip")),
+                    (0, 0)
+                );
+                assert!(
+                    rules(&bad, "unlabelled") >= 9 && rules(&bad, "icon_no_tooltip") >= 9,
+                    "{:?}",
+                    bad.rule_counts
+                );
                 assert_eq!(bad.approval, Some(false));
             }
             "depth" => {
                 assert_eq!(good.tasks[0].best.optimal_steps, Some(1));
                 assert_eq!(bad.tasks[0].best.optimal_steps, Some(5));
-                assert!(bad.hard_fails.iter().any(|h| h.contains("takes 5 actions, budget 3")), "{:?}", bad.hard_fails);
+                assert!(
+                    bad.hard_fails
+                        .iter()
+                        .any(|h| h.contains("takes 5 actions, budget 3")),
+                    "{:?}",
+                    bad.hard_fails
+                );
             }
             "group" => {
                 assert_eq!(rules(&good, "scattered"), 0);
                 assert_eq!(rules(&bad, "scattered"), 1, "{:?}", bad.rules);
-                assert!(bad.tasks[0].mean_step_distance.unwrap() > ux::SCATTERED && good.tasks[0].mean_step_distance.unwrap() < ux::SCATTERED);
+                assert!(
+                    bad.tasks[0].mean_step_distance.unwrap() > ux::SCATTERED
+                        && good.tasks[0].mean_step_distance.unwrap() < ux::SCATTERED
+                );
             }
             _ => unreachable!(),
         }
     }
     let out = json!({"date": chrono::Local::now().format("%Y-%m-%d").to_string(), "novice": novice, "pairs": table});
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("calibration/ux-{}-{novice}-{}.json", chrono::Local::now().format("%Y-%m-%d"), pairs.replace(',', "-")));
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+        "calibration/ux-{}-{novice}-{}.json",
+        chrono::Local::now().format("%Y-%m-%d"),
+        pairs.replace(',', "-")
+    ));
     std::fs::write(&path, serde_json::to_string_pretty(&out).unwrap()).unwrap();
     eprintln!("written to {}", path.display());
 }

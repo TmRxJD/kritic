@@ -13,7 +13,10 @@ fn report(v: Value) -> HarnessReport {
 }
 
 fn opts() -> UiOptions {
-    UiOptions { axe_blocking: true, ignore: vec![] }
+    UiOptions {
+        axe_blocking: true,
+        ignore: vec![],
+    }
 }
 
 // ------------------------------------------------------------------ ui judge (offline)
@@ -48,7 +51,6 @@ fn every_breakage_kind_rejects() {
         json!({"ok": true, "failed_requests": [{"url": "http://l/api", "status": 500}]}),
         json!({"ok": true, "crashes": [{"page": "p"}]}),
         json!({"ok": true, "persistence": [{"selector": "#n", "persisted": false, "expected": "a", "actual": ""}]}),
-        json!({"ok": true, "interactions": [{"page": "p", "element": {"name": "Go"}, "action": "click", "result": "no_effect"}]}),
         json!({"ok": true, "interactions": [{"page": "p", "element": {"name": "Go"}, "action": "click", "result": "error", "errors": ["e"]}]}),
         json!({"ok": true, "pages": [{"url": "u", "status": 500}]}),
         json!({"ok": true, "pages": [{"url": "u", "status": 200, "axe": [{"id": "color-contrast", "impact": "serious", "help": "h", "nodes": 2}]}]}),
@@ -65,14 +67,23 @@ fn ignore_list_and_non_blocking_axe() {
     let r = json!({"ok": true,
         "interactions": [{"page": "p", "element": {"name": "Tooltip trigger"}, "action": "click", "result": "no_effect"}],
         "pages": [{"url": "u", "status": 200, "axe": [{"id": "color-contrast", "impact": "serious", "help": "h", "nodes": 2}]}]});
-    let (s, b, approval, _) = judge(report(r), &UiOptions { axe_blocking: false, ignore: vec!["Tooltip".into()] });
+    let (s, b, approval, _) = judge(
+        report(r),
+        &UiOptions {
+            axe_blocking: false,
+            ignore: vec!["Tooltip".into()],
+        },
+    );
     assert_eq!(approval, Some(true), "{b:?}");
     assert_eq!(s.axe_serious, 1);
 }
 
 #[test]
 fn harness_failure_is_unknown_not_pass() {
-    let (_, _, approval, _) = judge(report(json!({"ok": false, "error": "refusing non-local URL"})), &opts());
+    let (_, _, approval, _) = judge(
+        report(json!({"ok": false, "error": "refusing non-local URL"})),
+        &opts(),
+    );
     assert_eq!(approval, None);
 }
 
@@ -129,24 +140,39 @@ fn live() -> bool {
 /// Minimal static server for the harness fixtures; returns the base URL.
 async fn serve_fixtures() -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/harness/test/fixtures"));
+    let dir = std::path::PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/harness/test/fixtures"
+    ));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {
         loop {
-            let Ok((mut sock, _)) = listener.accept().await else { break };
+            let Ok((mut sock, _)) = listener.accept().await else {
+                break;
+            };
             let dir = dir.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0u8; 8192];
                 let n = sock.read(&mut buf).await.unwrap_or(0);
                 let req = String::from_utf8_lossy(&buf[..n]);
-                let path = req.split_whitespace().nth(1).unwrap_or("/").split(['?', '#']).next().unwrap_or("/").to_string();
+                let path = req
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or("/")
+                    .split(['?', '#'])
+                    .next()
+                    .unwrap_or("/")
+                    .to_string();
                 let file = dir.join(path.trim_start_matches('/'));
                 let (status, body) = match std::fs::read(&file) {
                     Ok(b) if file.starts_with(&dir) && file.is_file() => ("200 OK", b),
                     _ => ("404 Not Found", b"not found".to_vec()),
                 };
-                let head = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+                let head = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
                 let _ = sock.write_all(head.as_bytes()).await;
                 let _ = sock.write_all(&body).await;
             });
@@ -162,20 +188,69 @@ async fn live_ui_test_good_vs_broken() {
     }
     let cfg = Config::from_env();
     let base = serve_fixtures().await;
-    let persist_good = vec![json!({"selector": "#name"}), json!({"selector": "#dark"}), json!({"selector": "#size"})];
-    let good = kritic::ui::ui_test(&cfg, &format!("{base}/good.html"), &[], &persist_good, 5, 60, false, false, false, true, &[], true, opts()).await;
-    eprintln!("good: approval={:?} summary={:?} breakages={:?} err={:?} {}ms", good.approval, good.summary, good.breakages, good.error, good.duration_ms);
+    let persist_good = vec![
+        json!({"selector": "#name"}),
+        json!({"selector": "#dark"}),
+        json!({"selector": "#size"}),
+    ];
+    let good = kritic::ui::ui_test(
+        &cfg,
+        &format!("{base}/good.html"),
+        &[],
+        &persist_good,
+        5,
+        60,
+        false,
+        false,
+        false,
+        true,
+        &[],
+        true,
+        opts(),
+    )
+    .await;
+    eprintln!(
+        "good: approval={:?} summary={:?} breakages={:?} err={:?} {}ms",
+        good.approval, good.summary, good.breakages, good.error, good.duration_ms
+    );
     assert_eq!(good.approval, Some(true), "{:?}", good.breakages);
 
     let persist_bad = vec![json!({"selector": "#note"})];
-    let bad = kritic::ui::ui_test(&cfg, &format!("{base}/broken.html"), &[], &persist_bad, 5, 60, false, false, false, true, &[], true, opts()).await;
-    eprintln!("broken: approval={:?} summary={:?}", bad.approval, bad.summary);
+    let bad = kritic::ui::ui_test(
+        &cfg,
+        &format!("{base}/broken.html"),
+        &[],
+        &persist_bad,
+        5,
+        60,
+        false,
+        false,
+        false,
+        true,
+        &[],
+        true,
+        opts(),
+    )
+    .await;
+    eprintln!(
+        "broken: approval={:?} summary={:?}",
+        bad.approval, bad.summary
+    );
     for b in &bad.breakages {
         eprintln!("  - {b}");
     }
     assert_eq!(bad.approval, Some(false));
     let all = bad.breakages.join("\n");
-    for needle in ["doesNotExist", "handler failed", "no observable effect", "api/missing", "logo.png", "did not persist", "image-alt", "color-contrast"] {
+    for needle in [
+        "doesNotExist",
+        "handler failed",
+        "no observable effect",
+        "api/missing",
+        "logo.png",
+        "did not persist",
+        "image-alt",
+        "color-contrast",
+    ] {
         assert!(all.contains(needle), "missing `{needle}` in breakages");
     }
 }
@@ -189,9 +264,14 @@ async fn live_visual_polished_vs_messy() {
     let base = serve_fixtures().await;
     for (page, expect) in [("polished.html", true), ("messy.html", false)] {
         let out = vision::run_dir(&cfg, "test").join(format!("{page}.png"));
-        kritic::ui::screenshot(&cfg, &format!("{base}/{page}"), &out, false, false).await.unwrap();
+        kritic::ui::screenshot(&cfg, &format!("{base}/{page}"), &out, false, false)
+            .await
+            .unwrap();
         let r = vision::critique(&cfg, &out, "").await;
-        eprintln!("{page}: approval={:?} scores={:?} obs={:?} err={:?} stopped_laya={} {}ms", r.approval, r.scores, r.unverified_observations, r.error, r.stopped_laya, r.latency_ms);
+        eprintln!(
+            "{page}: approval={:?} scores={:?} obs={:?} err={:?} stopped_laya={} {}ms",
+            r.approval, r.scores, r.unverified_observations, r.error, r.stopped_laya, r.latency_ms
+        );
         assert!(r.model_ok, "{:?}", r.error);
         assert_eq!(r.approval, Some(expect), "{page}");
     }
@@ -218,7 +298,8 @@ fn filler_observations_are_dropped() {
 #[test]
 fn run_dirs_are_unique_even_in_the_same_millisecond() {
     let cfg = Config::from_env();
-    let dirs: std::collections::HashSet<_> = (0..50).map(|_| vision::run_dir(&cfg, "visual")).collect();
+    let dirs: std::collections::HashSet<_> =
+        (0..50).map(|_| vision::run_dir(&cfg, "visual")).collect();
     assert_eq!(dirs.len(), 50);
 }
 
@@ -233,5 +314,36 @@ fn failed_flows_become_breakages_naming_the_step() {
     ];
     let b = kritic::ui::judge_flows(&flows);
     assert_eq!(b.len(), 1);
-    assert!(b[0].contains("\"save\" failed at step 2 (click") && b[0].contains("timeout"), "{}", b[0]);
+    assert!(
+        b[0].contains("\"save\" failed at step 2 (click") && b[0].contains("timeout"),
+        "{}",
+        b[0]
+    );
+}
+
+#[test]
+fn unobserved_effects_are_gaps_and_real_errors_still_reject() {
+    let mut raw = json!({"ok":true,"pages":[{"url":"p","status":200}],"interactions":[
+        {"page":"p","element":{"name":"Paint canvas"},"action":"click","result":"no_effect"}
+    ]});
+    let (s, b, approval, _) = judge(report(raw.clone()), &opts());
+    assert_eq!(approval, None);
+    assert!(b.is_empty());
+    assert_eq!(s.unverified_effects.len(), 1);
+    raw["page_errors"] = json!([{"message":"independently observed exception"}]);
+    let (_, b, approval, _) = judge(report(raw), &opts());
+    assert_eq!(approval, Some(false));
+    assert!(b[0].contains("independently observed exception"));
+}
+
+#[test]
+fn invalid_visual_threshold_cannot_create_vacuous_approval() {
+    let scores = vjson(8.0);
+    for threshold in [f64::NAN, -1.0, 11.0] {
+        let mut r = vision::VisualResult::default();
+        let (s, obs) = vision::parse(&scores).unwrap();
+        vision::judge(&mut r, s, obs, threshold);
+        assert_eq!(r.approval, None);
+        assert!(!r.model_ok);
+    }
 }

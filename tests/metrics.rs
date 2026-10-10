@@ -8,25 +8,37 @@ fn line(v: serde_json::Value) -> String {
 }
 
 fn assistant(id: &str, ts: &str, input: u64, cread: u64, cwrite: u64, out: u64) -> String {
-    line(json!({"type": "assistant", "timestamp": ts, "isSidechain": false,
+    line(
+        json!({"type": "assistant", "timestamp": ts, "isSidechain": false,
         "message": {"id": id, "model": "claude-opus-5-5", "usage": {"input_tokens": input, "cache_read_input_tokens": cread,
-            "cache_creation_input_tokens": cwrite, "output_tokens": out, "output_tokens_details": {"thinking_tokens": out / 2}}}}))
+            "cache_creation_input_tokens": cwrite, "output_tokens": out, "output_tokens_details": {"thinking_tokens": out / 2}}}}),
+    )
 }
 
 #[test]
 fn per_task_and_session_totals() {
     let mut t = String::new();
-    t += &line(json!({"type": "user", "timestamp": "2026-09-27T10:00:00Z", "origin": {"kind": "human"}, "message": {"content": "first task please"}}));
+    t += &line(
+        json!({"type": "user", "timestamp": "2026-09-27T10:00:00Z", "origin": {"kind": "human"}, "message": {"content": "first task please"}}),
+    );
     t += &assistant("m1", "2026-09-27T10:00:02Z", 10, 0, 5000, 200);
     // same message id repeated per content block: counted once, and the call ends at the last block
     t += &assistant("m1", "2026-09-27T10:00:04Z", 10, 0, 5000, 200);
-    t += &line(json!({"type": "user", "timestamp": "2026-09-27T10:00:03Z", "message": {"content": [{"type": "tool_result"}]}}));
+    t += &line(
+        json!({"type": "user", "timestamp": "2026-09-27T10:00:03Z", "message": {"content": [{"type": "tool_result"}]}}),
+    );
     t += &assistant("m2", "2026-09-27T10:00:07Z", 5, 5000, 800, 400);
-    t += &line(json!({"type": "user", "timestamp": "2026-09-27T10:05:00Z", "origin": {"kind": "human"}, "message": {"content": [{"type": "text", "text": "second task"}]}}));
+    t += &line(
+        json!({"type": "user", "timestamp": "2026-09-27T10:05:00Z", "origin": {"kind": "human"}, "message": {"content": [{"type": "text", "text": "second task"}]}}),
+    );
     t += &assistant("m3", "2026-09-27T10:05:10Z", 3, 5800, 100, 1000);
-    t += &line(json!({"type": "system", "subtype": "compact_boundary", "timestamp": "2026-09-27T10:06:00Z"}));
+    t += &line(
+        json!({"type": "system", "subtype": "compact_boundary", "timestamp": "2026-09-27T10:06:00Z"}),
+    );
     // synthetic entry without usage is ignored
-    t += &line(json!({"type": "assistant", "timestamp": "2026-09-27T10:06:01Z", "message": {"id": "m4", "usage": {}}}));
+    t += &line(
+        json!({"type": "assistant", "timestamp": "2026-09-27T10:06:01Z", "message": {"id": "m4", "usage": {}}}),
+    );
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("sess.jsonl");
     std::fs::write(&p, t).unwrap();

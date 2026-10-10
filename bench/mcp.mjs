@@ -3,7 +3,9 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 export async function connect(exe, env = {}) {
-  const child = spawn(exe, [], { stdio: ["pipe", "pipe", "ignore"], windowsHide: true, env: { ...process.env, ...env } });
+  // The benchmark operator explicitly selects the executable; no model/page content reaches it.
+  // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
+  const child = spawn(exe, [], { shell: false, stdio: ["pipe", "pipe", "ignore"], windowsHide: true, env: { ...process.env, ...env } });
   const pending = new Map();
   let nextId = 1;
   createInterface({ input: child.stdout }).on("line", (line) => {

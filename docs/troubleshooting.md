@@ -1,6 +1,7 @@
 # Troubleshooting
 
-Start with `status(start=true)`. It shows whether laya is up, every resolved path (and whether it
+Start with `status(start=false)`. Models are disabled by default; that is expected.
+Use start=true only after explicitly selecting local inference. It shows whether laya is up, every resolved path (and whether it
 exists), the config file read, any `config_errors`, and the ready states.
 
 | Symptom | Cause / fix |
@@ -17,8 +18,8 @@ exists), the config file read, any `config_errors`, and the ready states.
 | `model_ok: false` (visual) | Ollama isn't reachable and `vision.ollama_exe` couldn't start it, or `qwen2.5vl:7b` isn't pulled (`ollama list`). |
 | First Kev call after a visual review takes ~15 s | Expected: `visual_critic` stops laya to free the GPU. |
 | `ui_test` error `refusing non-local URL` | By design. Test the local dev server, or pass `allow_remote=true` only for your own staging. |
-| `ui_test` error `cannot start node` / harness not found | Node must be on PATH (or `ui.node`), and the harness needs `npm install` plus `npx playwright install chromium`. `install.sh` does both. |
-| `ui_test` `no_effect` on a control that is meant to be inert | Hover-only or purely visual controls trip it. Pass `ignore`. |
+| Native browser not found | Install Chrome/Edge/Chromium or set ui.browser. The default web path does not need Node/Playwright. |
+| `ui_test` `no_effect` on a control that is meant to be inert | Effects outside captured DOM/UIA state remain unverified. Independently assert the intended state; use `ignore` only for controls explicitly outside review scope. |
 | `desktop_test`: `no window appeared` | Wrong exe, a splash window comes first (set `window_title_re`), or the app needs `cwd`. |
 | `desktop_test`: a control is `skipped: no usable UIA pattern` | A custom control without UI Automation support. `use_mouse=true` falls back to real clicks (this moves the cursor). |
 | `desktop_test` Unity: stalls, then `stall_s` error | The app sent no event, wrote no log and accepted no socket connection for `stall_s`. Check `ready_event` and `app_events`, and that the port isn't held by a previous run (`hygiene_critic`). |
@@ -26,3 +27,20 @@ exists), the config file read, any `config_errors`, and the ready states.
 | `resource_critic` rejects a process you believe is fine | A garbage-collected runtime can grow its heap for a while before collecting. Run longer (`duration_s`), or raise `max_rss_slope_mb_per_min` for that workload, and say why. |
 | Kev flags clean code | See [benchmarks](benchmarks.md): Kev's gates also reject some correct changes. Read the flagged spot; if you can't name a problem, report the flag as a false positive. Code whose strings or comments *describe* bugs, vulnerabilities or reviewer instructions draws flags too. |
 | The session compacts right after it starts | Not kritic: Claude Code's `autoCompactWindow` is below the startup context. See [Claude Code](claude-code.md#context-use). |
+
+## Test-release/cloud/contract failures
+
+- Disabled tools are absent from discovery. Inspect status.enabled_tools and capability toggles.
+- Cloud key missing after changing provider/origin: default saved keys are origin-bound; select
+  the appropriate credential explicitly or save a new key. Do not copy a previous vendor's key.
+- Invalid/missing/extra/refused/truncated model answers remain unscored. Inspect the provider
+  configuration; do not convert absence into approval or retry a different provider automatically.
+- Gemini model mismatch: cloud.url identifies the model; cloud.model and vision.cloud_model must match.
+- Local health omits matching model/quantization/GGUF metadata: scoring is advisory; local gates
+  stay unverified. A filename alone does not establish the running model's calibration identity.
+- Contract null: required evidence is missing, unrun, stale or vacuous. Inspect each requirement
+  and the enforcement status. Broad/empty-input patterns are not accepted evidence.
+- Contract evidence changed during evaluation: stabilize inputs and rerun; earlier checks cannot
+  certify the changed artifact. Review every declared command before opting into execution.
+
+Reproduce a Kritic defect, add a regression, fix it directly and contribute a sanitized PR.

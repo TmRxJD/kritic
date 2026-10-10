@@ -16,24 +16,38 @@ pub const MAX_CHUNKS: usize = 60;
 /// place: specs/code_chunk.json.
 fn severity_rank(s: &str) -> usize {
     match unit_spec("files").question("severity").map(|q| &q.ask) {
-        Some(crate::spec::Ask::Choice { options, .. }) => options.iter().position(|(k, _)| k == s).unwrap_or(0),
+        Some(crate::spec::Ask::Choice { options, .. }) => {
+            options.iter().position(|(k, _)| k == s).unwrap_or(0)
+        }
         _ => 0,
     }
 }
 
 /// The spec a unit is judged with: diff hunks and code excerpts are different states.
 pub fn unit_spec(mode: &str) -> &'static DecisionSpec {
-    crate::spec::get(if mode == "diff" { "code_change" } else { "code_chunk" })
+    crate::spec::get(if mode == "diff" {
+        "code_change"
+    } else {
+        "code_chunk"
+    })
 }
 
 /// Completeness is judged on code when the change fits, else on a digest; they are different
 /// states with different calibration, so they are different specs.
 pub fn completeness_spec(basis: &str) -> &'static DecisionSpec {
-    crate::spec::get(if basis == "digest" { "completeness_digest" } else { "completeness" })
+    crate::spec::get(if basis == "digest" {
+        "completeness_digest"
+    } else {
+        "completeness"
+    })
 }
 
 fn completeness_state(task: &str, basis: &str, text: String) -> Result<Value, String> {
-    let field = if basis == "digest" { "change_digest" } else { "change_summary" };
+    let field = if basis == "digest" {
+        "change_digest"
+    } else {
+        "change_summary"
+    };
     completeness_spec(basis).state(&[("task", task.chars().take(1500).collect()), (field, text)])
 }
 
@@ -54,8 +68,15 @@ pub fn parse_diff(diff: &str, max_chars: usize) -> Vec<Hunk> {
     let mut start = 0usize;
     let mut body = String::new();
     let flush = |file: &str, header: &str, start: usize, body: &mut String, out: &mut Vec<Hunk>| {
-        if body.lines().any(|l| l.starts_with('+') || l.starts_with('-')) {
-            out.push(Hunk { file: file.into(), new_start: start, text: format!("{header}\n{body}") });
+        if body
+            .lines()
+            .any(|l| l.starts_with('+') || l.starts_with('-'))
+        {
+            out.push(Hunk {
+                file: file.into(),
+                new_start: start,
+                text: format!("{header}\n{body}"),
+            });
         }
         body.clear();
     };
@@ -107,18 +128,28 @@ pub fn added_by_file(hunks: &[Hunk]) -> Vec<(String, String)> {
 
 /// Score only what changed. Kev separates buggy from clean hunks better when asked whether the
 /// change introduces a bug than when judging whole excerpts of real code.
-pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str, revision: u32) -> CriticResult {
+pub async fn critic_diff<D: Decider>(
+    d: &D,
+    cfg: &Config,
+    task: &str,
+    diff: &str,
+    revision: u32,
+) -> CriticResult {
     let mut r = CriticResult {
         tool: "critic_score".into(),
         mode: "diff".into(),
         advisory: true,
-        model: cfg.model.clone(),
+        model: d.model_identity().unwrap_or_else(|| cfg.model.clone()),
         revision,
         max_revisions: cfg.max_revisions,
         revise_allowed: revision < cfg.max_revisions,
         ..Default::default()
     };
-    let task = if task.trim().is_empty() { "(no task given: judge the change on its own)" } else { task };
+    let task = if task.trim().is_empty() {
+        "(no task given: judge the change on its own)"
+    } else {
+        task
+    };
     let mut hunks = parse_diff(diff, cfg.chunk_chars);
     if hunks.is_empty() {
         r.error = Some("empty diff (no changed lines)".into());
@@ -132,7 +163,8 @@ pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str
     let qs = spec.wire();
     let mut verdicts = Vec::new();
     let mut weights = Vec::new();
-    let mut queue: std::collections::VecDeque<(Hunk, u8)> = hunks.iter().cloned().map(|h| (h, 0)).collect();
+    let mut queue: std::collections::VecDeque<(Hunk, u8)> =
+        hunks.iter().cloned().map(|h| (h, 0)).collect();
     let total = queue.len();
     let deadline = Deadline::new(cfg);
     while let Some((h, depth)) = queue.pop_front() {
@@ -141,12 +173,20 @@ pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str
             return r;
         }
         let h = &h;
-        crate::events::emit("progress", json!({"tool": "critic_score", "unit": format!("{}:+{}", h.file, h.new_start), "done": verdicts.len(), "total": total}));
+        crate::events::emit(
+            "progress",
+            json!({"tool": "critic_score", "unit": format!("{}:+{}", h.file, h.new_start), "done": verdicts.len(), "total": total}),
+        );
         let label = format!("{}:+{}", h.file, h.new_start);
         // The request is not part of this state: measured, its wording moved severity by +0.3 on
         // identical code. Fit to the request is the completeness spec's question.
         // Removed lines stay out: they leaked into judgments of the added ones.
-        let added: String = h.text.lines().filter(|l| !l.starts_with('-')).collect::<Vec<_>>().join("\n");
+        let added: String = h
+            .text
+            .lines()
+            .filter(|l| !l.starts_with('-'))
+            .collect::<Vec<_>>()
+            .join("\n");
         let state = match spec.state(&[("file", h.file.clone()), ("added", added)]) {
             Ok(s) => s,
             Err(e) => {
@@ -154,7 +194,10 @@ pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {label})"));
                 return r;
@@ -193,7 +236,14 @@ pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str
     let added = added_by_file(&hunks);
     let total: usize = added.iter().map(|(_, t)| t.len()).sum();
     let (text, basis) = if total <= cfg.chunk_chars {
-        (hunks.iter().map(|h| h.text.as_str()).collect::<Vec<_>>().join("\n"), "code")
+        (
+            hunks
+                .iter()
+                .map(|h| h.text.as_str())
+                .collect::<Vec<_>>()
+                .join("\n"),
+            "code",
+        )
     } else {
         (digest(&added, cfg.chunk_chars), "digest")
     };
@@ -204,7 +254,14 @@ pub async fn critic_diff<D: Decider>(d: &D, cfg: &Config, task: &str, diff: &str
             return r;
         }
     };
-    let p_complete = match d.decide(&state, &completeness_spec(basis).wire()).await {
+    let p_complete = match deadline
+        .bound(
+            d.decide(&state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            hunks.len(),
+        )
+        .await
+    {
         Err(e) => {
             r.error = Some(e);
             return r;
@@ -286,19 +343,32 @@ pub struct CriticResult {
 }
 
 /// Score a set of (label, text) files against `task`.
-pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(String, String)], revision: u32) -> CriticResult {
+pub async fn critic<D: Decider>(
+    d: &D,
+    cfg: &Config,
+    task: &str,
+    files: &[(String, String)],
+    revision: u32,
+) -> CriticResult {
     let mut r = CriticResult {
         tool: "critic_score".into(),
         mode: "files".into(),
         advisory: true,
-        model: cfg.model.clone(),
+        model: d.model_identity().unwrap_or_else(|| cfg.model.clone()),
         revision,
         max_revisions: cfg.max_revisions,
         revise_allowed: revision < cfg.max_revisions,
         ..Default::default()
     };
-    let task = if task.trim().is_empty() { "(no task given: judge the code on its own)" } else { task };
-    let mut chunks: Vec<Chunk> = files.iter().flat_map(|(f, t)| chunk_text(f, t, cfg.chunk_chars)).collect();
+    let task = if task.trim().is_empty() {
+        "(no task given: judge the code on its own)"
+    } else {
+        task
+    };
+    let mut chunks: Vec<Chunk> = files
+        .iter()
+        .flat_map(|(f, t)| chunk_text(f, t, cfg.chunk_chars))
+        .collect();
     if chunks.is_empty() {
         r.error = Some("empty artifact (nothing readable to score)".into());
         return r;
@@ -312,7 +382,8 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
     let qs = spec.wire();
     let mut verdicts = Vec::new();
     let mut weights = Vec::new();
-    let mut queue: std::collections::VecDeque<(Chunk, u8)> = chunks.iter().cloned().map(|c| (c, 0)).collect();
+    let mut queue: std::collections::VecDeque<(Chunk, u8)> =
+        chunks.iter().cloned().map(|c| (c, 0)).collect();
     let total = queue.len();
     let deadline = Deadline::new(cfg);
     while let Some((c, depth)) = queue.pop_front() {
@@ -321,9 +392,18 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
             return r;
         }
         let c = &c;
-        crate::events::emit("progress", json!({"tool": "critic_score", "unit": c.label(), "done": verdicts.len(), "total": total}));
+        crate::events::emit(
+            "progress",
+            json!({"tool": "critic_score", "unit": c.label(), "done": verdicts.len(), "total": total}),
+        );
         let state = match spec.state(&[
-            ("file", format!("{} (lines {}-{} of {})", c.file, c.start_line, c.end_line, c.total_lines)),
+            (
+                "file",
+                format!(
+                    "{} (lines {}-{} of {})",
+                    c.file, c.start_line, c.end_line, c.total_lines
+                ),
+            ),
             ("code", c.text.clone()),
         ]) {
             Ok(s) => s,
@@ -332,7 +412,10 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {})", c.label()));
                 return r;
@@ -341,7 +424,8 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
                 r.latency_ms += dec.latency_ms;
                 r.kev_input_tokens += dec.input_tokens;
                 // laya silently truncated this row: split and re-score (max 2 levels).
-                if dec.truncated && depth < 2
+                if dec.truncated
+                    && depth < 2
                     && let Some((a, b)) = halve(c)
                 {
                     queue.push_front((b, depth + 1));
@@ -369,7 +453,11 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
     }
 
     // Completeness: on the code itself when it fits in one chunk, else on a digest.
-    let (text, basis) = if chunks.len() == 1 { (chunks[0].text.clone(), "code") } else { (digest(files, cfg.chunk_chars), "digest") };
+    let (text, basis) = if chunks.len() == 1 {
+        (chunks[0].text.clone(), "code")
+    } else {
+        (digest(files, cfg.chunk_chars), "digest")
+    };
     let complete_state = match completeness_state(task, basis, text) {
         Ok(s) => s,
         Err(e) => {
@@ -377,7 +465,14 @@ pub async fn critic<D: Decider>(d: &D, cfg: &Config, task: &str, files: &[(Strin
             return r;
         }
     };
-    let p_complete = match d.decide(&complete_state, &completeness_spec(basis).wire()).await {
+    let p_complete = match deadline
+        .bound(
+            d.decide(&complete_state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            chunks.len(),
+        )
+        .await
+    {
         Err(e) => {
             r.error = Some(e);
             return r;
@@ -401,12 +496,36 @@ pub struct Deadline {
 
 impl Deadline {
     pub fn new(cfg: &Config) -> Self {
-        Deadline { at: std::time::Instant::now() + std::time::Duration::from_secs(cfg.critic_deadline_s), limit_s: cfg.critic_deadline_s }
+        Deadline {
+            at: std::time::Instant::now() + std::time::Duration::from_secs(cfg.critic_deadline_s),
+            limit_s: cfg.critic_deadline_s,
+        }
     }
 
     pub fn passed(&self, done: usize, total: usize) -> Option<String> {
-        (std::time::Instant::now() >= self.at)
-            .then(|| format!("critic stalled: past its {}s deadline with {done} of {total} units scored", self.limit_s))
+        (std::time::Instant::now() >= self.at).then(|| {
+            format!(
+                "critic stalled: past its {}s deadline with {done} of {total} units scored",
+                self.limit_s
+            )
+        })
+    }
+
+    /// Cancel this request future at the shared pass deadline, including an
+    /// in-flight grouped decision. Dropping HTTP work does not prove a remote
+    /// inference stopped; no shared service is killed here.
+    pub async fn bound<T>(
+        &self,
+        future: impl std::future::Future<Output = Result<T, String>>,
+        done: usize,
+        total: usize,
+    ) -> Result<T, String> {
+        tokio::time::timeout_at(self.at.into(), future)
+            .await
+            .map_err(|_| format!(
+                "critic deadline exceeded: {}s; {done}/{total} units complete; request future cancelled; remote cancellation unconfirmed",
+                self.limit_s
+            ))?
     }
 }
 
@@ -426,7 +545,11 @@ fn halve_hunk(h: &Hunk) -> Option<(Hunk, Hunk)> {
         return None;
     }
     let mid = body.len() / 2;
-    let mk = |part: &[&str]| Hunk { file: h.file.clone(), new_start: h.new_start, text: format!("{header}\n{}\n", part.join("\n")) };
+    let mk = |part: &[&str]| Hunk {
+        file: h.file.clone(),
+        new_start: h.new_start,
+        text: format!("{header}\n{}\n", part.join("\n")),
+    };
     Some((mk(&body[..mid]), mk(&body[mid..])))
 }
 
@@ -437,8 +560,16 @@ fn halve(c: &Chunk) -> Option<(Chunk, Chunk)> {
         return None;
     }
     let mid = lines.len() / 2;
-    let a = Chunk { text: lines[..mid].join("\n") + "\n", end_line: c.start_line + mid - 1, ..c.clone() };
-    let b = Chunk { text: lines[mid..].join("\n") + "\n", start_line: c.start_line + mid, ..c.clone() };
+    let a = Chunk {
+        text: lines[..mid].join("\n") + "\n",
+        end_line: c.start_line + mid - 1,
+        ..c.clone()
+    };
+    let b = Chunk {
+        text: lines[mid..].join("\n") + "\n",
+        start_line: c.start_line + mid,
+        ..c.clone()
+    };
     Some((a, b))
 }
 
@@ -457,16 +588,30 @@ pub fn aggregate(
     r.kev_ok = true;
     r.chunks_scored = verdicts.len();
     r.completeness_basis = basis.into();
-    let fmin = |f: fn(&ChunkVerdict) -> f64| verdicts.iter().map(|(v, _)| f(v)).fold(f64::INFINITY, f64::min);
+    let fmin = |f: fn(&ChunkVerdict) -> f64| {
+        verdicts
+            .iter()
+            .map(|(v, _)| f(v))
+            .fold(f64::INFINITY, f64::min)
+    };
     let fmax = |f: fn(&ChunkVerdict) -> f64| verdicts.iter().map(|(v, _)| f(v)).fold(0.0, f64::max);
     let p_correct = fmin(|v| v.p_correct);
     let p_sec = fmax(|v| v.p_security_issue);
     let p_unf = fmax(|v| v.p_unfinished);
     let p_inj = fmax(|v| v.p_reviewer_injection);
-    let worst = verdicts.iter().map(|(v, _)| v.severity.as_str()).max_by_key(|s| severity_rank(s)).unwrap_or("none");
+    let worst = verdicts
+        .iter()
+        .map(|(v, _)| v.severity.as_str())
+        .max_by_key(|s| severity_rank(s))
+        .unwrap_or("none");
     let p_severe_max = verdicts.iter().map(|(v, _)| v.p_severe).fold(0.0, f64::max);
     let wsum: f64 = weights.iter().sum::<f64>().max(1.0);
-    let quality = verdicts.iter().zip(weights).map(|((v, _), w)| v.quality * w).sum::<f64>() / wsum;
+    let quality = verdicts
+        .iter()
+        .zip(weights)
+        .map(|((v, _), w)| v.quality * w)
+        .sum::<f64>()
+        / wsum;
 
     r.p_correct_min = Some(round2(p_correct));
     r.p_complete = Some(round2(p_complete));
@@ -478,40 +623,70 @@ pub fn aggregate(
     r.correctness = Some(round2(p_correct * 10.0));
     r.completeness = Some(round2(p_complete * 10.0));
     r.quality = Some(round2(quality));
-    r.confidence = Some(round2(verdicts.iter().map(|(_, c)| c).sum::<f64>() / verdicts.len().max(1) as f64));
+    r.confidence = Some(round2(
+        verdicts.iter().map(|(_, c)| c).sum::<f64>() / verdicts.len().max(1) as f64,
+    ));
     r.truncated_chunks = verdicts.iter().filter(|(v, _)| v.truncated).count();
 
     // Approval comes only from the specs' calibrated gates. Questions without calibration
     // (defect, severity, quality, completeness on a digest) are reported, never decide.
     // The change fails if its worst unit crosses a gate, so the per-unit threshold is corrected
     // for the number of units (see spec::Gate::Rule::good_tail).
-    let unit = unit_spec(&r.mode);
+    let unit = unit_spec(&r.mode).for_model(&r.model);
     let n = verdicts.len().max(1);
     let per_chunk = |v: &ChunkVerdict| -> Vec<String> {
-        [("defect", 1.0 - v.p_correct), ("security", v.p_security_issue), ("unfinished", v.p_unfinished), ("reviewer_text", v.p_reviewer_injection)]
-            .into_iter()
-            .filter_map(|(id, value)| unit.check_units(id, value, n))
-            .collect()
-    };
-    r.flagged_chunks = verdicts.iter().filter(|(v, _)| !per_chunk(v).is_empty()).map(|(v, _)| v.clone()).collect();
-    let mut reasons: Vec<String> = [("defect", 1.0 - p_correct), ("security", p_sec), ("unfinished", p_unf), ("reviewer_text", p_inj)]
+        [
+            ("defect", 1.0 - v.p_correct),
+            ("security", v.p_security_issue),
+            ("unfinished", v.p_unfinished),
+            ("reviewer_text", v.p_reviewer_injection),
+        ]
         .into_iter()
         .filter_map(|(id, value)| unit.check_units(id, value, n))
+        .collect()
+    };
+    r.flagged_chunks = verdicts
+        .iter()
+        .filter(|(v, _)| !per_chunk(v).is_empty())
+        .map(|(v, _)| v.clone())
         .collect();
-    let completeness = completeness_spec(basis);
+    let mut reasons: Vec<String> = [
+        ("defect", 1.0 - p_correct),
+        ("security", p_sec),
+        ("unfinished", p_unf),
+        ("reviewer_text", p_inj),
+    ]
+    .into_iter()
+    .filter_map(|(id, value)| unit.check_units(id, value, n))
+    .collect();
+    let completeness = completeness_spec(basis).for_model(&r.model);
     reasons.extend(completeness.check_value("complete", p_complete));
-    r.gates = unit.questions.iter().filter(|q| unit.gates(&q.id)).map(|q| format!("{}.{}", unit.name, q.id)).collect();
+    r.gates = unit
+        .questions
+        .iter()
+        .filter(|q| unit.gates(&q.id))
+        .map(|q| format!("{}.{}", unit.name, q.id))
+        .collect();
     if completeness.gates("complete") {
         r.gates.push(format!("{}.complete", completeness.name));
     }
     // Rule failures reject; coverage gaps only make the verdict unknown.
     let rules_pass = reasons.is_empty();
     let mut coverage = Vec::new();
+    // Under a model the gates were not calibrated for, the probabilities are reported but no
+    // verdict is claimed: an uncalibrated "approved" would be a guess presented as a result.
+    if let Some(note) = unit.uncalibrated_note() {
+        r.gates.clear();
+        coverage.push(note);
+    }
     if r.chunks_unscored > 0 {
         coverage.push(format!("{} chunks over the {MAX_CHUNKS}-chunk limit were not scored; score file groups separately", r.chunks_unscored));
     }
     if r.truncated_chunks > 0 {
-        coverage.push(format!("{} chunks were truncated by the 2,048-token limit", r.truncated_chunks));
+        coverage.push(format!(
+            "{} chunks were truncated by the 2,048-token limit",
+            r.truncated_chunks
+        ));
     }
     r.approval = match (rules_pass, coverage.is_empty()) {
         (false, _) => Some(false),
