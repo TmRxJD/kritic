@@ -108,7 +108,10 @@ def test_recall_malformed_is_explicit_error(monkeypatch, wire):
 def test_actual_native_archive_namespace(tmp_path, monkeypatch):
     import json
     m = load()
-    exe = Path('E:/hermes-performance-lab/bin/kritic-power.exe')
+    configured_exe = os.environ.get('KRITIC_EXE')
+    assert configured_exe, 'Set KRITIC_EXE to the built native binary'  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    exe = Path(configured_exe)
+    assert exe.is_absolute(), 'KRITIC_EXE must be an absolute path'  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     assert exe.is_file(), 'Required isolated native binary unavailable'  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     monkeypatch.setenv('HERMES_HOME', str(tmp_path / 'hermes'))
     monkeypatch.setenv('KRITIC_HOME', str(tmp_path / 'kritic'))
