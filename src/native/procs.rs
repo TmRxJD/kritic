@@ -433,6 +433,159 @@ mod identity_tests {
     }
 }
 
+#[cfg(all(test, any(windows, target_os = "linux")))]
+mod lifecycle_tests {
+    use super::{TrackedTree, refresh, system};
+    use std::net::TcpListener;
+    use std::process::{Child, Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    const PARENT: &str = "native::procs::lifecycle_tests::parent_fixture";
+    const CHILD: &str = "native::procs::lifecycle_tests::child_fixture";
+
+    // Fixtures only execute when explicitly selected by a subprocess. Ordinary
+    // full-suite runs do not spawn an accidental second fixture tree.
+    fn selected(name: &str) -> bool {
+        std::env::args()
+            .collect::<Vec<_>>()
+            .windows(2)
+            .any(|args| args[0] == "--exact" && args[1] == name)
+    }
+
+    fn fixture(name: &str) -> Command {
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", name, "--nocapture"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        command
+    }
+
+    struct RootGuard(Child);
+    impl Drop for RootGuard {
+        fn drop(&mut self) {
+            if !matches!(self.0.try_wait(), Ok(Some(_))) && self.0.kill().is_ok() {
+                let _ = self.0.wait();
+            }
+        }
+    }
+
+    #[test]
+    fn child_fixture() {
+        if !selected(CHILD) {
+            return;
+        }
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::fs::write("child-ready.tmp", format!("{} {port}", std::process::id())).unwrap();
+        std::fs::rename("child-ready.tmp", "child-ready").unwrap();
+        // A bounded fallback prevents a leaked fixture if its controlling test panics.
+        std::thread::sleep(Duration::from_secs(60));
+        drop(listener);
+        panic!("fixture was not cleaned up before its safety deadline");
+    }
+
+    #[test]
+    fn parent_fixture() {
+        if !selected(PARENT) {
+            return;
+        }
+        let mut child = RootGuard(fixture(CHILD).spawn().unwrap());
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !std::path::Path::new("release-parent").exists() {
+            assert!(
+                Instant::now() < deadline,
+                "parent fixture readiness deadline exceeded"
+            );
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "child fixture exited before release"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Deliberately orphan the verified child. Its safety deadline still bounds
+        // lifetime if the controlling test fails before it can perform cleanup.
+        std::mem::forget(child);
+    }
+
+    #[test]
+    fn observed_child_remains_owned_after_parent_exit_and_is_cleaned() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut root = RootGuard(fixture(PARENT).current_dir(dir.path()).spawn().unwrap());
+        let mut tracked = TrackedTree::new(root.0.id(), true).unwrap();
+        let mut sys = system();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let (child_pid, port) = loop {
+            refresh(&mut sys);
+            let alive = tracked.refresh(&sys);
+            if let Ok(ready) = std::fs::read_to_string(dir.path().join("child-ready")) {
+                let fields: Vec<_> = ready.split_whitespace().collect();
+                assert_eq!(fields.len(), 2, "malformed fixture readiness: {ready}");
+                let pid: u32 = fields[0].parse().unwrap();
+                let port: u16 = fields[1].parse().unwrap();
+                if alive.iter().any(|identity| identity.pid == pid) {
+                    assert_eq!(
+                        alive.len(),
+                        2,
+                        "root and verified child must both be live: {alive:?}"
+                    );
+                    assert!(alive.iter().any(|identity| identity.pid == root.0.id()));
+                    break (pid, port);
+                }
+            }
+            assert!(
+                root.0.try_wait().unwrap().is_none(),
+                "parent fixture exited before ownership was verified"
+            );
+            assert!(
+                Instant::now() < deadline,
+                "child readiness and verified ownership deadline exceeded"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        assert!(
+            TcpListener::bind(("127.0.0.1", port)).is_err(),
+            "fixture must hold the port before cleanup"
+        );
+        std::fs::write(dir.path().join("release-parent"), "verified").unwrap();
+        let exit_deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(status) = root.0.try_wait().unwrap() {
+                assert!(status.success(), "parent fixture failed: {status}");
+                break;
+            }
+            assert!(
+                Instant::now() < exit_deadline,
+                "parent did not exit after release"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        refresh(&mut sys);
+        let alive = tracked.refresh(&sys);
+        assert!(!tracked.root_alive());
+        assert_eq!(
+            alive.len(),
+            1,
+            "only the verified orphan may remain: {alive:?}"
+        );
+        assert_eq!(alive.iter().next().unwrap().pid, child_pid);
+        assert!(
+            tracked.cleanup().is_empty(),
+            "verified descendant cleanup failed"
+        );
+        refresh(&mut sys);
+        assert!(
+            tracked.refresh(&sys).is_empty(),
+            "a tracked process survived cleanup"
+        );
+        assert!(
+            TcpListener::bind(("127.0.0.1", port)).is_ok(),
+            "owned descendant still holds port {port}"
+        );
+    }
+}
+
 /// (port, pid) of every listening TCP socket.
 pub fn listeners() -> Vec<(u16, u32)> {
     use netstat2::{
