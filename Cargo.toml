@@ -1,9 +1,9 @@
 [package]
 name = "kritic"
-version = "0.4.0"
+version = "0.5.0-test.1"
 edition = "2024"
 rust-version = "1.89"
-description = "Local, advisory end-of-task review for coding agents: deterministic checkers produce findings, the Kev typed-decision model scores them, code decides."
+description = "Experimental evidence-based review for coding agents: deterministic checks, work contracts, optional cloud/local reviewers."
 license = "Apache-2.0"
 repository = "https://github.com/TmRxJD/kritic"
 readme = "README.md"

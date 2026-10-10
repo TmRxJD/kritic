@@ -135,3 +135,65 @@ def test_unity_protocol_controls_click_and_home(tmp_path):
     # no `home` verb: the adapter notes it and relaunches instead (not exercised here)
     with pytest.raises(RuntimeError, match="unknown verb"):
         u._cmd("home")
+
+
+def test_volatile_text_does_not_make_a_new_screen():
+    v = ux.compile_volatile(["^Validation", "^Loading"])
+    assert ux.is_volatile("Validation passed", v) and ux.is_volatile("Loading: waveform", v) and not ux.is_volatile("Composer", v)
+
+
+def _unity(tmp_path, answers, **extra):
+    u = ux.UnityApp({"out_dir": str(tmp_path), "app_events": "ws://127.0.0.1:1", "stall_s": 1, **extra})
+    u.events = FakeEvents(answers)
+
+    class Win:
+        def window_text(self):
+            return "Studio"
+
+    class App:
+        def alive(self):
+            return True
+
+    u.win, u.app = Win(), App()
+    return u
+
+
+def test_unity_observe_waits_for_the_app_to_stop_being_busy(tmp_path):
+    dump, reads = tmp_path / "c.json", []
+
+    def answers(verb, arg):
+        reads.append(verb)
+        busy = "opening the map: waveform" if len(reads) < 3 else ""
+        dump.write_text(json.dumps({"screen": [1600, 900], "texts": ["Loading: waveform" if busy else "Ready"], "busy": busy, "controls": []}))
+        return "ok", str(dump)
+
+    u = _unity(tmp_path, answers, volatile=["^Loading", "^Ready$"])
+    o = u.observe({})
+    assert len(reads) == 3 and o["busy"] == "", reads
+    # a wait that runs out is reported on the observation, not hidden
+    reads.clear()
+    u2 = _unity(tmp_path, lambda verb, arg: (dump.write_text(json.dumps({"screen": [1, 1], "texts": [], "busy": "starting the preview", "controls": []})), ("ok", str(dump)))[1], busy_timeout_s=0.3)
+    assert u2.observe({})["busy"] == "starting the preview"
+
+
+def test_pixel_diff_reports_the_changed_fraction_and_honours_masked_regions(tmp_path):
+    PIL = pytest.importorskip("PIL.Image")
+    from PIL import Image, ImageDraw
+
+    def shot(name, box=None):
+        img = Image.new("RGB", (100, 100), "black")
+        if box:
+            ImageDraw.Draw(img).rectangle(box, fill="white")
+        path = tmp_path / name
+        img.save(path)
+        return str(path)
+
+    base, same, changed = shot("a.png"), shot("b.png"), shot("c.png", (0, 0, 49, 99))
+    assert ux.pixel_diff(base, same)["fraction"] == 0.0
+    d = ux.pixel_diff(base, changed)
+    assert 0.49 < d["fraction"] < 0.51 and d["bbox"][0] == 0 and d["bbox"][2] == 50, d
+    # the animated half of the window is masked out (fractions of the window)
+    assert ux.pixel_diff(base, changed, [[0.0, 0.0, 0.5, 1.0]])["fraction"] == 0.0
+    other = tmp_path / "small.png"
+    Image.new("RGB", (50, 50)).save(other)
+    assert ux.pixel_diff(base, str(other))["sizes_differ"]

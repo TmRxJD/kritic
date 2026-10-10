@@ -4,13 +4,13 @@
 
 **Jev** is TypeSafe AI's evaluation model: instead of writing text, it reads a small declared state
 and answers typed questions (yes/no, a choice from a declared set, or a score on a declared scale),
-each as a probability. Its weights are closed. [Kev](https://github.com/jaredpalmer/kev) is an open,
+as structured values and model-reported confidence. Its weights are closed. [Kev](https://github.com/jaredpalmer/kev) is an open,
 Apache-2.0 family of Jev-style typed-decision models; the "k" in kritic is for Kev. Kev-4B is built
 on Qwen and served locally by [laya](https://github.com/monatis/ggmlc/tree/main/examples/laya) from a
-GGUF. There is no free text to parse, and no explanation to trust or distrust.
+GGUF. Typed output still needs schema validation and independent evidence.
 
-That shape is why kritic uses it: a probability can be thresholded, calibrated and audited, and a
-typed answer can't invent a finding. Kev is also only as good as the question it is given, so
+Kritic uses this shape to validate answer types and audit measured calibration. Typed answers
+can still be wrong; reported confidence is not automatically a calibrated probability. Kev is also only as good as the question it is given, so
 nothing in kritic writes a question inline.
 
 ## Specs

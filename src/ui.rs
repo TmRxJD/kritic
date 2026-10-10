@@ -133,6 +133,8 @@ pub struct UiSummary {
     pub navigated: usize,
     pub errors: usize,
     pub no_effect: usize,
+    /// Heuristic interactions whose effect was not observed; these are coverage gaps, not proven broken controls.
+    pub unverified_effects: Vec<String>,
     pub skipped: usize,
     pub axe_serious: usize,
 }
@@ -183,7 +185,13 @@ pub fn judge(
     b.extend(judge_interactions(&report.interactions, opts, &mut s));
     b.extend(judge_errors(&report));
     b.extend(judge_flows(&report.flows));
-    let approval = Some(b.is_empty());
+    let approval = if !b.is_empty() {
+        Some(false)
+    } else if report.pages.is_empty() || !s.unverified_effects.is_empty() {
+        None
+    } else {
+        Some(true)
+    };
     (s, b, approval, report)
 }
 
@@ -271,10 +279,13 @@ fn judge_interactions(
             }
             "no_effect" => {
                 s.no_effect += 1;
-                Some(format!(
-                    "control has no observable effect (missing handler?): {} \"{}\" on {}",
-                    i.element.tag, i.element.name, i.page
-                ))
+                if !ignored(&i.element.name) {
+                    s.unverified_effects.push(format!(
+                        "interaction effect unverified: {} \"{}\" on {}; check application state independently",
+                        i.element.tag, i.element.name, i.page
+                    ));
+                }
+                None
             }
             _ => {
                 s.errors += 1;

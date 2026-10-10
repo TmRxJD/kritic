@@ -13,7 +13,7 @@ use crate::kev::{Backend, KevClient};
 
 #[derive(Args, Debug, Default)]
 pub struct DoctorArgs {
-    /// Also start local Kev (or call cloud Jev) and time one real question
+    /// Also start the selected local reviewer or call the selected cloud provider and time one question
     #[arg(long)]
     pub online: bool,
     /// Print the checks as JSON on stdout
@@ -167,79 +167,105 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                 "kev",
                 "backend",
                 Level::Ok,
-                format!("cloud Jev ({}, key configured)", cfg.cloud_model),
+                format!(
+                    "cloud {} ({}, key configured; not probed)",
+                    cfg.cloud_provider, cfg.cloud_model
+                ),
                 None,
             ));
             c.push(check(
                 "kev",
                 "gates",
                 Level::Warn,
-                "Kev's calibrated gates are advisory under Jev: critic_score reports probabilities, not a verdict",
-                Some("run local Kev (kritic setup --backend local), or calibrate Jev (kritic calibrate)"),
+                "Cloud judgments are advisory; local calibrated thresholds do not apply",
+                Some("run local Kev only if you want the measured local gates: kritic setup --backend local"),
             ));
         }
     }
     if online && cfg.backend != "off" {
         c.push(online_probe(&kev).await);
     }
-    // ---- vision
-    let http = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .expect("http");
-    let tags = http
-        .get(format!("{}/api/tags", cfg.ollama_url))
-        .send()
-        .await
-        .ok();
-    let tags: Option<Value> = match tags {
-        Some(r) => r.json().await.ok(),
-        None => None,
-    };
-    match tags {
-        Some(v) => {
-            let has = v["models"].as_array().is_some_and(|m| {
-                m.iter().any(|x| {
-                    x["name"]
-                        .as_str()
-                        .is_some_and(|n| n.starts_with(&cfg.vision_model))
-                })
-            });
-            c.push(if has {
-                check(
-                    "vision",
-                    &cfg.vision_model,
-                    Level::Ok,
-                    "pulled; Ollama answering",
-                    None,
-                )
-            } else {
-                check(
-                    "vision",
-                    &cfg.vision_model,
-                    Level::Warn,
-                    "Ollama is running but the model is not pulled",
-                    Some(&format!("ollama pull {}", cfg.vision_model)),
-                )
-            });
-        }
-        None if cfg.ollama_exe.is_file() => c.push(check(
+    // ---- vision: disabled/local/cloud are independent of the text reviewer.
+    if cfg.vision_backend == "off" {
+        c.push(check(
             "vision",
-            "Ollama",
-            Level::Ok,
-            format!(
-                "installed ({}); started on demand",
-                cfg.ollama_exe.display()
-            ),
+            "backend",
+            Level::Skip,
+            "disabled by default; no GPU/model required",
             None,
-        )),
-        None => c.push(check(
+        ));
+    } else if cfg.vision_backend == "cloud" {
+        c.push(check(
             "vision",
-            "Ollama",
-            Level::Warn,
-            "not installed: visual_critic and the ux_critic vision novice are unavailable",
-            Some("install Ollama (https://ollama.com), then kritic setup"),
-        )),
+            "backend",
+            if cfg.cloud_key().is_some() {
+                Level::Ok
+            } else {
+                Level::Fail
+            },
+            "cloud vision configured; image compatibility not probed",
+            Some("configure a vision-capable cloud model"),
+        ));
+    } else {
+        // ---- vision
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .expect("http");
+        let tags = http
+            .get(format!("{}/api/tags", cfg.ollama_url))
+            .send()
+            .await
+            .ok();
+        let tags: Option<Value> = match tags {
+            Some(r) => r.json().await.ok(),
+            None => None,
+        };
+        match tags {
+            Some(v) => {
+                let has = v["models"].as_array().is_some_and(|m| {
+                    m.iter().any(|x| {
+                        x["name"]
+                            .as_str()
+                            .is_some_and(|n| n.starts_with(&cfg.vision_model))
+                    })
+                });
+                c.push(if has {
+                    check(
+                        "vision",
+                        &cfg.vision_model,
+                        Level::Ok,
+                        "pulled; Ollama answering",
+                        None,
+                    )
+                } else {
+                    check(
+                        "vision",
+                        &cfg.vision_model,
+                        Level::Warn,
+                        "Ollama is running but the model is not pulled",
+                        Some(&format!("ollama pull {}", cfg.vision_model)),
+                    )
+                });
+            }
+            None if cfg.ollama_exe.is_file() => c.push(check(
+                "vision",
+                "Ollama",
+                Level::Ok,
+                format!(
+                    "installed ({}); started on demand",
+                    cfg.ollama_exe.display()
+                ),
+                None,
+            )),
+            None => c.push(check(
+                "vision",
+                "Ollama",
+                Level::Warn,
+                "not installed: visual_critic and the ux_critic vision novice are unavailable",
+                Some("install Ollama (https://ollama.com), then kritic setup"),
+            )),
+        }
     }
     // ---- web testing (Chrome/Edge over CDP)
     match crate::native::web::find_browser(&cfg) {

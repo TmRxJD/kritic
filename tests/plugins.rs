@@ -48,7 +48,7 @@ findings = [{"severity": "high", "message": "parity break at beat 12", "file": "
 state = {"parity": "TYPICAL: 0.004 breaks per note"}
 if a.get("mode") == "wrong_state":
     state = {"parity": "0.004"}
-print(json.dumps({"ok": True, "summary": "scored map", "metrics": {"nps": 5.2, "parity_breaks": len(findings)}, "findings": findings, "kev_state": state}))
+print(json.dumps({"ok": True, "approval": a.get("mode") != "bad", "summary": "scored map", "metrics": {"nps": 5.2, "parity_breaks": len(findings)}, "findings": findings, "kev_state": state}))
 "#;
 
 /// A plugin spec as a repo would write it: every field defined, the question names its field and

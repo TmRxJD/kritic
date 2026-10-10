@@ -6,7 +6,10 @@ line on stdout, progress events on stderr. Same contract as harness/ux_web.mjs:
   {op:"start", kind, exe, args, cwd, env, window_title_re, app_events, ready_event, ready_timeout_s,
    stall_s, ignore, allow_destructive, out_dir}
   {op:"reset"}                        relaunch (Unity: the app's `home` command when it has one)
-  {op:"observe", shot?, marks?}       -> {obs: {fingerprint, title, text, viewport, controls, screenshot?, marked?, events}}
+  {op:"observe", shot?, marks?, compare?}
+                                      -> {obs: {fingerprint, title, text, texts, viewport, controls, busy, screenshot?,
+                                               pixel_diff?, marked?, events}}; `compare` names an earlier screenshot to
+                                         diff `shot` against
   {op:"act", id}
   {op:"close"}                        -> {hygiene}: processes and ports the run left alive (then killed)
 
@@ -14,10 +17,12 @@ Unity apps draw their own UI, so UI Automation sees nothing: the app must answer
 commands over its event socket (`id|verb|argument`, replied to with a `command` event carrying
 `id`, `outcome` and `detail`):
   controls <label>  writes {"screen":[w,h],"controls":[{path,label,text,tooltip,role,rect,enabled,selected}],
-                    "texts":[...]} to a JSON file (rect: x,y,w,h in window pixels, origin top-left) and
-                    replies with the file's path;
+                    "texts":[...],"busy":"what the app is still waiting for, or empty"} to a JSON file
+                    (rect: x,y,w,h in window pixels, origin top-left) and replies with the file's path;
   click <path>      presses the control at that hierarchy path;
   home              (optional) closes dialogs and menus and returns to the start screen.
+An app that reports `busy` is waited on: observe and reset return once it is empty, or once
+`busy_timeout_s` runs out, which the observation reports instead of hiding.
 """
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import desktop_test as dt
@@ -41,7 +47,42 @@ def reply(obj: dict) -> None:
 
 def fingerprint(parts: list[str]) -> str:
     # digits folded: a clock or counter ticking is not a new screen
-    return hashlib.sha1(re.sub(r"\d+", "0", "\n".join(parts)).encode("utf-8", "replace")).hexdigest()[:16]
+    return hashlib.sha256(re.sub(r"\d+", "0", "\n".join(parts)).encode("utf-8", "replace")).hexdigest()[:16]
+
+
+def compile_volatile(patterns: list[str] | None) -> list[re.Pattern]:
+    """The spec's `volatile` regexes: text that changes without the screen changing (a status line, a counter)."""
+    return [re.compile(p) for p in patterns or []]
+
+
+def is_volatile(text: str, volatile: list[re.Pattern]) -> bool:
+    return any(r.search(text) for r in volatile)
+
+
+def pixel_diff(before: str, after: str, regions: list | None = None, threshold: int = 24) -> dict | None:
+    """How much two screenshots differ: the changed fraction, and the box (x0, y0, x1, y1) that holds every change.
+    `regions` ([x0, y0, x1, y1] fractions of the window) are parts that animate on their own and are not compared."""
+    try:
+        from PIL import Image, ImageChops
+
+        a = Image.open(before).convert("L")
+        b = Image.open(after).convert("L")
+    except (OSError, ImportError):
+        return None
+    if a.size != b.size:
+        return {"fraction": 1.0, "bbox": [0, 0, b.size[0], b.size[1]], "sizes_differ": True}
+    mask = ImageChops.difference(a, b).point(lambda v: 255 if v > threshold else 0)
+    if regions:
+        from PIL import ImageDraw
+
+        draw = ImageDraw.Draw(mask)
+        w, h = a.size
+        for x0, y0, x1, y1 in regions:
+            draw.rectangle([x0 * w, y0 * h, x1 * w, y1 * h], fill=0)
+    box = mask.getbbox()
+    if box is None:
+        return {"fraction": 0.0, "bbox": [0, 0, 0, 0]}
+    return {"fraction": round(mask.histogram()[255] / (a.size[0] * a.size[1]), 4), "bbox": list(box)}
 
 
 def assign_ids(controls: list[dict]) -> None:
@@ -195,6 +236,8 @@ class UnityApp:
         args, self.log_path = um.unity_args(inp.get("args", []), self.out_dir, 1600, 900)
         self.launch_inp = {**inp, "args": args}
         self.stall = float(inp.get("stall_s", 15))
+        self.busy_timeout = float(inp.get("busy_timeout_s", 45))
+        self.volatile = compile_volatile(inp.get("volatile"))
         self.app = self.win = self.events = None
         self.since = 0
         self.n = 0
@@ -218,10 +261,27 @@ class UnityApp:
         """Where the app's `shot` files land: `app.shot_dir` in ux.toml (an absolute reply needs none)."""
         return self.inp.get("shot_dir") or ""
 
+    def _read(self) -> dict:
+        path = Path(self._cmd("controls", f"ux-{self.n}"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        path.unlink(missing_ok=True)
+        return data
+
+    def _settled(self) -> dict:
+        """The app's controls once it says it is waiting for nothing (a loading veil, a preview still starting).
+        A wait that runs out comes back with `busy` still set, so it is reported rather than hidden."""
+        deadline = time.monotonic() + self.busy_timeout
+        data = self._read()
+        while data.get("busy") and time.monotonic() < deadline:
+            time.sleep(0.25)
+            data = self._read()
+        return data
+
     def reset(self) -> None:
         if self.app is not None and self.app.alive() and self.has_home:
             try:
                 self._cmd("home")
+                self._settled()
                 self.since = self.events.mark()
                 return
             except RuntimeError as e:
@@ -243,9 +303,7 @@ class UnityApp:
         self.since = self.events.mark()
 
     def observe(self, req: dict) -> dict:
-        path = Path(self._cmd("controls", f"ux-{self.n}"))
-        data = json.loads(path.read_text(encoding="utf-8"))
-        path.unlink(missing_ok=True)
+        data = self._settled()
         controls = [{
             "id": c["path"], "label": (c.get("label") or "").strip()[:80], "text": (c.get("text") or "").strip()[:80],
             "tooltip": (c.get("tooltip") or "").strip()[:160], "role": c.get("role") or "button", "rect": c["rect"],
@@ -260,10 +318,14 @@ class UnityApp:
         texts = [t.get("text", "") if isinstance(t, dict) else t for t in data.get("texts", [])]
         texts = [t for t in texts if t]
         events = self.events.since(self.since)
+        # What the screen is, not what it is saying right now: text the spec calls volatile does not make a new screen.
+        stable = [t for t in texts if not is_volatile(t, self.volatile)]
+        labels = [f"{c['id']}|{'~' if is_volatile(c['label'], self.volatile) else c['label']}|{c['enabled']}|{c['selected']}" for c in controls]
         obs = {
-            "fingerprint": fingerprint([f"{c['id']}|{c['label']}|{c['enabled']}|{c['selected']}" for c in controls] + texts),
-            "title": self.win.window_text(), "url": "", "text": " ".join(texts)[:20000],
+            "fingerprint": fingerprint(labels + stable),
+            "title": self.win.window_text(), "url": "", "text": " ".join(texts)[:20000], "texts": texts[:400],
             "viewport": data.get("screen") or [0, 0], "controls": controls, "events": events,
+            "busy": str(data.get("busy") or ""),
         }
         if req.get("shot") or req.get("marks"):
             shot = req.get("shot") or str(Path(req["marks"]).with_suffix(".plain.png"))
@@ -271,6 +333,8 @@ class UnityApp:
             if self._shot(Path(shot)):
                 if req.get("shot"):
                     obs["screenshot"] = shot
+                    if req.get("compare"):
+                        obs["pixel_diff"] = pixel_diff(req["compare"], shot, self.inp.get("volatile_regions"))
                 if req.get("marks"):
                     obs["marked"] = draw_marks(shot, req["marks"], controls)
                     if not req.get("shot"):

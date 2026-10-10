@@ -1,3 +1,15 @@
+# 0.5.0-test.1 (prepared; not published)
+
+- Test-release skill: independently verify critic claims, evaluate workflow viability, reproduce
+  and fix Kritic defects with regressions and upstream PRs.
+- Deterministic-by-default setup/config; local models and cloud reviewers explicitly optional.
+- OpenAI/OpenAI-compatible, Anthropic, Gemini and JEV transports; optional cloud vision,
+  strict bounded responses, redacted errors, provider-origin-bound saved credentials.
+- Work contracts: declared acceptance checks, coverage gaps, current input hashes, stale evidence,
+  final revalidation, separately reported static enforcement wiring and prose sources.
+- Capability/tool toggles, no GPU side effects for cloud/off, scoped calibration provenance,
+  rejection of empty/skipped/vacuous approvals, synchronized docs and offline CI.
+
 # Changelog
 
 ## 0.4.0 — 2026-09-29: kritic

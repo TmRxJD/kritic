@@ -200,19 +200,6 @@ fn default_calibrated_for() -> Vec<String> {
     vec!["kev-4b".to_string()]
 }
 
-/// The decision model currently answering (set by the Kev client once its backend is known).
-static ACTIVE_MODEL: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
-
-pub fn set_active_model(model: &str) {
-    if let Ok(mut m) = ACTIVE_MODEL.write() {
-        *m = Some(model.to_string());
-    }
-}
-
-pub fn active_model() -> Option<String> {
-    ACTIVE_MODEL.read().ok().and_then(|m| m.clone())
-}
-
 /// Most fields a yes/no question may read, and a choice or score. Measured: a question that
 /// had to combine five fields got an all-down map wrong; one or two fields were reliable.
 pub const MAX_READS_NOUL: usize = 2;
@@ -580,15 +567,24 @@ impl DecisionSpec {
     /// Whether this spec's gates may decide under the active model. With no model known yet
     /// (offline tests, fakes) the calibrated default applies.
     pub fn gates_apply(&self) -> bool {
-        active_model().is_none_or(|m| self.calibrated_for.contains(&m))
+        !self.calibrated_for.is_empty()
     }
 
-    /// Why this spec's gates are advisory right now, if they are.
+    pub fn gates_apply_for(&self, model: &str) -> bool {
+        self.calibrated_for.iter().any(|m| m == model) && !model.starts_with("cloud:")
+    }
+
+    /// Clone a spec with gates made advisory for this exact decision's provenance.
+    pub fn for_model(&self, model: &str) -> Self {
+        let mut spec = self.clone();
+        if !self.gates_apply_for(model) {
+            spec.calibrated_for.clear();
+        }
+        spec
+    }
+
     pub fn uncalibrated_note(&self) -> Option<String> {
-        let m = active_model()?;
-        (!self.gates_apply()).then(|| {
-            format!("{}: gates are advisory under {m} (calibrated for {}); run `kritic calibrate` to calibrate them", self.name, self.calibrated_for.join(", "))
-        })
+        (!self.gates_apply()).then(|| format!("{}: model judgments are advisory; no calibration for this provider/model/quantization", self.name))
     }
 
     pub fn check_units(&self, id: &str, v: f64, units: usize) -> Option<String> {
@@ -716,8 +712,11 @@ builtin_specs!(
     "function_maintainability",
     "resource_fit",
     "route",
+    "route_codex",
     "context_relevance",
     "ux_novice_step",
+    "file_relevance",
+    "task_requirements",
 );
 
 /// Every built-in spec, parsed and linted. A bad spec file is a build-time test failure and a

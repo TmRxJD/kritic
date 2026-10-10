@@ -28,9 +28,46 @@ pub struct RouteResult {
     /// Fixed text describing the chosen tier (Kev does not write reasons).
     pub basis: Option<String>,
     pub note: String,
+    /// Exact coding model for Codex routing; classification backends are never executors.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_model: Option<String>,
 }
 
 pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &str) -> RouteResult {
+    route_spec(d, task, hints, artifact_type, "route").await
+}
+
+/// Conservative Codex-only tier selection; low-confidence or unavailable advice stays on Sol.
+pub async fn route_codex<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+) -> RouteResult {
+    let mut result = route_spec(d, task, hints, artifact_type, "route_codex").await;
+    result.coding_model = Some(codex_model(result.suggestion.as_deref(), result.confidence).into());
+    result.note = "Codex performs all work: Sol standard, Astra hard, Luna basic. Kev/JEV only classifies. Uncertain/unavailable routing stays on Sol; recommendations are not calibrated gates.".into();
+    result
+}
+
+pub fn codex_model(tier: Option<&str>, confidence: Option<f64>) -> &'static str {
+    if !confidence.is_some_and(|p| p.is_finite() && (0.75..=1.0).contains(&p)) {
+        return "gpt-6.1-sol";
+    }
+    match tier {
+        Some("luna") => "gpt-6-luna",
+        Some("astra") => "gpt-6-astra",
+        _ => "gpt-6.1-sol",
+    }
+}
+
+async fn route_spec<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+    name: &str,
+) -> RouteResult {
     let mut r = RouteResult {
         tool: "route".into(),
         advisory: true,
@@ -41,7 +78,7 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
         r.error = Some("empty task".into());
         return r;
     }
-    let spec = crate::spec::get("route");
+    let spec = crate::spec::get(name);
     let mut described = task.to_string();
     if !hints.trim().is_empty() {
         described.push_str(&format!("\nHints: {hints}"));
@@ -59,7 +96,14 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
     match d.decide(&state, &spec.wire()).await {
         Err(e) => r.error = Some(e),
         Ok(dec) => {
-            let a = &dec.answers["tier"];
+            let Some(a) = dec.answers.get("tier") else {
+                r.error = Some("routing decision is missing the tier answer".into());
+                return r;
+            };
+            if dec.truncated || !a.value.is_finite() || !(0.0..=1.0).contains(&a.value) {
+                r.error = Some("routing decision is truncated or has an invalid confidence".into());
+                return r;
+            }
             r.kev_ok = true;
             r.suggestion = a.choice.clone();
             r.confidence = Some(a.value);
@@ -394,6 +438,31 @@ pub async fn artifact_validate<D: Decider>(
         ));
     }
     r.deterministic_ok = r.reasons.is_empty();
+    let mut gaps = Vec::new();
+    if r.files.is_empty() && r.commands.is_empty() {
+        gaps.push("no artifacts or commands were checked".to_string());
+    }
+    if !r.skipped.is_empty() {
+        gaps.push(format!(
+            "{} artifacts skipped; coverage is incomplete",
+            r.skipped.len()
+        ));
+    }
+    if files.iter().any(|(_, content)| content.trim().is_empty()) {
+        gaps.push("empty artifact content does not establish acceptance".into());
+    }
+    if r.files
+        .iter()
+        .flat_map(|f| &f.checks)
+        .any(|c| c.status == Status::Skipped)
+        || r.commands.iter().any(|c| c.status == Status::Skipped)
+    {
+        gaps.push("requested checks were skipped".into());
+    }
+    if inp.use_model && files.is_empty() {
+        gaps.push("model review requested but no reviewable artifacts".into());
+    }
+
     if inp.use_model && !files.is_empty() {
         let c = critic(d, cfg, inp.task, &files, inp.revision).await;
         r.critic = Some(c);
@@ -415,6 +484,12 @@ pub async fn artifact_validate<D: Decider>(
             }
         }
     };
+    if !gaps.is_empty() {
+        if r.approval == Some(true) {
+            r.approval = None;
+        }
+        r.reasons.extend(gaps);
+    }
     r
 }
 
@@ -423,6 +498,12 @@ pub async fn artifact_validate<D: Decider>(
 #[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
 pub struct StatusResult {
     pub tool: String,
+    pub capabilities: BTreeMap<String, bool>,
+    pub enabled_tools: Vec<String>,
+    pub cloud_provider: String,
+    /// Configuration is not a paid connectivity test. Use doctor --online explicitly.
+    pub cloud_verification: String,
+    pub vision_backend: String,
     /// `kev.backend` as configured (auto, local, cloud, off).
     pub backend_setting: String,
     /// The backend Kev questions go to (local or cloud), or null when none is usable.
@@ -475,14 +556,33 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
         (Ok(crate::kev::Backend::Local), true) => k.ensure_up().await.err(),
         _ => None,
     };
-    let health = k.health().await;
+    let health = if matches!(resolved, Ok(crate::kev::Backend::Local)) {
+        k.health().await
+    } else {
+        None
+    };
     let decision_model = resolved.as_ref().ok().map(|b| k.model_for(b).to_string());
     StatusResult {
         tool: "status".into(),
+        capabilities: cfg.capabilities.clone(),
+        enabled_tools: crate::config::TOOL_NAMES
+            .iter()
+            .filter(|n| cfg.tool_enabled(n))
+            .map(|n| n.to_string())
+            .collect(),
+        cloud_provider: cfg.cloud_provider.clone(),
+        cloud_verification: "not_probed (doctor --online makes an API call)".into(),
+        vision_backend: cfg.vision_backend.clone(),
         backend_setting: cfg.backend.clone(),
         backend: resolved.as_ref().ok().map(|b| b.label().to_string()),
         backend_error: resolved.as_ref().err().cloned(),
-        gates_calibrated: crate::spec::builtin().values().all(|s| s.gates_apply()),
+        gates_calibrated: resolved.is_ok()
+            && crate::spec::builtin().values().all(|s| {
+                s.gates_apply_for(
+                    &k.model_identity()
+                        .unwrap_or_else(|| cfg.decision_identity()),
+                )
+            }),
         decision_model,
         cloud_key_configured: cfg.cloud_key().is_some(),
         laya_up: health.is_some(),

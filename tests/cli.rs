@@ -138,7 +138,10 @@ fn register_then_uninstall_round_trip() {
     kritic::cli::register::register_claude(
         &khome,
         &exe,
-        &kritic::cli::register::ClaudeOptions { rule: true, concise: false },
+        &kritic::cli::register::ClaudeOptions {
+            rule: true,
+            concise: false,
+        },
     )
     .unwrap();
     kritic::cli::register::register_hermes(

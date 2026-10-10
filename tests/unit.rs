@@ -1302,7 +1302,7 @@ budget = 1
             {"id": "region", "impact": "moderate", "help": "x", "nodes": 1, "targets": ["main"]}
         ]))
         .unwrap();
-        let hits: Vec<(String, String)> = ux::audit(&controls, &axe)
+        let hits: Vec<(String, String)> = ux::audit(&controls, &axe, [1600.0, 900.0])
             .into_iter()
             .map(|(r, _, k, _)| (r.to_string(), k))
             .collect();

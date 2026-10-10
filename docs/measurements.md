@@ -1,3 +1,6 @@
+> Historical measurements on the recorded fixtures/configuration, not validation of the current
+> test release or a guarantee for other projects, providers, hardware or operating systems.
+
 # Measurements
 
 Everything here was measured on Windows 11 with an RTX 5070 (12 GB), Kev-4B Q8_0 through laya

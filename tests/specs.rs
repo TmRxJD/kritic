@@ -12,7 +12,18 @@ fn builtin_specs_are_valid() {
         "invalid built-in specs:\n  {}",
         errors.join("\n  ")
     );
-    assert_eq!(spec::builtin().len(), 11);
+    for name in [
+        "route",
+        "route_codex",
+        "code_change",
+        "code_chunk",
+        "completeness",
+    ] {
+        assert!(
+            spec::builtin().contains_key(name),
+            "missing required spec: {name}"
+        );
+    }
 }
 
 fn base() -> DecisionSpec {

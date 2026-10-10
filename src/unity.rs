@@ -250,9 +250,9 @@ pub async fn run_tests(
             Ok((total, passed, failed, skipped, failures)) => {
                 (r.total, r.passed, r.failed, r.skipped, r.failures) =
                     (total, passed, failed, skipped, failures);
-                r.approval = Some(failed == 0 && total > 0);
-                if total == 0 {
-                    r.error = Some("no tests ran (none found for this platform/filter?)".into());
+                r.approval = nunit_approval(total, passed, failed, skipped);
+                if r.approval.is_none() {
+                    r.error = Some("no complete executed test coverage (empty, skipped or inconsistent results)".into());
                     r.approval = None;
                 }
             }
@@ -275,4 +275,19 @@ pub async fn run_tests(
         }
     }
     r
+}
+
+/// A discovered test is not evidence of execution. Partial/all-skipped suites remain unknown.
+pub fn nunit_approval(total: u64, passed: u64, failed: u64, skipped: u64) -> Option<bool> {
+    if failed > 0 {
+        return Some(false);
+    }
+    if total == 0
+        || passed == 0
+        || skipped > 0
+        || passed.checked_add(failed)?.checked_add(skipped)? != total
+    {
+        return None;
+    }
+    Some(true)
 }

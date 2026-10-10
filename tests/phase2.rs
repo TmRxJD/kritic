@@ -51,7 +51,6 @@ fn every_breakage_kind_rejects() {
         json!({"ok": true, "failed_requests": [{"url": "http://l/api", "status": 500}]}),
         json!({"ok": true, "crashes": [{"page": "p"}]}),
         json!({"ok": true, "persistence": [{"selector": "#n", "persisted": false, "expected": "a", "actual": ""}]}),
-        json!({"ok": true, "interactions": [{"page": "p", "element": {"name": "Go"}, "action": "click", "result": "no_effect"}]}),
         json!({"ok": true, "interactions": [{"page": "p", "element": {"name": "Go"}, "action": "click", "result": "error", "errors": ["e"]}]}),
         json!({"ok": true, "pages": [{"url": "u", "status": 500}]}),
         json!({"ok": true, "pages": [{"url": "u", "status": 200, "axe": [{"id": "color-contrast", "impact": "serious", "help": "h", "nodes": 2}]}]}),
@@ -320,4 +319,31 @@ fn failed_flows_become_breakages_naming_the_step() {
         "{}",
         b[0]
     );
+}
+
+#[test]
+fn unobserved_effects_are_gaps_and_real_errors_still_reject() {
+    let mut raw = json!({"ok":true,"pages":[{"url":"p","status":200}],"interactions":[
+        {"page":"p","element":{"name":"Paint canvas"},"action":"click","result":"no_effect"}
+    ]});
+    let (s, b, approval, _) = judge(report(raw.clone()), &opts());
+    assert_eq!(approval, None);
+    assert!(b.is_empty());
+    assert_eq!(s.unverified_effects.len(), 1);
+    raw["page_errors"] = json!([{"message":"independently observed exception"}]);
+    let (_, b, approval, _) = judge(report(raw), &opts());
+    assert_eq!(approval, Some(false));
+    assert!(b[0].contains("independently observed exception"));
+}
+
+#[test]
+fn invalid_visual_threshold_cannot_create_vacuous_approval() {
+    let scores = vjson(8.0);
+    for threshold in [f64::NAN, -1.0, 11.0] {
+        let mut r = vision::VisualResult::default();
+        let (s, obs) = vision::parse(&scores).unwrap();
+        vision::judge(&mut r, s, obs, threshold);
+        assert_eq!(r.approval, None);
+        assert!(!r.model_ok);
+    }
 }

@@ -58,19 +58,19 @@ pub fn cvss_to_severity(score: f64) -> &'static str {
 
 /// Where scanner binaries live (`scan.tools_bin`, default `~/.kritic/bin`, then PATH).
 pub fn tool_path(bin_dir: &Path, name: &str) -> Option<PathBuf> {
-    let exe = if cfg!(windows) {
+    let exe = if cfg!(windows) && Path::new(name).extension().is_none() {
         format!("{name}.exe")
     } else {
         name.to_string()
     };
     let p = bin_dir.join(&exe);
-    if p.exists() {
+    if p.is_file() {
         return Some(p);
     }
     let path = std::env::var_os("PATH")?;
     std::env::split_paths(&path)
         .map(|d| d.join(&exe))
-        .find(|p| p.exists())
+        .find(|p| p.is_file())
 }
 
 pub async fn run_json(
@@ -79,6 +79,16 @@ pub async fn run_json(
     dir: &Path,
     timeout_s: u64,
 ) -> Result<(String, i32), String> {
+    let (stdout, code, _) = run_output(exe, args, dir, timeout_s).await?;
+    Ok((stdout, code))
+}
+
+async fn run_output(
+    exe: &Path,
+    args: &[&str],
+    dir: &Path,
+    timeout_s: u64,
+) -> Result<(String, i32, String), String> {
     let child = tokio::process::Command::new(exe)
         .args(args)
         .current_dir(dir)
@@ -96,6 +106,10 @@ pub async fn run_json(
     Ok((
         String::from_utf8_lossy(&out.stdout).into_owned(),
         out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stderr)
+            .chars()
+            .take(2000)
+            .collect(),
     ))
 }
 
@@ -209,14 +223,32 @@ pub fn parse_gitleaks(base: &Path, json: &str) -> Result<Vec<Finding>, String> {
         .collect())
 }
 
+/// Maintenance notices are preserved, but are not mislabeled as exploitable vulnerabilities.
+/// An unknown category, mixed affected metadata, or explicit severity stays a security advisory.
+fn informational_advisory(v: &Value) -> bool {
+    let no_severity = v
+        .get("severity")
+        .is_none_or(|s| s.as_array().is_some_and(Vec::is_empty));
+    no_severity
+        && v["affected"].as_array().is_some_and(|affected| {
+            !affected.is_empty()
+                && affected.iter().all(|a| {
+                    matches!(
+                        a["database_specific"]["informational"].as_str(),
+                        Some("unmaintained" | "notice")
+                    )
+                })
+        })
+}
+
 /// osv-scanner v2 `scan source --format json`. One finding per vulnerable package, at the
 /// package's worst group severity (CVSS), listing its advisory ids.
 pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
     let v: Value = serde_json::from_str(json).map_err(|e| format!("osv JSON: {e}"))?;
     let mut out = Vec::new();
-    for r in v["results"].as_array().into_iter().flatten() {
+    for r in v["results"].as_array().ok_or("osv: no results array")? {
         let src = r["source"]["path"].as_str().unwrap_or("").to_string();
-        for p in r["packages"].as_array().into_iter().flatten() {
+        for p in r["packages"].as_array().ok_or("osv: no packages array")? {
             let vulns = p["vulnerabilities"].as_array().map(Vec::len).unwrap_or(0);
             if vulns == 0 {
                 continue;
@@ -231,6 +263,10 @@ pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
                         .and_then(|s| s.parse::<f64>().ok())
                 })
                 .fold(0.0, f64::max);
+            let informational = worst == 0.0
+                && p["vulnerabilities"].as_array().is_some_and(|items| {
+                    !items.is_empty() && items.iter().all(informational_advisory)
+                });
             let ids: Vec<&str> = p["vulnerabilities"]
                 .as_array()
                 .into_iter()
@@ -242,8 +278,15 @@ pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
             let ver = p["package"]["version"].as_str().unwrap_or("?");
             out.push(Finding {
                 tool: "osv-scanner".into(),
-                rule: "vulnerable-dependency".into(),
-                severity: if worst > 0.0 {
+                rule: if informational {
+                    "informational-dependency"
+                } else {
+                    "vulnerable-dependency"
+                }
+                .into(),
+                severity: if informational {
+                    "info".into()
+                } else if worst > 0.0 {
                     cvss_to_severity(worst).into()
                 } else {
                     "medium".into()
@@ -254,7 +297,17 @@ pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
                     .unwrap_or(src.clone()),
                 line: 0,
                 message: format!(
-                    "{name} {ver}: {vulns} known vulnerabilities (worst CVSS {worst:.1}), e.g. {}",
+                    "{name} {ver}: {vulns} {} ({}), e.g. {}",
+                    if informational {
+                        "informational advisories"
+                    } else {
+                        "security advisories"
+                    },
+                    if worst > 0.0 {
+                        format!("worst CVSS {worst:.1}")
+                    } else {
+                        "no scored CVSS supplied".into()
+                    },
                     ids.join(", ")
                 ),
                 confidence: None,
@@ -344,7 +397,10 @@ pub fn parse_eslint(base: &Path, json: &str) -> Result<Vec<Finding>, String> {
     let v: Value = serde_json::from_str(json).map_err(|e| format!("eslint JSON: {e}"))?;
     let mut out = Vec::new();
     for f in v.as_array().ok_or("eslint: expected array")? {
-        for m in f["messages"].as_array().into_iter().flatten() {
+        for m in f["messages"]
+            .as_array()
+            .ok_or("eslint: no messages array")?
+        {
             out.push(Finding {
                 tool: "eslint".into(),
                 rule: m["ruleId"].as_str().unwrap_or("parse").into(),
@@ -439,6 +495,13 @@ useDefault = true
 [allowlist]
 description = "vendored and generated trees"
 paths = ['(^|[\\/])({alts})[\\/]']
+
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "ACS decision content identity, only in the canonical_key JSON field"
+regexTarget = "match"
+regexes = ['^"?canonical_key"\s*:\s*"acs-decision-[a-f0-9]{{64}}"[\s,}}]*$']
 "#
     );
     let path = dir.join("kritic-gitleaks.toml");
@@ -536,6 +599,108 @@ pub struct Runner<'a> {
     pub findings: Vec<Finding>,
 }
 
+/// Validate completion independently from extracted findings: partial findings remain useful,
+/// but a broken scan must never be recorded as clean.
+pub fn completion_error(tool: &str, stdout: &str, code: i32, findings: usize) -> Option<String> {
+    let allowed = code == 0
+        || (code == 1
+            && findings > 0
+            && matches!(
+                tool,
+                "bandit" | "osv-scanner" | "eslint" | "cargo-audit" | "semgrep"
+            ));
+    if !allowed {
+        return Some(format!("{tool} exited with {code}; scan incomplete"));
+    }
+    if tool == "tsc" {
+        return (!stdout.trim().is_empty() && findings == 0)
+            .then(|| "tsc returned unrecognized diagnostics".into());
+    }
+    if tool == "clippy" {
+        let mut finished = false;
+        for line in stdout.lines().filter(|l| !l.trim().is_empty()) {
+            let Ok(v) = serde_json::from_str::<Value>(line) else {
+                return Some("clippy returned non-JSON output".into());
+            };
+            if v["reason"] == "build-finished" {
+                if v["success"] != true {
+                    return Some("clippy build did not succeed".into());
+                }
+                finished = true;
+            }
+        }
+        return (!finished).then(|| "clippy did not report a completed build".into());
+    }
+    // Gitleaks emits empty stdout on some successful, finding-free versions.
+    if tool == "gitleaks" && stdout.trim().is_empty() {
+        return None;
+    }
+    let Ok(v) = serde_json::from_str::<Value>(stdout) else {
+        return Some(format!("{tool} returned invalid JSON"));
+    };
+    if let Some(errors) = v.get("errors")
+        && !errors.as_array().is_some_and(|a| a.is_empty())
+    {
+        return Some(format!("{tool} report contains scanner errors"));
+    }
+    let valid = match tool {
+        "bandit" | "semgrep" | "osv-scanner" => v["results"].is_array(),
+        "gitleaks" | "ruff" | "eslint" => v.is_array(),
+        "cargo-audit" => v["vulnerabilities"]["list"].is_array(),
+        _ => true,
+    };
+    if !valid {
+        return Some(format!("{tool} report is missing required result fields"));
+    }
+    if tool == "semgrep"
+        && !v["paths"]["scanned"]
+            .as_array()
+            .is_some_and(|paths| !paths.is_empty())
+    {
+        return Some("semgrep reported no scanned files; coverage unverified".into());
+    }
+    if tool == "bandit"
+        && !v["metrics"]["_totals"]["loc"]
+            .as_u64()
+            .is_some_and(|loc| loc > 0)
+    {
+        return Some("bandit reported no analyzed lines; coverage unverified".into());
+    }
+    let fields: &[&str] = match tool {
+        "bandit" => &["/test_id", "/filename", "/issue_severity", "/issue_text"],
+        "semgrep" => &["/check_id", "/path", "/extra/severity", "/extra/message"],
+        "gitleaks" => &["/RuleID", "/File", "/Description"],
+        "ruff" => &["/filename", "/message"],
+        "eslint" => &["/filePath"],
+        _ => &[],
+    };
+    let rows = if matches!(tool, "bandit" | "semgrep") {
+        v["results"].as_array()
+    } else {
+        v.as_array()
+    };
+    if let Some(rows) = rows {
+        for row in rows {
+            if fields
+                .iter()
+                .any(|path| !row.pointer(path).is_some_and(Value::is_string))
+            {
+                return Some(format!("{tool} contains a malformed result"));
+            }
+            if tool == "eslint"
+                && !row["messages"].as_array().is_some_and(|messages| {
+                    messages.iter().all(|m| {
+                        m["message"].is_string() && matches!(m["severity"].as_u64(), Some(1 | 2))
+                    })
+                })
+            {
+                return Some("eslint contains malformed diagnostics".into());
+            }
+        }
+    }
+    None
+}
+
 impl<'a> Runner<'a> {
     pub fn new(base: &'a Path, bin_dir: &'a Path, timeout_s: u64) -> Self {
         Runner {
@@ -563,27 +728,48 @@ impl<'a> Runner<'a> {
         F: FnOnce(&str) -> Result<Vec<Finding>, String>,
     {
         let Some(exe) = exe else {
-            self.skip(tool, "not installed");
+            self.runs.push(ToolRun {
+                tool: tool.into(),
+                status: "failed".into(),
+                detail: "applicable scanner is not installed".into(),
+                findings: 0,
+                duration_ms: 0,
+            });
             return;
         };
         let t0 = Instant::now();
-        let res = run_json(&exe, args, self.base, self.timeout_s)
-            .await
-            .and_then(|(out, _code)| parse(&out));
+        let res = run_output(&exe, args, self.base, self.timeout_s).await;
         let ms = t0.elapsed().as_millis() as u64;
         match res {
-            Ok(f) => {
+            Ok((out, code, stderr)) => {
+                let parsed = parse(&out);
+                let mut error =
+                    completion_error(tool, &out, code, parsed.as_ref().map_or(0, Vec::len));
+                let f = match parsed {
+                    Ok(f) => f,
+                    Err(e) => {
+                        error.get_or_insert(e);
+                        Vec::new()
+                    }
+                };
                 // backstop: drop anything a tool reported from a vendored tree
                 let before = f.len();
                 let f: Vec<Finding> = f.into_iter().filter(|x| !is_vendored(&x.file)).collect();
-                let detail = if before > f.len() {
+                let detail = if let Some(e) = &error {
+                    // Gitleaks stderr can contain credentials; retain the failure without leaking them.
+                    if tool == "gitleaks" || stderr.trim().is_empty() {
+                        e.clone()
+                    } else {
+                        format!("{e}; stderr: {}", stderr.trim())
+                    }
+                } else if before > f.len() {
                     format!("{} findings in vendored paths ignored", before - f.len())
                 } else {
                     String::new()
                 };
                 self.runs.push(ToolRun {
                     tool: tool.into(),
-                    status: "ran".into(),
+                    status: if error.is_some() { "failed" } else { "ran" }.into(),
                     detail,
                     findings: f.len(),
                     duration_ms: ms,

@@ -100,9 +100,13 @@ pub async fn deterministic_checks(content: &str, kind: &str) -> Vec<Check> {
             "no_merge_conflict_markers",
             "merge conflict markers present",
         ));
+    } else {
+        out.push(Check::pass("no_merge_conflict_markers"));
     }
     if content.contains('\u{FFFD}') {
         out.push(Check::fail("utf8_clean", "invalid UTF-8 bytes"));
+    } else {
+        out.push(Check::pass("utf8_clean"));
     }
     out
 }
@@ -154,11 +158,27 @@ pub struct CommandResult {
 /// verbatim; nothing is summarized or inferred.
 pub async fn run_command(cmd: &str, dir: &Path, timeout_s: u64) -> CommandResult {
     let t0 = Instant::now();
-    let mut c = if cfg!(windows) {
+    if cmd.trim().is_empty() {
+        return CommandResult {
+            command: cmd.into(),
+            status: Status::Skipped,
+            exit_code: None,
+            duration_ms: 0,
+            output_tail: "empty command; nothing executed".into(),
+        };
+    }
+    #[cfg(windows)]
+    let mut c = {
+        use std::os::windows::process::CommandExt;
         let mut c = tokio::process::Command::new("cmd");
-        c.args(["/C", cmd]);
+        // cmd.exe does not use C-runtime argument escaping. Preserve the caller's
+        // shell command inside cmd's outer quote pair, including quoted paths.
+        c.args(["/D", "/S", "/C"]);
+        c.as_std_mut().raw_arg(format!("\"{cmd}\""));
         c
-    } else {
+    };
+    #[cfg(not(windows))]
+    let mut c = {
         let mut c = tokio::process::Command::new("sh");
         c.args(["-c", cmd]);
         c

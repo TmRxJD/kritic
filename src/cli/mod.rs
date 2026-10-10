@@ -28,7 +28,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Cmd {
-    /// Install the model and tools, write the config, connect Claude Code / Hermes
+    /// Install deterministic tools (models optional), write the config, connect Claude Code / Hermes
     Setup(setup::SetupArgs),
     /// Check every feature and say what to fix
     Doctor(doctor::DoctorArgs),
@@ -40,8 +40,23 @@ pub enum Cmd {
     Serve,
     /// Hermes context-engine backend (used by the kritic Hermes plugin)
     Context(context::ContextArgs),
-    /// Save the AI Gateway key for cloud Jev (hidden prompt, or piped on stdin)
+    /// Save the configured cloud API key (hidden prompt, or piped on stdin)
     Key(KeyArgs),
+    /// Audit .kritic/contract.toml without an MCP client or model
+    Contract(ContractArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct ContractArgs {
+    #[arg(long, default_value = ".")]
+    pub base_dir: std::path::PathBuf,
+    #[arg(long)]
+    pub path: Option<String>,
+    #[arg(long, default_value = "")]
+    pub task: String,
+    /// Execute the contract's shell commands after you have reviewed them
+    #[arg(long)]
+    pub run_commands: bool,
 }
 
 #[derive(Args, Debug)]
@@ -62,7 +77,7 @@ pub fn key(args: KeyArgs) -> Result<(), String> {
         return Ok(());
     }
     let key = if ui::interactive() {
-        ui::secret("AI Gateway API key (input hidden)")
+        ui::secret("Configured cloud API key (input hidden)")
     } else {
         let mut s = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut s).map_err(|e| e.to_string())?;
@@ -72,18 +87,18 @@ pub fn key(args: KeyArgs) -> Result<(), String> {
     if key.chars().any(char::is_whitespace) {
         return Err("that doesn't look like a key (it contains whitespace)".into());
     }
-    setup::write_key(path, &key)?;
+    cfg.save_cloud_key(&key)?;
     ui::ok(&format!(
         "key saved to {} (never printed, never in kritic.toml)",
         path.display()
     ));
     match cfg.backend.as_str() {
-        "cloud" => ui::info("kev.backend = cloud: Kev questions go to cloud Jev"),
+        "cloud" => ui::info("review.backend = cloud: questions go to your configured provider"),
         "auto" => ui::info(
-            "kev.backend = auto: cloud Jev is used only when local Kev isn't installed; set KRITIC_KEV_BACKEND=cloud to force it",
+            "review.backend = auto: local Kev only; cloud requires explicit review.backend = cloud",
         ),
         other => ui::info(&format!(
-            "kev.backend = {other}: the key is unused until the backend is cloud or auto"
+            "review.backend = {other}: the key is unused until the backend is explicitly cloud"
         )),
     }
     Ok(())

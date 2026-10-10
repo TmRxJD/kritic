@@ -230,12 +230,26 @@ fn resource_blocking(
     interval_ms: u64,
     warmup_s: f64,
 ) -> Value {
+    if !duration_s.is_finite() || duration_s <= 0.0 || !warmup_s.is_finite() || warmup_s < 0.0 {
+        return json!({"ok": false, "error": "sampling duration must be positive and warmup nonnegative and finite"});
+    }
     let (root, mut child) = match start(command, attach, allow_attach, cwd) {
         Ok(x) => x,
         Err(e) => return json!({"ok": false, "error": e}),
     };
     let interval = Duration::from_millis(interval_ms.max(100));
     let mut sys = procs::system();
+    let attached_start = if attach.is_some() {
+        procs::refresh(&mut sys);
+        match sys.process(pid(root)) {
+            Some(p) if p.start_time() > 0 => Some(p.start_time()),
+            _ => {
+                return json!({"ok": false, "error": "attached process does not exist or its identity cannot be verified"});
+            }
+        }
+    } else {
+        None
+    };
     let mut cum_disk = std::collections::HashMap::new();
     let mut samples: Vec<Sample> = Vec::new();
     let mut gpu = Vec::new();
@@ -244,12 +258,19 @@ fn resource_blocking(
     let mut n = 0usize;
     while t0.elapsed().as_secs_f64() < duration_s + warmup_s {
         let (mut s, tree) = sample_tree(&mut sys, root, &mut cum_disk);
+        if let Some(start) = attached_start
+            && !sys
+                .process(pid(root))
+                .is_some_and(|p| p.start_time() == start)
+        {
+            return json!({"ok": false, "error": "attached process disappeared or PID was reused; sampling incomplete", "samples": samples.len()});
+        }
         let t = t0.elapsed().as_secs_f64();
         if t >= warmup_s {
             s.t = round(t - warmup_s, 2);
             samples.push(s);
             n += 1;
-            if n % (1000 / interval.as_millis().max(1) as usize).max(1) == 0
+            if n.is_multiple_of((1000 / interval.as_millis().max(1) as usize).max(1))
                 && let Some(g) = gpu_sample()
             {
                 gpu.push(g);
@@ -263,6 +284,15 @@ fn resource_blocking(
             break;
         }
         std::thread::sleep(interval);
+    }
+    if let Some(start) = attached_start {
+        procs::refresh(&mut sys);
+        if !sys
+            .process(pid(root))
+            .is_some_and(|p| p.start_time() == start)
+        {
+            return json!({"ok": false, "error": "attached process disappeared or PID was reused; sampling incomplete", "samples": samples.len()});
+        }
     }
     if let Some(c) = child.as_mut()
         && c.try_wait().ok().flatten().is_none()

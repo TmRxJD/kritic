@@ -1,120 +1,154 @@
-# kritic
+# Kritic — test release
 
-**A local, advisory end-of-task review for coding agents.** When an agent is about to say "done",
-kritic checks the change: real tools produce the findings, the
-[Kev](https://github.com/jaredpalmer/kev) typed-decision model only scores and ranks them, and
-approval is computed in code from thresholds that carry their calibration evidence.
+**Deterministic checks for coding agents, with optional local or cloud reviewers. No GPU required.**
 
-It runs as an MCP server (Rust, stdio) on your machine, with no cloud calls for the review itself,
-and is built for [Claude Code](https://claude.com/claude-code). Any MCP client works.
+This is an experimental test release. The main purpose of the skill is to test whether Kritic's
+workflow and findings are useful and correct. Agents must validate critic claims independently,
+reproduce defects in Kritic, fix them with regression coverage, and contribute pull requests.
+An `approval` value is a result from declared checks, never permission to ship or proof a task is complete.
 
-```text
-kritic: A9.1 C8.7 Q7.0 · sev none · tests pass · UI 24 actions 0 breakages · approved · 0 revisions
-```
+Kritic is a Rust MCP server. The skill tells your existing coding agent how to collect evidence,
+check requirements and evaluate the findings. That agent can use the cloud model it already runs
+on; Kritic needs no separate inference service or API key for this workflow.
 
-## With vs without
+## Start without a GPU
 
-14 realistic agent changes, each in a defective and a correct variant. *Without* = the project's
-own tests, which the agent already runs. *With* = those tests plus the review kritic prescribes for
-that kind of change ([method and per-case results](docs/benchmarks.md)):
-
-| | Without kritic | With kritic |
-|---|---|---|
-| Defects caught | 1 / 14 | **14 / 14** |
-| …by kritic's deterministic tools alone | | 11 / 14 |
-| Correct changes rejected | 0 / 14 | 7 / 14 (5 by Kev, just past its thresholds) |
-| Review time | | median 7.6 s (1–94 s) |
-| Tokens returned to the agent | | ~600 per review |
-
-What that means in practice:
-
-- The deterministic layer caught hard-coded secrets, SQL and shell injection, vulnerable
-  dependencies, broken config, merge markers, a broken UI and a 24-branch function. None of them
-  broke a test.
-- Kev caught what no checker looks for: a stub left `not implemented`, a comment telling AI
-  reviewers to approve, and an off-by-one.
-- Kev also flags correct code, so the workflow treats its flags as places to read, never as verdicts.
-
-## How it decides
-
-```
- facts (code)            scores (models)               verdict (code)
- ─────────────           ───────────────               ──────────────
- tests you name     ┐                                  deterministic failure → false
- parsers, markers   │    Kev-4B: typed questions       calibrated Kev gate   → false
- scanners, linters  ├──► over declared state,  ──────► budget exceeded       → false
- Playwright, UIA    │    probabilities only            anything unmeasured   → null
- process sampler    │    Qwen2.5-VL: layout scores     otherwise             → true
- repo plugins       ┘
-```
-
-- **Models never invent findings, and never remove one.** Kev triages, ranks and scores facts that
-  code gathered. A model opinion cannot clear a failing test, a secret or a crash.
-- **Every Kev question is a declared spec** with defined answers, linted, and allowed to fail
-  approval only with dated calibration evidence ([decision specs](docs/decision-specs.md)).
-  Calibration found Kev good at unfinished work, reviewer-directed text, completeness and security in
-  diffs, and blind to subtle logic bugs. So `defect` never gates, and your tests stay the bug catcher.
-- **Never fabricated.** A tool that can't run returns `approval: null` with the reason.
-- **Advisory, end of task, at most two revisions.** No hooks, nothing blocks, and nothing overrides
-  the user or the tests.
-
-## Tools
-
-| | |
-|---|---|
-| `critic_score` | Kev over a git diff or files: unfinished work, reviewer-directed text, security, completeness against the request |
-| `artifact_validate` | parse checks (JSON/YAML/TOML/Python, merge markers, UTF-8) + **your test/tsc/lint commands** |
-| `security_critic` | gitleaks, osv-scanner, semgrep, bandit, cargo-audit; Kev ranks findings |
-| `code_quality_critic` | your linters + complexity, length, nesting, duplication |
-| `ui_test` | Playwright crawl of a local web app: errors, dead controls, failed requests, persistence, axe |
-| `visual_critic` | Qwen2.5-VL layout scores for a page or screenshot |
-| `ux_critic` | workflow review: mode entries, shortest task paths vs budgets, discoverability, with a novice model |
-| `desktop_test` | Windows apps through UI Automation; **Unity mode** with an app event socket, soak, frame timing |
-| `unity_tests` | Unity Test Framework, headless |
-| `resource_critic` | CPU, memory, handle growth, GPU against budgets |
-| `hygiene_critic` | orphaned processes, held ports, leftover files |
-| `plugin_list` / `plugin_run` | your repo's own evaluators in `.kritic/plugins/` |
-| `status`, `spec_lint`, `token_metrics`, `route`, `context_trim` | health, spec checks, context accounting |
-
-Full rules: [docs/tools.md](docs/tools.md).
-
-## Quick start
+Install Rust 1.89+ to build from source. Run in Bash (Git Bash on Windows):
 
 ```bash
-git clone https://github.com/TmRxJD/kritic && cd kritic
-scripts/install.sh --with-models        # binary, harness, config, laya + Kev-4B (~4.5 GB)
-ollama pull qwen2.5vl:7b                # optional: visual_critic and the ux novice
-claude mcp add --scope user kritic -- ~/.kritic/bin/kritic
-cp -r examples/claude/skills/kritic ~/.claude/skills/ && cp examples/claude/agents/ux-critic.md ~/.claude/agents/
-cat examples/claude/CLAUDE.md >> ~/.claude/CLAUDE.md
+git clone https://github.com/TmRxJD/kritic.git
+cd kritic
+export KRITIC_HOME="${KRITIC_HOME:-$HOME/.kritic}"
+scripts/install.sh
+"$KRITIC_HOME/bin/kritic" setup --backend off --no-vision
 ```
 
-Requirements per feature, GPU notes and scanner installs: [getting started](docs/getting-started.md).
-Every setting is in [`kritic.toml`](examples/kritic.toml) ([configuration](docs/configuration.md)).
+Set `KRITIC_HOME` first if you want data somewhere other than `~/.kritic`; for example
+`export KRITIC_HOME='E:/AI/kritic'` on Windows. If you do not set it, invoke `~/.kritic/bin/kritic`
+(Windows: `kritic.exe`). Setup can install browser/scanner dependencies and register Claude Code
+or Hermes. `--no-register`, `--no-harness` and `--no-scanners` suppress those steps. No models
+are installed unless you explicitly select local review or pass `--vision`.
 
-## Docs
+Any MCP client can start `kritic serve` over stdio. Install the
+[test-release skill](examples/claude/skills/kritic/SKILL.md) in your client's skill directory.
+Claude Code: `kritic register --claude`. Hermes: `kritic register --hermes`.
+For clients with no skill support, use the [short instruction block](examples/claude/CLAUDE.md).
 
-- [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) · [Claude Code](docs/claude-code.md) · [Troubleshooting](docs/troubleshooting.md)
-- [Tools](docs/tools.md) · [ux_critic](docs/ux-critic.md) · [Unity](docs/unity.md) · [Repo plugins](docs/plugins.md)
-- [Decision specs and calibration](docs/decision-specs.md) · [Measurements](docs/measurements.md) · [Benchmarks](docs/benchmarks.md)
-- [Architecture](docs/architecture.md) · [Extending](docs/extending.md) · [Changelog](CHANGELOG.md)
+## Choose your capabilities
 
-Examples: [config](examples/kritic.toml) · [Claude Code skill, agent, rule](examples/claude/) ·
-[a repo plugin](examples/plugin-repo/) · [ux.toml for web and Unity](examples/ux/) · [.mcp.json](examples/mcp.json)
+| Capability | Model/GPU needed? | Evidence and limits |
+|---|---|---|
+| Artifact validation | No | Parsing, conflict markers, requested tests/typecheck/lint; only tests that actually ran count |
+| Work contracts | No | Declared acceptance checks, input hashes, stale/missing evidence, static enforcement wiring |
+| Web and UX checks | No | Chrome/Edge interactions, errors, persistence, axe rules, declared workflow paths; needs browser/spec |
+| Security and quality | No | Installed scanners, project linters and code metrics; missing tools mean incomplete coverage |
+| Desktop and processes | No | Windows UI Automation, process budgets/hygiene; desktop needs Python/uv |
+| Model code critic | Optional | Local Kev or your configured cloud API; coarse screening, never a substitute for tests |
+| Screenshot/novice critic | Optional | Local Ollama or a cloud vision model; observations can be false |
+| Context helpers / map domain | Optional | Disabled by default; opt in only when relevant |
 
-## Status and limits
+`status` reports capability settings and exposed tools. `kritic doctor` checks dependencies;
+`kritic doctor --online` explicitly makes a reviewer API/inference call. A configured key is not
+proof that a provider works. Toggle groups in `[capabilities]` and individual tools in
+`[tools].disabled`; restart your MCP client after changing configuration.
 
-- Developed and measured on Windows 11 with an RTX 5070 (12 GB). The server, web harness and model
-  runtimes are cross-platform; `desktop_test` is Windows-only. Linux and macOS are untested.
-- Kev's context is 2,048 tokens: code is scored in ~1,300-character chunks, at most 60 per call.
-- Kev returns probabilities, not explanations: `flagged_chunks` says where, and the agent has to read the code.
-- Kev and the vision model share the GPU one at a time, so a visual review makes the next Kev call
-  pay a ~13 s restart.
+## Optional cloud or local review
 
-## Credits and license
+Cloud transports: OpenAI, OpenAI-compatible chat endpoints (including gateways), Anthropic,
+Gemini, and JEV. Supply your own exact model ID and credential environment variable.
+Neither assistant subscriptions nor host-agent OAuth tokens are reused. Protocol/model support
+must be tested with your provider; “OpenAI-compatible” is not a guarantee every model accepts
+the same parameters. Your current coding agent can always review deterministic evidence itself.
 
-kritic is Apache-2.0. It runs [Kev](https://github.com/jaredpalmer/kev) (Apache-2.0,
-[GGUF](https://huggingface.co/mys/kev-4b-GGUF)) on [laya/ggmlc](https://github.com/monatis/ggmlc),
-Qwen2.5-VL through [Ollama](https://ollama.com), [Playwright](https://playwright.dev) with
-[axe-core](https://github.com/dequelabs/axe-core), [pywinauto](https://github.com/pywinauto/pywinauto),
-[psutil](https://github.com/giampaolo/psutil) and the scanners named above. Each keeps its own license.
+```toml
+[review]
+backend = "cloud"          # default: off
+[cloud]
+provider = "openai-compatible"
+url = "https://openrouter.ai/api/v1/chat/completions"
+model = "your-provider/model-id"
+key_env = "OPENROUTER_API_KEY"
+max_output_tokens = 4096
+```
+
+Cloud judgments are advisory. Self-reported confidence does not inherit Kev's local calibration.
+Code excerpts go to the selected endpoint; screenshots are sent only when cloud vision is
+explicitly enabled. Default operation has no inference calls, although tools such as dependency
+scanners, setup and browsers can access networks.
+
+Local Kev: `kritic setup --backend local --no-vision`. Local vision: `kritic setup --vision`.
+Local inference is optional: roughly 8 GB VRAM for Kev Q8, 12 GB recommended for sequential
+Kev and vision. The 8 GB vision configuration remains a field-testing target, not a guarantee.
+No GPU is required for deterministic checks or cloud review. 16 GB system RAM is a practical
+recommendation; the tested project may require more. See [hardware and dependencies](docs/getting-started.md).
+
+## Review a work contract
+
+Copy [the contract example](examples/contract.toml) to `.kritic/contract.toml` and write real,
+nonempty acceptance checks. AGENTS.md, task text and extra source documents remain prose for
+your agent to interpret; they are never silently marked satisfied.
+
+```bash
+kritic contract --base-dir .
+# After reviewing the declared shell commands:
+kritic contract --base-dir . --run-commands
+```
+
+The first command audits without executing project commands. Exit codes: 0 declared required
+checks verified, 1 violated, 2 unverified. Passing a weak assertion does not establish the whole
+requirement. A CI text binding proves declared wiring is present, not that CI ran or branch
+protection is active. [Contract format and assurance](docs/contracts.md).
+
+## Testing and contributing
+
+Read [the tester guide](docs/testing-release.md), [contributing](CONTRIBUTING.md), and
+[security policy](SECURITY.md). Model-free validation:
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
+# Hermes tests use the real Hermes agent.context_engine ABC.
+# Set PYTHONPATH to a Hermes checkout and KRITIC_EXE to this build's absolute binary path.
+python -m pip install pytest
+python -m pytest integrations/hermes/tests
+python scripts/test_calibration_policy.py
+```
+
+Live model tests are opt in. Mock provider tests make no paid calls. Test fixtures deliberately
+contain defective code and unfinished markers; they are not production implementation stubs.
+Windows is the development platform; cross-platform support needs field confirmation. Do not
+represent an unrun OS/provider/model combination as verified.
+
+## Evidence from real use
+
+- **GPU-free reviews in Towerium:** its [public validation record](https://github.com/TmRxJD/towerium/blob/778febf06ef81a606829997fea8be59a2b52cbe2/VALIDATION.md)
+  records Kritic running 64 controller tests while Kev was off. On 2026-10-10 we independently
+  reran the focused controller/aim suite independently and through Kritic: **78 passed, zero failures/skips**, with no model or build.
+  This proves those assertions ran; it does not prove every critic verdict or the whole game correct.
+- **Project-specific checks without a model:** Beat Agent's real `map-score` plugin rejected a
+  synthetic map with notes sharing a cell and beat. This freshly verifies overlap detection only;
+  it does not establish human mapping quality or the historical calibration scores.
+- **Browser effects checked against real behavior:** a headless browser independently reproduced
+  focus-only and scroll-only false positives. Both native and legacy testers now recognize them;
+  inert controls remain unobserved. The native browser regression was actually executed.
+- **Acceptance checks that resist false passes:** contract regressions reject stale input hashes,
+  evidence changed by later commands, escaping paths and empty/optional-only acceptance. Missing
+  scanner coverage and empty reviews remain unverified instead of producing perfect scores.
+
+[Reproducers, provenance and limits](docs/field-evidence.md) distinguish recorded field results
+from fresh independent verification. This is a test release: **canvas/audio/app-state effects can
+remain unobserved**, and live providers, local GPU models and other platforms are not yet verified.
+See [canvas observation issue #1](https://github.com/TmRxJD/kritic/issues/1); unobserved UI effects now yield `approval: null`, not a fabricated
+broken-control finding.
+
+## Documentation
+
+[Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) ·
+[Cloud reviewers](docs/cloud.md) · [Work contracts](docs/contracts.md) ·
+[Tool behavior](docs/tools.md) · [Architecture](docs/architecture.md) ·
+[Test release](docs/testing-release.md) · [Historical measurements](docs/measurements.md)
+
+Apache-2.0. Optional model runtimes, scanners, axe-core and other dependencies retain their own
+licenses. Historical benchmark results describe the recorded configuration, not this release's
+accuracy on arbitrary projects.

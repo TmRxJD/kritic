@@ -1,4 +1,9 @@
-# Tools
+# Tools — test release
+
+Validate every finding independently. Deterministic checking is the default; model tools may
+be disabled and absent from discovery. A scoped approval is not task completion or permission.
+`status.enabled_tools` lists the effective tool surface after capability toggles.
+
 
 Every tool returns JSON with a published output schema. `approval` is `true`, `false`, or `null`
 when the tool could not reach a verdict (a dependency offline, partial coverage, a run that could
@@ -7,14 +12,15 @@ scores, and a model opinion never removes a deterministic failure.
 
 | Tool | Deterministic part | Kev / model part | Approval rule |
 |---|---|---|---|
+| `contract_critic` | declared acceptance checks, fresh commands when opted in, evidence hashes/age, static enforcement wiring | none; calling agent reviews prose/coverage | false on required violations; null on uncovered/stale/unrun required checks; only declared assertions may be verified |
 | `critic_score` | chunking (a truncated chunk is split and re-scored), git diff, missing files | per unit (spec `code_chunk` / `code_change`; the request is not included): defect, severity, security, unfinished, quality, reviewer text; once per call: completeness (`completeness` on code, `completeness_digest` on a digest) | only the specs' calibrated gates, at the family-wise threshold for the number of units (`status().gates` lists them); `null` if Kev is offline or coverage was partial |
 | `artifact_validate` | JSON/YAML/TOML/Python-syntax parse, merge markers, bad UTF-8, missing files, **`commands` run verbatim** | optional critic (`use_model`) | any deterministic or command failure means `false` |
 | `security_critic` | gitleaks (secrets), osv-scanner (vulnerable dependencies in any lockfile), semgrep (`p/default`), bandit (Python), cargo-audit (Rust); secrets are redacted | Kev `p_true_positive` per code finding with ±6 lines of context, for ordering only | any **high/critical** finding means `false`; a scanner that fails to run makes it `null`. `security_score` = 10 − 3·critical − 2·high − 0.5·medium |
 | `code_quality_critic` | the project's linters (ruff, clippy, eslint, tsc when configured) plus metrics: function length, cyclomatic-style complexity, nesting, duplicated 8-line blocks | `p_hard_to_maintain` for the most complex functions → line-weighted `maintainability` | `false` on linter errors, or a function with complexity > 20 or more than 150 lines (both per call) |
-| `ui_test` | Playwright crawl of a **local** app: clicks, fills, toggles and selects every visible control; page and console errors, failed requests, crashes, no-effect controls, `persist` selectors across reload, axe-core; screenshots; scripted `flows` | none | any breakage means `false`; serious/critical axe violations count unless `axe_blocking=false`; `ignore` exempts named controls |
-| `visual_critic` | screenshot via Playwright (or `image_path`) | vision model: 0–10 layout clarity, spacing/alignment, hierarchy, contrast, accessibility, plus `unverified_observations` | `false` if any score < `vision.visual_min` (6) |
+| `ui_test` | native CDP crawl of a **local** app: clicks, fills, toggles and selects every visible control; page and console errors, failed requests, crashes, unobserved interaction effects, `persist` selectors across reload, axe-core; screenshots; scripted `flows` | none | measured breakages mean `false`; unverified effects mean `null`; serious/critical axe violations count unless `axe_blocking=false`; `ignore` exempts named controls |
+| `visual_critic` | screenshot via native CDP (or `image_path`) | vision model: 0–10 layout clarity, spacing/alignment, hierarchy, contrast, accessibility, plus `unverified_observations` | `false` if any score < `vision.visual_min` (6) |
 | `ux_critic` | the repo's `.kritic/ux.toml`; per screen: unlabelled controls, icon-only without tooltip, targets < 24 px, axe contrast, disabled without a reason; breadth-first exploration gives each mode and task its `optimal_steps`; `scattered` workflows | none for approval; a novice (vision model, Kev fallback) tries each task from its plain-words goal | `false` on a mode without a top-level entry, an unreachable, trivially-done or over-budget task, an error-level rule, or a primary task the vision novice fails 2 of 3 times. See [ux_critic](ux-critic.md) |
-| `desktop_test` | Windows UI Automation: launches the app, exercises every enabled control (Invoke/Toggle/Value/Select, not the mouse), a Win32 watchdog records and closes dialogs and detects hangs; crashes, error dialogs with text, no-effect controls, stderr errors, `persist` controls across a relaunch, scripted `flows`. **Unity mode** (automatic when `UnityPlayer.dll` sits beside the exe): see [Unity](unity.md) | none | any breakage means `false` |
+| `desktop_test` | Windows UI Automation: launches the app, exercises every enabled control (Invoke/Toggle/Value/Select, not the mouse), a Win32 watchdog records and closes dialogs and detects hangs; crashes, error dialogs with text, no-effect controls, stderr errors, `persist` controls across a relaunch, scripted `flows`. **Unity mode** (automatic when `UnityPlayer.dll` sits beside the exe): see [Unity](unity.md) | none | measured breakages mean `false`; unobserved effects mean `null` |
 | `resource_critic` | launches a command (or attaches to a pid with `allow_attach`) and samples the process tree: CPU, RSS/private memory, handles, threads, disk I/O, whole-GPU use | leak-risk choice and `p_reasonable` for the described workload (reported; acts only if p(leak high) > 0.5) | `false` on budget violations. Defaults: memory growing > 5 MB/min over ≥ 15 s, handles +500, early exit; optional CPU/RSS/GPU caps |
 | `hygiene_critic` | processes whose exe or command line is under the project roots, orphans (parent exited, PID reuse checked), listening sockets still bound after their owner exited, `leftover_globs` files; `clean=true` kills orphans and socket inheritors. `desktop_test` and `resource_critic` also report what each run left alive | none | any orphan, inherited socket, leftover or run leak means `false` |
 | `unity_tests` | Unity Test Framework tests headless (`-batchmode -runTests`), editor version from `ProjectVersion.txt`, NUnit XML parsed | none | `false` on any failed test; `null` if nothing ran |
@@ -42,3 +48,20 @@ difference.
 - `security_critic` never echoes a secret; findings carry a redacted match.
 - Critic input is treated as data: text in the code addressed to a reviewer is itself a finding
   (`reviewer_text`), never an instruction.
+
+## Test-release coverage semantics
+
+`security_score` and `quality_score` are nullable: missing applicable tools or missing meaningful
+coverage yield `null`, never a perfect score. Display limits do not limit violation evaluation.
+Security needs at least one completed scanner; unavailable scanners remain explicit coverage gaps.
+Resource approval needs the requested measurements, at least two process samples, and at least
+15 seconds of observation for RSS growth. Short observations and unavailable GPU/handle metrics
+remain unverified. All results establish only the checks and inputs listed, never global correctness.
+
+`ui_test` retains raw `no_effect` observations, but unobserved effects are listed under
+`summary.unverified_effects` and yield `approval: null` rather than a proven broken control.
+Canvas/audio/application-only state can change without a detected DOM effect. Independently assert
+the intended state; an ambient animation/screenshot difference alone cannot prove the action caused it.
+Real exceptions, failed requests and explicit failed flow assertions still reject.
+
+Desktop UI Automation follows the same principle: `summary.unverified_effects` counts missing effect observations; these are not proven missing handlers.

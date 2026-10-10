@@ -123,6 +123,19 @@ pub fn judge(r: &mut VisualResult, s: VisualScores, obs: Vec<String>, min: f64) 
         ("color_contrast", s.color_contrast),
         ("accessibility", s.accessibility),
     ];
+    if !min.is_finite()
+        || !(0.0..=10.0).contains(&min)
+        || pairs
+            .iter()
+            .any(|(_, value)| !value.is_finite() || !(0.0..=10.0).contains(value))
+    {
+        r.model_ok = false;
+        r.approval = None;
+        r.min_score = None;
+        r.scores = None;
+        r.error = Some("visual scores and threshold must be finite values from 0 to 10".into());
+        return;
+    }
     let lo = pairs.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
     r.reasons = pairs
         .iter()
@@ -145,6 +158,18 @@ async fn ollama_up(http: &reqwest::Client, cfg: &Config) -> bool {
 }
 
 pub async fn ensure_ollama(http: &reqwest::Client, cfg: &Config) -> Result<(), String> {
+    if !cfg.config_errors.is_empty() {
+        return Err("vision disabled until config_errors are fixed".into());
+    }
+    match cfg.vision_backend.as_str() {
+        "off" => return Err("vision is disabled (vision.backend = off)".into()),
+        "cloud" => {
+            crate::provider::endpoint(cfg)?;
+            return Ok(());
+        }
+        "local" => {}
+        _ => return Err("invalid vision backend".into()),
+    }
     if ollama_up(http, cfg).await {
         return Ok(());
     }
@@ -194,7 +219,11 @@ pub async fn critique(cfg: &Config, image: &Path, metadata: &str) -> VisualResul
     let mut r = VisualResult {
         tool: "visual_critic".into(),
         advisory: true,
-        model: cfg.vision_model.clone(),
+        model: if cfg.vision_backend == "cloud" {
+            format!("cloud:{}:{}", cfg.cloud_provider, cfg.vision_cloud_model)
+        } else {
+            cfg.vision_model.clone()
+        },
         image: Some(image.display().to_string()),
         ..Default::default()
     };
@@ -213,7 +242,9 @@ pub async fn critique(cfg: &Config, image: &Path, metadata: &str) -> VisualResul
         r.error = Some(e);
         return r;
     }
-    r.stopped_laya = crate::gpu::stop_laya(cfg).await;
+    if cfg.vision_backend == "local" {
+        r.stopped_laya = crate::gpu::stop_laya(cfg).await;
+    }
     let prompt = if metadata.trim().is_empty() {
         "Review this UI screenshot.".to_string()
     } else {
@@ -258,6 +289,14 @@ pub async fn critique(cfg: &Config, image: &Path, metadata: &str) -> VisualResul
         Ok((s, obs)) => judge(&mut r, s, obs, cfg.visual_min),
         Err(e) => r.error = Some(e),
     }
+    if cfg.vision_backend == "cloud" || cfg.vision_model != "qwen2.5vl:7b" {
+        r.approval = None;
+        r.reasons.push(
+            "visual scores are advisory for this provider/model; thresholds are not calibrated"
+                .into(),
+        );
+    }
+
     r
 }
 
@@ -265,6 +304,48 @@ pub async fn critique(cfg: &Config, image: &Path, metadata: &str) -> VisualResul
 /// on the event bus and logs token usage. Returns Ollama's response JSON.
 async fn chat(http: &reqwest::Client, cfg: &Config, body: &Value) -> Result<Value, String> {
     let t0 = Instant::now();
+    if cfg.vision_backend == "off" {
+        return Err("vision is disabled (vision.backend = off)".into());
+    }
+    if cfg.vision_backend == "cloud" {
+        let system = body["messages"][0]["content"]
+            .as_str()
+            .ok_or("vision request missing system prompt")?;
+        let user = body["messages"][1]["content"]
+            .as_str()
+            .ok_or("vision request missing user prompt")?;
+        let data = body["messages"][1]["images"][0]
+            .as_str()
+            .ok_or("vision request missing image")?;
+        let schema = body.get("format").map(Value::to_string).unwrap_or_default();
+        let system = format!("{system} Return JSON only. Required output schema: {schema}");
+        let mime = if data.starts_with("iVBOR") {
+            "image/png"
+        } else if data.starts_with("/9j/") {
+            "image/jpeg"
+        } else if data.starts_with("UklG") {
+            "image/webp"
+        } else if data.starts_with("R0lG") {
+            "image/gif"
+        } else {
+            return Err("cloud vision requires PNG, JPEG, WebP or GIF".into());
+        };
+        let c = crate::provider::complete(
+            cfg,
+            &cfg.vision_cloud_model,
+            &system,
+            user,
+            Some((mime, data)),
+        )
+        .await?;
+        crate::usage::log_model_usage(
+            cfg,
+            json!({"model":cfg.vision_cloud_model,"backend":cfg.cloud_provider,"input_tokens":c.input_tokens,"output_tokens":c.output_tokens}),
+        );
+        return Ok(
+            json!({"message":{"content":c.value.to_string()},"prompt_eval_count":c.input_tokens,"eval_count":c.output_tokens}),
+        );
+    }
     crate::events::ready("vision", "loading", &cfg.vision_model);
     let resp = http
         .post(format!("{}/api/chat", cfg.ollama_url))

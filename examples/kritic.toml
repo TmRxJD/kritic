@@ -9,12 +9,17 @@
 # evidence in specs/*.json. Recalibrate (scripts/calibrate-specs.mjs) instead of editing them.
 
 [kev]
+# Legacy backend alias. Prefer review.backend; conflicting aliases fail closed.
 # Who answers Kev's typed questions:
-#   auto  - local Kev when installed (laya + GGUF), else cloud Jev when a gateway key is configured
+#   auto  - explicitly selected local discovery; never falls back to cloud
 #   local - local Kev only (nothing leaves the machine)
-#   cloud - cloud Jev only (code excerpts are sent to the AI Gateway)
+#   cloud - explicitly configured provider (code excerpts leave this machine)
 #   off   - no model: deterministic tools only; Kev-backed verdicts report null
-# backend = "auto"                              # KRITIC_KEV_BACKEND
+# backend = "off"                              # KRITIC_KEV_BACKEND
+# cpu_only = false                             # KRITIC_KEV_CPU_ONLY: true only for a CPU Kev service
+# CPU-only launches use --device cpu. Kev calls bypass GPU leases and never stop the shared
+# service or evict vision. Existing/external services must already run on CPU; restart them
+# explicitly before changing this flag. Vision tools still hold the GPU lease.
 #
 # Kev-4B typed-decision model, served by laya. kritic starts laya itself when it is not running.
 # laya_url = "http://127.0.0.1:8089"            # KRITIC_LAYA_URL (default built from laya_port)
@@ -30,15 +35,24 @@
 # critic_deadline_s = 600                       # KRITIC_CRITIC_DEADLINE_S: a whole critic pass returns what it has after this
 
 [cloud]
-# Cloud Jev, TypeSafe AI's typed-evaluation model, through Vercel's AI Gateway. Used when
-# kev.backend is "cloud", or "auto" without a local Kev. The key comes from AI_GATEWAY_API_KEY,
-# else from key_file (written by `kritic setup`); it is never stored here. Kev's calibrated
-# gates are advisory under Jev until you run `kritic calibrate` with the cloud backend.
-# url = "https://ai-gateway.vercel.sh/v1/evaluate"   # KRITIC_CLOUD_URL
-# model = "typesafe-ai/jev"                     # KRITIC_CLOUD_MODEL
-# key_file = "~/.kritic/ai-gateway.key"         # KRITIC_CLOUD_KEY_FILE
+# Optional, explicitly selected API provider. No keys or host-agent OAuth tokens are discovered.
+# API access/billing is separate from an assistant subscription. Alternatively let your existing
+# coding agent interpret deterministic results in its current session: no separate API needed.
+# provider = "openai-compatible"                # KRITIC_CLOUD_PROVIDER: openai | openai-compatible | anthropic | gemini | jev
+# url = "https://api.openai.com/v1/chat/completions" # KRITIC_CLOUD_URL: full endpoint; HTTPS except loopback
+# model = ""                                   # KRITIC_CLOUD_MODEL: required; use your provider's exact model ID
+# key_env = "OPENAI_API_KEY"                    # KRITIC_CLOUD_KEY_ENV: the only environment key read
+# key_file = "~/.kritic/cloud.key"              # KRITIC_CLOUD_KEY_FILE: optional alternative, written by kritic key
+# max_output_tokens = 4096                      # KRITIC_CLOUD_MAX_OUTPUT_TOKENS: hard output limit per call (1..32768)
+# Provider-specific defaults: anthropic uses /v1/messages + ANTHROPIC_API_KEY;
+# jev uses the Vercel /v1/evaluate endpoint + AI_GATEWAY_API_KEY. Gemini needs an explicit
+# URL ending in /models/<same-model>:generateContent and GEMINI_API_KEY.
+# Generic models use JSON-only prompt compatibility mode with strict local validation.
+# All cloud judgments remain advisory, including self-reported confidence.
 
 [vision]
+# backend = "off"                              # KRITIC_VISION_BACKEND: off | local (Ollama) | cloud
+# cloud_model = ""                             # KRITIC_VISION_CLOUD_MODEL: defaults to cloud.model; must support images
 # Qwen2.5-VL through Ollama: visual_critic scores and the ux_critic novice.
 # ollama_url = "http://127.0.0.1:11434"         # KRITIC_OLLAMA_URL
 # ollama_exe = "ollama"                         # KRITIC_OLLAMA_EXE (default: ollama on PATH, else the platform install path)
@@ -46,6 +60,8 @@
 # visual_min = 6.0                              # KRITIC_VISUAL_MIN: lowest per-criterion score (0-10) that still approves
 
 [review]
+# backend = "off"                              # KRITIC_BACKEND: off | local | cloud | auto (local discovery only)
+# Fresh installs use deterministic checks, no inference and no model downloads.
 # max_revisions = 2                             # KRITIC_MAX_REVISIONS: revise-and-rescore rounds the agent may take
 # command_timeout_s = 300                       # KRITIC_COMMAND_TIMEOUT: each artifact_validate command
 # context_limit = 1000000                       # KRITIC_CONTEXT_LIMIT: model context size token_metrics measures against
@@ -88,7 +104,20 @@
 # runs_dir = "~/.kritic/runs"                   # KRITIC_RUNS_DIR: screenshots and full results (full_result paths)
 
 [tools]
-# MCP tools not offered to the client. map_eval is the Beat Saber domain pack; set
-# disabled = [] to enable it. Disable anything you never use to shrink the tool list the
-# agent loads into its context.
-# disabled = ["map_eval"]                       # KRITIC_DISABLED_TOOLS (comma-separated)
+# MCP tools not offered to the client, applied after capability toggles.
+# Unknown names are config errors; disabled tools cannot be called through MCP.
+# disabled = []                       # KRITIC_DISABLED_TOOLS (comma-separated)
+
+[capabilities]
+# These hide tools from MCP discovery and execution. Restart the client/server after changes.
+# enabled is configuration, not proof every dependency is installed; status/doctor report details.
+# web = true                                   # KRITIC_CAP_WEB: browser interaction checks
+# ux = true                                    # KRITIC_CAP_UX: workflow/rule audit; novice uses optional models
+# security = true                              # KRITIC_CAP_SECURITY: installed security scanners
+# quality = true                               # KRITIC_CAP_QUALITY: linters and code metrics
+# desktop = true                               # KRITIC_CAP_DESKTOP: Windows desktop and Unity checks
+# resources = true                             # KRITIC_CAP_RESOURCES: process budgets and hygiene
+# contracts = true                             # KRITIC_CAP_CONTRACTS: requirement evidence and enforcement wiring
+# plugins = true                               # KRITIC_CAP_PLUGINS: repository-defined checks
+# context = false                              # KRITIC_CAP_CONTEXT: optional model routing/locate/trim
+# domain_maps = false                          # KRITIC_CAP_DOMAIN_MAPS: Beat Saber map evaluator

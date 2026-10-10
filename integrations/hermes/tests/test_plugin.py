@@ -68,6 +68,23 @@ def engine():
     return ctx.engine
 
 
+def test_recall_forwards_options_and_bounds_python_serialization(monkeypatch):
+    e = engine()
+    calls = []
+
+    def recall_result(op, payload):
+        calls.append((op, payload))
+        return {"found": [{"original_content": "🦀" * 10000}]}
+
+    monkeypatch.setattr(e, "_run", recall_result)
+    result = e.handle_tool_call("kritic_recall", {"id": "kr-test", "format": "original", "max_chars": 0, "max_output_bytes": 256})
+    assert len(result.encode("utf-8")) <= 256
+    assert "error" in json.loads(result)
+    assert calls[0][1]["format"] == "original"
+    assert calls[0][1]["max_chars"] == 0
+    assert calls[0][1]["max_output_bytes"] == 256
+
+
 def test_contract_and_thresholds(env):
     e = engine()
     assert e.name == "kritic"
@@ -120,8 +137,22 @@ def test_prune_and_usage_log(env):
     assert row["session_id"] == "sess-2" and row["prompt_tokens"] == 100
 
 
-def test_fails_open_without_kritic(env, monkeypatch):
+def test_invalid_explicit_kritic_exe_is_configuration_error(env, monkeypatch):
     monkeypatch.setenv("KRITIC_EXE", str(env / "missing.exe"))
+    monkeypatch.setenv("PATH", str(env / "empty"))
+    mod = load_plugin()
+    monkeypatch.setattr(mod, "_HERE", env)  # no kritic_exe.txt either
+    ctx = Ctx()
+    mod.register(ctx)
+    e = ctx.engine
+    e.update_model("m", 12000)
+    msgs = transcript()
+    with pytest.raises(ValueError, match="KRITIC_EXE must be an existing absolute file"):
+        e.compress(msgs)
+
+
+def test_fails_open_without_implicit_kritic(env, monkeypatch):
+    monkeypatch.delenv("KRITIC_EXE", raising=False)
     monkeypatch.setenv("PATH", str(env / "empty"))
     mod = load_plugin()
     monkeypatch.setattr(mod, "_HERE", env)  # no kritic_exe.txt either

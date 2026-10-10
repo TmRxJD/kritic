@@ -4,7 +4,11 @@
 //! Everything that decides approval is measured against deterministic done-checks the repo
 //! declares in `.kritic/ux.toml`, never a model's opinion:
 //! - a rule audit of every observed screen (labels, tooltips, target size, contrast, disabled
-//!   controls that say why, a top-level entry for every mode);
+//!   controls that say why, overlapping or off-screen controls, a top-level entry for every mode);
+//! - continuity: a screen has to be the same screen every time it is reached. Each replay of a
+//!   path is compared with the first visit (controls, text, and the screenshots pixel for
+//!   pixel); a difference is a finding with both pictures, and enough of them fail the run,
+//!   because every measurement after a state leak is about a different app;
 //! - an exhaustive breadth-first exploration (screen fingerprint -> action -> fingerprint) that
 //!   gives each task its `optimal_steps`, the shortest path to a screen passing its done-check;
 //! - a deliberately weak novice (vision model on a set-of-marks screenshot, or Kev through the
@@ -69,6 +73,10 @@ pub struct AppSpec {
     /// Wait after each load or action before observing (web default 150 ms).
     #[serde(default)]
     pub settle_ms: Option<u64>,
+    /// unity / desktop: how long to wait for an app that reports it is busy (loading) before the
+    /// wait counts as a failure. Default 45 s.
+    #[serde(default)]
+    pub busy_timeout_s: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema, Default)]
@@ -114,6 +122,16 @@ pub struct SpecFile {
     /// Regexes on control labels: never pressed by exploration or the novice (still audited).
     #[serde(default)]
     pub ignore: Vec<String>,
+    /// Regexes on text that changes while the screen stays the same (a status line, a counter, a
+    /// loading message). Such text is left out of a screen's identity and of continuity
+    /// comparisons; without it every tick of a clock is a new screen and the action budget goes on
+    /// phantom duplicates.
+    #[serde(default)]
+    pub volatile: Vec<String>,
+    /// Parts of the window that legitimately animate (a native video or preview surface), as
+    /// [x0, y0, x1, y1] fractions of the window. They are masked out of screenshot comparisons.
+    #[serde(default)]
+    pub volatile_regions: Vec<[f64; 4]>,
     pub app: AppSpec,
     #[serde(default)]
     pub modes: Vec<ModeSpec>,
@@ -162,6 +180,8 @@ pub struct Spec {
     pub modes: Vec<Goal>,
     pub tasks: Vec<Goal>,
     pub ignore: Vec<String>,
+    pub volatile: Vec<String>,
+    pub volatile_regions: Vec<[f64; 4]>,
 }
 
 pub const DEFAULT_BUDGET: usize = 3;
@@ -235,6 +255,9 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
     for (i, p) in f.ignore.iter().enumerate() {
         rx(&mut errors, &format!("ignore[{i}]"), &Some(p.clone()));
     }
+    for (i, p) in f.volatile.iter().enumerate() {
+        rx(&mut errors, &format!("volatile[{i}]"), &Some(p.clone()));
+    }
     if f.tasks.is_empty() {
         errors.push("tasks: declare at least one task".into());
     }
@@ -289,6 +312,8 @@ pub fn parse_spec(text: &str, path: &str) -> Result<Spec, Vec<String>> {
             modes,
             tasks,
             ignore: f.ignore,
+            volatile: f.volatile,
+            volatile_regions: f.volatile_regions,
         })
     } else {
         Err(errors)
@@ -390,7 +415,52 @@ pub struct Obs {
     /// App events since the last reset.
     #[serde(default)]
     pub events: Vec<String>,
+    /// Each visible text on its own (`text` joins them), so two visits can be compared piece by piece.
+    #[serde(default)]
+    pub texts: Vec<String>,
+    /// What the app says it is still waiting for (a loading veil, a preview starting); empty when it is
+    /// ready. The adapter waits for it to clear, so a value here means the wait ran out.
+    #[serde(default)]
+    pub busy: String,
+    /// How much this screenshot differs from the one it was asked to compare with.
+    #[serde(default)]
+    pub pixel_diff: Option<PixelDiff>,
 }
+
+/// Two screenshots compared: the fraction of pixels that changed and the box holding every change.
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema, Default)]
+pub struct PixelDiff {
+    pub fraction: f64,
+    /// x0, y0, x1, y1 in screenshot pixels.
+    #[serde(default)]
+    pub bbox: [f64; 4],
+    #[serde(default)]
+    pub sizes_differ: bool,
+}
+
+/// A screen that was not the same screen when it was reached again, or was seen mid-load.
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct Continuity {
+    /// replay_differs | looks_different | seen_busy
+    pub kind: String,
+    pub screen: usize,
+    pub path: Vec<String>,
+    pub detail: String,
+    /// What the second visit has that the first did not, and the reverse, and what changed in place.
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub changed: Vec<String>,
+    /// The two pictures to open side by side: the first visit and the repeat.
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub pixel_diff: Option<PixelDiff>,
+}
+
+/// A replay whose screenshot changes by more than this, with no structural difference, is
+/// reported as looking different: something drew or failed to draw that no control describes.
+const VISUAL_DIFF: f64 = 0.30;
+/// This share of the screens a run expanded changing between visits fails the run.
+const UNSTABLE_SHARE: f64 = 0.1;
 
 impl Obs {
     pub fn actionable(&self) -> Vec<&Control> {
@@ -546,8 +616,8 @@ impl ProcAdapter {
 
 /// The adapter for a spec: web runs in-process over CDP; desktop and Unity run the harness.
 pub enum AppAdapter {
-    Web(crate::native::web::WebSession),
-    Proc(ProcAdapter),
+    Web(Box<crate::native::web::WebSession>),
+    Proc(Box<ProcAdapter>),
 }
 
 impl AppAdapter {
@@ -560,11 +630,11 @@ impl AppAdapter {
         if spec.app.kind == "web" {
             crate::native::web::WebSession::start(cfg, &start)
                 .await
-                .map(AppAdapter::Web)
+                .map(|session| AppAdapter::Web(Box::new(session)))
         } else {
             ProcAdapter::launch(cfg, spec, start, stall_s)
                 .await
-                .map(AppAdapter::Proc)
+                .map(|adapter| AppAdapter::Proc(Box::new(adapter)))
         }
     }
 
@@ -846,6 +916,9 @@ pub struct UxResult {
     pub tasks: Vec<TaskResult>,
     pub rules: Vec<RuleFinding>,
     pub rule_counts: BTreeMap<String, usize>,
+    /// Screens that were not the same screen when reached again, or were measured half-loaded, each
+    /// with the two pictures to compare. The reviewer opens every pair.
+    pub continuity: Vec<Continuity>,
     pub screens: Vec<ScreenResult>,
     pub exploration: Exploration,
     /// vision model, Kev spec, or "off"; with the reason when the novice did not run.
@@ -880,6 +953,10 @@ struct Screen {
     url: String,
     screenshot: Option<String>,
     controls: usize,
+    /// Each control's id and state (label, enabled, selected) and each visible text as first seen,
+    /// so a repeat visit can be compared piece by piece.
+    state: Vec<(String, String)>,
+    texts: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -903,6 +980,10 @@ pub struct Run<'s> {
     rules: BTreeMap<(String, String), RuleFinding>,
     truncated: Option<String>,
     problems: Vec<String>,
+    continuity: Vec<Continuity>,
+    volatile: Vec<Regex>,
+    /// Screens whose replay was compared with their first visit.
+    expanded: usize,
     error: Option<String>,
     novice: Vec<Option<NoviceResult>>,
     novice_model: String,
@@ -916,10 +997,29 @@ fn path_labels(p: &[Control]) -> Vec<String> {
     p.iter().map(Control::shown).collect()
 }
 
+/// A screen's controls as (id, state), the state being what a person would notice changing.
+fn screen_state(o: &Obs) -> Vec<(String, String)> {
+    o.controls
+        .iter()
+        .map(|c| {
+            (
+                c.id.clone(),
+                format!(
+                    "{}|{}|{}",
+                    c.label,
+                    if c.enabled { "on" } else { "off" },
+                    if c.selected { "selected" } else { "" }
+                ),
+            )
+        })
+        .collect()
+}
+
 /// Rule audit of one screen. Pure: (rule, severity, key, detail).
 pub fn audit(
     controls: &[Control],
     axe: &[AxeViolation],
+    viewport: [f64; 2],
 ) -> Vec<(&'static str, &'static str, String, String)> {
     const FIELDS: [&str; 6] = [
         "textbox", "combobox", "checkbox", "radio", "Edit", "ComboBox",
@@ -960,9 +1060,72 @@ pub fn audit(
             ));
         }
     }
+    out.extend(layout_findings(controls, viewport));
     for v in axe.iter().filter(|v| v.id == "color-contrast") {
         for t in &v.targets {
             out.push(("contrast", "error", t.clone(), v.help.clone()));
+        }
+    }
+    out
+}
+
+/// Controls drawn over one another, and controls drawn off the window. Both are invisible to a
+/// reviewer reading labels and obvious to anyone looking: a button half under another, a label
+/// clipped by the window edge.
+fn layout_findings(
+    controls: &[Control],
+    viewport: [f64; 2],
+) -> Vec<(&'static str, &'static str, String, String)> {
+    const EDGE: f64 = 2.0;
+    let mut out = Vec::new();
+    let real: Vec<&Control> = controls
+        .iter()
+        .filter(|c| c.rect[2] > 0.0 && c.rect[3] > 0.0)
+        .collect();
+    if viewport[0] > 0.0 && viewport[1] > 0.0 {
+        for c in &real {
+            let [x, y, w, h] = c.rect;
+            if x < -EDGE || y < -EDGE || x + w > viewport[0] + EDGE || y + h > viewport[1] + EDGE {
+                out.push((
+                    "offscreen",
+                    "warn",
+                    c.id.clone(),
+                    format!("{} at {x:.0},{y:.0} ({w:.0}x{h:.0}) reaches outside the {:.0}x{:.0} window", c.shown(), viewport[0], viewport[1]),
+                ));
+            }
+        }
+    }
+    for (i, a) in real.iter().enumerate() {
+        for b in &real[i + 1..] {
+            let (ax1, ay1) = (a.rect[0] + a.rect[2], a.rect[1] + a.rect[3]);
+            let (bx1, by1) = (b.rect[0] + b.rect[2], b.rect[1] + b.rect[3]);
+            let w = ax1.min(bx1) - a.rect[0].max(b.rect[0]);
+            let h = ay1.min(by1) - a.rect[1].max(b.rect[1]);
+            if w <= 0.0 || h <= 0.0 {
+                continue;
+            }
+            let smaller = (a.rect[2] * a.rect[3]).min(b.rect[2] * b.rect[3]);
+            let share = w * h / smaller;
+            // A control wholly inside another is a part of it, not a collision.
+            let inside = |p: &Control, q: &Control| {
+                p.rect[0] >= q.rect[0] - EDGE
+                    && p.rect[1] >= q.rect[1] - EDGE
+                    && p.rect[0] + p.rect[2] <= q.rect[0] + q.rect[2] + EDGE
+                    && p.rect[1] + p.rect[3] <= q.rect[1] + q.rect[3] + EDGE
+            };
+            if share > 0.3 && !inside(a, b) && !inside(b, a) {
+                out.push((
+                    "overlap",
+                    if share > 0.6 { "error" } else { "warn" },
+                    format!("{} x {}", a.id, b.id),
+                    format!(
+                        "{} and {} overlap by {:.0}% of the smaller",
+                        a.shown(),
+                        b.shown(),
+                        share * 100.0
+                    ),
+                ));
+            }
         }
     }
     out
@@ -1003,6 +1166,13 @@ impl<'s> Run<'s> {
             rules: BTreeMap::new(),
             truncated: None,
             problems: vec![],
+            continuity: vec![],
+            volatile: spec
+                .volatile
+                .iter()
+                .filter_map(|p| Regex::new(p).ok())
+                .collect(),
+            expanded: 0,
             error: None,
             novice: vec![None; spec.tasks.len()],
             novice_model: "off".into(),
@@ -1038,7 +1208,7 @@ impl<'s> Run<'s> {
 
     fn add_screen(&mut self, o: Obs, depth: usize, path: Vec<Control>) -> usize {
         let id = self.screens.len();
-        for (rule, sev, key, detail) in audit(&o.controls, &o.axe) {
+        for (rule, sev, key, detail) in audit(&o.controls, &o.axe, o.viewport) {
             self.rules
                 .entry((rule.to_string(), key.clone()))
                 .or_insert_with(|| RuleFinding {
@@ -1053,6 +1223,21 @@ impl<'s> Run<'s> {
         }
         self.check_goals(&o, &path, id);
         self.by_fp.insert(o.fingerprint.clone(), id);
+        if !o.busy.is_empty() {
+            self.continuity.push(Continuity {
+                kind: "seen_busy".into(),
+                screen: id,
+                path: path_labels(&path),
+                detail: format!("still waiting for: {} (the wait ran out), so this screen was measured half-loaded", o.busy),
+                added: vec![],
+                removed: vec![],
+                changed: vec![],
+                before: o.screenshot.clone(),
+                after: None,
+                pixel_diff: None,
+            });
+        }
+        let state = screen_state(&o);
         self.screens.push(Screen {
             fingerprint: o.fingerprint,
             depth,
@@ -1061,6 +1246,8 @@ impl<'s> Run<'s> {
             url: o.url,
             screenshot: o.screenshot,
             controls: o.controls.len(),
+            state,
+            texts: o.texts,
         });
         id
     }
@@ -1091,9 +1278,7 @@ impl<'s> Run<'s> {
             a.reset().await?;
             replay(a, &path).await?;
             let here = a.observe(json!({})).await?;
-            if here.fingerprint != self.screens[s].fingerprint {
-                self.problems.push(format!("screen {s} looked different on replay (the app is not deterministic from reset)"));
-            }
+            self.check_continuity(a, s, &here).await?;
             for c in here.actionable() {
                 if self.actions >= self.opts.max_actions {
                     self.truncated = Some(format!("action cap {} reached", self.opts.max_actions));
@@ -1132,6 +1317,135 @@ impl<'s> Run<'s> {
             }
         }
         Ok(())
+    }
+
+    /// Compare a screen reached again with the first time it was reached: its controls and text piece
+    /// by piece, and (when there is a first screenshot) the two pictures pixel by pixel. A difference
+    /// means state leaked between visits: the app is not the same app each time it is reset, and
+    /// every other measurement here is about whichever one it happened to be.
+    async fn check_continuity<A: Adapter>(
+        &mut self,
+        a: &mut A,
+        s: usize,
+        here: &Obs,
+    ) -> Result<(), String> {
+        self.expanded += 1;
+        let (added, removed, changed) = self.diff_against(s, here);
+        let structural = !(added.is_empty() && removed.is_empty() && changed.is_empty());
+        let first = self.screens[s].screenshot.clone();
+        // The picture of the repeat, compared with the first, whether or not anything structural changed:
+        // a half-drawn viewport or a leftover overlay is often invisible to the control tree.
+        let mut after = None;
+        let mut pixel_diff = None;
+        if let Some(before) = &first {
+            let shot = self.opts.out_dir.join(format!("screen-{s:03}.replay.png"));
+            let o = a.observe(json!({"shot": shot, "compare": before})).await?;
+            pixel_diff = o.pixel_diff;
+            after = o.screenshot;
+        }
+        let visual = pixel_diff
+            .as_ref()
+            .is_some_and(|d| d.fraction > VISUAL_DIFF);
+        let fingerprint_moved = here.fingerprint != self.screens[s].fingerprint;
+        if !structural && !visual && !fingerprint_moved {
+            if let Some(f) = &after {
+                let _ = std::fs::remove_file(f);
+            }
+            return Ok(());
+        }
+        let kind = if structural {
+            "replay_differs"
+        } else {
+            "looks_different"
+        };
+        let mut detail = if structural {
+            format!(
+                "reached again by the same path it looks different: {} added, {} removed, {} changed",
+                added.len(),
+                removed.len(),
+                changed.len()
+            )
+        } else if visual {
+            format!(
+                "reached again by the same path its controls are the same but {:.0}% of the picture differs",
+                pixel_diff.as_ref().map_or(0.0, |d| d.fraction) * 100.0
+            )
+        } else {
+            "reached again by the same path it has a different fingerprint, but nothing that can be named differs".into()
+        };
+        if !here.busy.is_empty() {
+            detail.push_str(&format!("; the app was still waiting for: {}", here.busy));
+        }
+        self.problems.push(format!("screen {s}: {detail}"));
+        self.continuity.push(Continuity {
+            kind: kind.into(),
+            screen: s,
+            path: path_labels(&self.screens[s].path),
+            detail,
+            added,
+            removed,
+            changed,
+            before: first,
+            after,
+            pixel_diff,
+        });
+        Ok(())
+    }
+
+    /// What a repeat visit has that the first lacked, lacks that the first had, and has changed in
+    /// place. Text the spec calls volatile is left out.
+    fn diff_against(&self, s: usize, here: &Obs) -> (Vec<String>, Vec<String>, Vec<String>) {
+        let before = &self.screens[s];
+        let now = screen_state(here);
+        let old: HashMap<&str, &str> = before
+            .state
+            .iter()
+            .map(|(i, st)| (i.as_str(), st.as_str()))
+            .collect();
+        let new: HashMap<&str, &str> = now
+            .iter()
+            .map(|(i, st)| (i.as_str(), st.as_str()))
+            .collect();
+        let label = |id: &str| id.rsplit('/').next().unwrap_or(id).to_string();
+        let mut added: Vec<String> = now
+            .iter()
+            .filter(|(i, _)| !old.contains_key(i.as_str()))
+            .map(|(i, _)| format!("control {}", label(i)))
+            .collect();
+        let mut removed: Vec<String> = before
+            .state
+            .iter()
+            .filter(|(i, _)| !new.contains_key(i.as_str()))
+            .map(|(i, _)| format!("control {}", label(i)))
+            .collect();
+        let changed: Vec<String> = now
+            .iter()
+            .filter_map(|(i, st)| {
+                old.get(i.as_str())
+                    .filter(|o| **o != st.as_str())
+                    .map(|o| format!("control {}: {} -> {}", label(i), o, st))
+            })
+            .collect();
+        let stable = |t: &&String| !self.volatile.iter().any(|r| r.is_match(t));
+        let old_text: std::collections::HashSet<&String> =
+            before.texts.iter().filter(stable).collect();
+        let new_text: std::collections::HashSet<&String> =
+            here.texts.iter().filter(stable).collect();
+        added.extend(
+            new_text
+                .difference(&old_text)
+                .map(|t| format!("text \"{t}\"")),
+        );
+        removed.extend(
+            old_text
+                .difference(&new_text)
+                .map(|t| format!("text \"{t}\"")),
+        );
+        for v in [&mut added, &mut removed] {
+            v.sort();
+            v.truncate(12);
+        }
+        (added, removed, changed.into_iter().take(12).collect())
     }
 
     /// Whether any task can be tried by the novice (reachable, and not already done at home).
@@ -1394,6 +1708,31 @@ impl<'s> Run<'s> {
                 ));
             }
         }
+        let changed: Vec<&Continuity> = self
+            .continuity
+            .iter()
+            .filter(|c| c.kind != "seen_busy")
+            .collect();
+        // The home screen differing from itself is the clearest sign that reset does not restore the start
+        // state, so it fails alone; elsewhere it takes a tenth of the screens to call it a pattern.
+        let home_changed = changed.iter().any(|c| c.screen == 0);
+        if home_changed
+            || (changed.len() >= 2 && changed.len() as f64 >= self.expanded as f64 * UNSTABLE_SHARE)
+        {
+            hard.push(format!(
+                "the app is not the same from reset to reset: {} of {} screens changed between visits, e.g. screen {}: {}",
+                changed.len(),
+                self.expanded,
+                changed[0].screen,
+                changed[0].detail
+            ));
+        }
+        if let Some(c) = self.continuity.iter().find(|c| c.kind == "seen_busy") {
+            hard.push(format!(
+                "the app was measured while still loading (screen {}): {}",
+                c.screen, c.detail
+            ));
+        }
         let screens: Vec<ScreenResult> = self
             .screens
             .iter()
@@ -1430,6 +1769,7 @@ impl<'s> Run<'s> {
             tasks,
             rule_counts: counts,
             rules,
+            continuity: self.continuity,
             exploration: Exploration {
                 actions: self.actions,
                 max_actions: self.opts.max_actions,
@@ -1475,9 +1815,16 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
         .flat_map(|x| x.screenshots.iter().map(String::as_str))
         .take(20)
         .collect();
+    let pairs: Vec<Value> = r
+        .continuity
+        .iter()
+        .take(12)
+        .map(|c| json!({"screen": c.screen, "kind": c.kind, "detail": c.detail, "before": c.before, "after": c.after, "pixel_diff": c.pixel_diff}))
+        .collect();
     json!({
         "agent": "ux-critic",
         "agent_file": "~/.claude/agents/ux-critic.md",
+        "continuity_pairs": pairs,
         "purpose": spec.app.purpose,
         "modes": spec.modes.iter().map(|m| &m.name).collect::<Vec<_>>(),
         "tasks": spec.tasks.iter().map(|t| json!({"name": t.name, "goal": t.goal, "primary": t.primary, "budget": t.budget})).collect::<Vec<_>>(),
@@ -1485,8 +1832,9 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
         "screenshots": shots,
         "failed_novice_screenshots": novice,
         "prompt": format!(
-            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. Hard fails: {}.",
+            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. {}Hard fails: {}.",
             spec.app.kind, spec.app.purpose, r.full_result.as_deref().unwrap_or("(not saved)"),
+            if r.continuity.is_empty() { String::new() } else { format!("Continuity: {} screen(s) were not the same when reached again; open each before/after pair in continuity_pairs side by side and say what a person would see change (layout shift, leftover or missing elements, a half-drawn area, a loading state, overlap), not only what the control list says. ", r.continuity.len()) },
             if r.hard_fails.is_empty() { "none".to_string() } else { r.hard_fails.join("; ") }),
     })
 }
@@ -1506,7 +1854,8 @@ pub fn start_request(
         "op": "start", "kind": a.kind, "url": url.or(a.url.as_deref()), "viewport": a.viewport.map(|[w, h]| json!({"width": w, "height": h})),
         "exe": a.exe, "args": a.args, "cwd": a.cwd, "env": a.env, "window_title_re": a.window_title_re,
         "app_events": a.app_events, "ready_event": a.ready_event, "ready_timeout_s": a.ready_timeout_s.unwrap_or(120.0), "shot_dir": a.shot_dir,
-        "settle_ms": a.settle_ms, "ignore": spec.ignore, "allow_destructive": allow_destructive, "allow_remote": allow_remote,
+        "settle_ms": a.settle_ms, "busy_timeout_s": a.busy_timeout_s.unwrap_or(45.0),
+        "volatile": spec.volatile, "volatile_regions": spec.volatile_regions, "ignore": spec.ignore, "allow_destructive": allow_destructive, "allow_remote": allow_remote,
         "headed": headed, "stall_s": stall_s, "out_dir": out_dir,
     })
 }
