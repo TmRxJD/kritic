@@ -20,16 +20,18 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install semgrep==1.178.0 bandit==1.9.4
       - name: Semgrep findings and parser coverage
-        run: semgrep scan --config p/default --strict --error --json --metrics=off --timeout 30 . > semgrep-report.json
+        run: semgrep scan --config p/default --strict --error --json --metrics=off --timeout 30 --output "$env:RUNNER_TEMP/semgrep-report.json" .
       - name: Bandit findings and parser coverage
-        run: bandit -r . -f json -q -x "*/.git/*" > bandit-report.json
+        run: bandit -r . -f json -q -x "*/.git/*" -o "$env:RUNNER_TEMP/bandit-report.json"
       - name: Reject empty or incomplete scan coverage
-        run: python scripts/verify-security-reports.py semgrep-report.json bandit-report.json
+        run: python scripts/verify-security-reports.py "$env:RUNNER_TEMP/semgrep-report.json" "$env:RUNNER_TEMP/bandit-report.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: security-reports
-          path: '*-report.json'
+          path: |
+            ${{ runner.temp }}/semgrep-report.json
+            ${{ runner.temp }}/bandit-report.json
 
   rust:
     # Developed and measured on Windows; the desktop harness and several offline tests use Win32.

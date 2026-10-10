@@ -42,6 +42,8 @@ or test directory is excluded to remove these findings.
 Annotations remain reviewable in source. Changed trust boundaries require reevaluation.
 CI blocks Semgrep findings and parser warnings and runs Bandit without a severity floor;
 raw reports are uploaded even on failure. Registry rules can change independently of the pinned scanner.
+CI reports are written outside the checkout: redirecting a report into the scan root caused Semgrep
+to scan its own incomplete JSON. That parser failure was retained and fixed, not ignored.
 
 The strict local run scanned 142 files using 500 Semgrep rules and analyzed 3254 Python lines with
 Bandit. Semgrep's default ignore policy omitted 53 entries; this is not an all-file coverage claim.
