@@ -3,8 +3,10 @@
     "kritic": {
       "type": "stdio",
       "command": "/absolute/path/to/.kritic/bin/kritic",
-      "args": [],
-      "env": {}
+      "args": ["serve"],
+      "env": {
+        "KRITIC_HOME": "/absolute/path/to/.kritic"
+      }
     }
   }
 }

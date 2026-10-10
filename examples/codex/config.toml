@@ -1,0 +1,10 @@
+# Merge this table into your Codex configuration; do not replace unrelated settings.
+# Replace BOTH absolute paths with your extracted package directory.
+[mcp_servers.kritic]
+command = "E:/AI/kritic/bin/kritic.exe"
+args = ["serve"]
+startup_timeout_sec = 30
+tool_timeout_sec = 900
+enabled = true
+[mcp_servers.kritic.env]
+KRITIC_HOME = "E:/AI/kritic"

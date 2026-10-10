@@ -24,24 +24,52 @@ for those environments from the Windows measurements.
 
 ## Prebuilt Windows package
 
-Extract the test ZIP into your chosen persistent directory, open that `kritic` folder, and run:
+Extract the test ZIP into your chosen persistent directory, open that `kritic` folder, and on
+a fresh install select the included minimal profile before running setup:
 
 ```powershell
 $env:KRITIC_HOME = (Resolve-Path .).Path
-.\bin\kritic.exe setup --backend off --no-vision
+Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
+.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-scanners --no-register
 .\bin\kritic.exe doctor
 ```
 
-This uses the included binary; no Rust or local model is needed. Setup can install deterministic
-dependencies and register supported agents. `--no-harness --no-scanners --no-register` skips those
-steps. Install the bundled skill in your host's skill directory, and verify the TEST RELEASE header.
+Do not copy over an existing config: merge the selected settings instead. This first-run path
+installs no optional harnesses/scanners/models and registers no unrelated agent. It exposes
+artifact, contract and native process/resource checks. Your project's validators still need
+their own normal toolchains. Connect [Codex/local Work, Cursor or another client](clients.md)
+and install the skill; verify its TEST RELEASE header.
+
+## Optional installs, in order
+
+In KRITIC_HOME/kritic.toml enable only the groups you need. All commands below preserve
+deterministic review and avoid automatic Claude/Hermes registration; restart MCP afterward.
+
+| Goal | First edit `[capabilities]` | Then run from the extracted package |
+|---|---|---|
+| Web UI / deterministic UX | `web=true`, `ux=true`; leave `desktop=false` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
+| Security scanners | `security=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-register` |
+| Windows desktop UI | `desktop=true`; optionally `ux=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
+| Project code quality | `quality=true` | Install your project's lint/typecheck dependencies, then run doctor; no model/setup needed |
+| Repository plugins / map domain | `plugins=true` / `domain_maps=true` | Install the relevant project plugin/evaluator dependencies; no model required for map_eval |
+
+Browser provisioning uses installed Chrome/Edge/Chromium or downloads Chrome for Testing.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before desktop provisioning
+or scanner setup when Semgrep/Bandit/Ruff are absent: Kritic uses uv to prepare those Python tools.
+Desktop also needs Python and the Windows harness; matching Unity is a separate application
+install. Scanners can access networks. Partial install failures remain visible in
+doctor and critic coverage; a successful setup command does not prove every optional dependency
+or project validator works. Do not install local models to fix missing deterministic dependencies.
 
 ## Install from source and configure
 
 ```bash
+git clone https://github.com/TmRxJD/kritic.git
+cd kritic
 export KRITIC_HOME='E:/AI/kritic' # optional; choose your own persistent data directory
 scripts/install.sh
-"$KRITIC_HOME/bin/kritic" setup --backend off --no-vision
+cp examples/profiles/minimal.toml "$KRITIC_HOME/kritic.toml" # fresh install only
+"$KRITIC_HOME/bin/kritic" setup --yes --backend off --no-vision --no-harness --no-scanners --no-register
 ```
 
 On Windows the binary is `kritic.exe`. Without KRITIC_HOME it lives in `~/.kritic/bin`.
@@ -50,16 +78,18 @@ config if absent. It does not pull models by default. Setup discovers/installs m
 use `--no-harness --no-scanners --no-register` to skip dependency installation/registration.
 Existing config selections are preserved unless you explicitly override them.
 
-Register Claude Code or Hermes with `kritic register --claude` / `--hermes`. Other clients can
-start the binary with `serve`; copy the shipped skill into their skill directory. Do not assume
-Claude's paths work in every client. `kritic doctor` reports configured/missing features;
+The source installer requires Rust 1.89+ and native linker/build tools; prebuilt Windows does not.
+Clone the repo and run these commands from its root. On Windows use `bin/kritic.exe`.
+Use [client-specific setup](clients.md) for Codex/local Work, Cursor, Claude Code and Hermes.
+`kritic doctor` reports configured/missing features;
 `--online` explicitly tests the configured reviewer and may incur API cost.
 
 ## Optional local models
 
 ```bash
-kritic setup --backend local --no-vision
-kritic setup --vision
+kritic setup --yes --backend local --no-vision --no-harness --no-scanners --no-register
+# Separate opt-in: installs/starts Ollama and pulls the vision model where supported.
+kritic setup --yes --vision --no-harness --no-scanners --no-register
 ```
 
 Kev Q8's recorded footprint is about 5 GB: recommend an 8 GB GPU after allowing roughly
