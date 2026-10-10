@@ -37,7 +37,7 @@ paths need field testing; there are no prebuilt packages for those platforms in 
 
 ## Quickstart: install the minimum, then choose extras
 
-1. **Get the binary:** download the Windows ZIP from [the test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.2).
+1. **Get the binary:** download the Windows ZIP from [the test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.3).
    Extract it into a persistent location and open its `kritic` folder in PowerShell.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
    if absent. No Rust, Python, Node, GPU, Ollama or API key is required for the minimum setup.

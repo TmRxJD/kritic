@@ -4,7 +4,9 @@ use kritic::contract::{Outcome, critique, hash, parse};
 fn cfg(dir: &std::path::Path) -> Config {
     let mut c = Config::load();
     c.runs_dir = dir.join("runs");
-    c.command_timeout_s = 3;
+    // These tests assert command results and evidence freshness, not startup speed.
+    // Cold hosted Windows runners can spend several seconds starting Python.
+    c.command_timeout_s = 30;
     c
 }
 
