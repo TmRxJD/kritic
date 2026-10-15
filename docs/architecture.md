@@ -6,6 +6,9 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
 
 - config.rs: environment/TOML defaults, explicit model providers and capability/tool toggles.
 - server.rs: typed MCP routing and lifecycle events; disabled tools are not callable through MCP.
+- tool_metadata.rs: concise discovery descriptions and schema-annotation compaction. Validation
+  keywords, property names, references and field guidance are preserved; no tool is hidden by
+  this optimization. Short shared instructions avoid repetition in clients that prefix each tool.
 - checks.rs/tools.rs: parsing, requested validator execution, coverage gaps and artifact reports.
 - contract.rs: acceptance assertions, hashed/fresh evidence, final revalidation and static wiring.
 - provider.rs: explicit bounded HTTPS transports, native authentication, JSON-only compatibility.
