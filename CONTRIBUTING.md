@@ -14,6 +14,17 @@ History/format-export changes must keep historical evidence separate from curren
 Use sanitized fixtures for report/input/context mismatch, bounded storage and private-data leakage.
 Do not present a serialization test as live jcode integration or a memory-savings benchmark.
 
+MCP schema changes need a server-construction/tool-discovery regression: every tool's
+`inputSchema` must explicitly declare root `type: "object"`. Tagged enums can produce
+alternatives without that root declaration; verify the generated schema and constructor,
+not only a JSON serialization roundtrip. Include optional tools in the enabled test surface.
+
+Technical-debt changes must preserve offline defaults, explicit online disclosure, private-source
+skips, bounded requests/cache/corpus and visible lookup/coverage gaps. Test exact lock resolution
+separately from requirements, workspace/alias handling, stale evidence and unsupported ordering.
+Urgency/effort are advisory; no automatic update, inferred secret value or compatibility claim
+belongs in the feature. [Evidence and validation workflow](docs/technical-debt.md).
+
 1. Reproduce the defect and distinguish it from a bug in the user's project.
 2. Add a regression that fails for the demonstrated behavior (avoid vacuous/mirrored assertions).
 3. Fix the implementation without weakening checks, expanding approval scope or hiding coverage gaps.

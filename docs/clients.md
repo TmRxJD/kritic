@@ -5,13 +5,13 @@ Then connect **two things**: the MCP server provides checks; the skill tells the
 interpret and independently validate them. Your host's existing model does the reasoning;
 leave Kritic's model backends off. No additional inference account is needed.
 
-Current source builds also offer `repository_critic` when `capabilities.repository=true`.
-The minimal profile disables it; the published `v0.5.0-test.3` binary predates it. Client/MCP
+Test.4 and later also offer `repository_critic` when `capabilities.repository=true`.
+The minimal profile disables it. Client/MCP
 registration does not enforce commits: configure repository rules and explicitly
 [install the Git hook](repository-policy.md#commit-enforcement). Keep semantic scope review in
 the calling agent, including with models off.
 
-The optional source-only `review_history` tool is separately gated by `capabilities.history=false`
+The optional `review_history` tool is separately gated by `capabilities.history=false`
 by default. Enabling it exposes explicit record/list/compare/export actions; it does not capture
 your session, index the workspace or install a jcode harness. [Usage and privacy](memory-adapter.md).
 
@@ -75,6 +75,12 @@ For another stdio client, configure the same binary with `args=["serve"]` and KR
 use its skill mechanism or merge the AGENTS.md instruction block.
 
 ## Prove the connection before a real task
+
+Test.4 and later can optionally expose `technical_debt_critic` to any of these clients.
+Set `[capabilities] debt=true`, restart the server/client and confirm the tool appears in
+`status.enabled_tools`. Its default call is `{"base_dir":".","online":false,"refresh":false,"source_paths":[]}`;
+no model, GPU or cloud credentials are needed. Public package metadata lookup is a separate
+`online=true` opt-in, not implied by connecting Codex, Cursor or another client. [Maintenance review guide](technical-debt.md).
 
 Ask: “Use Kritic's TEST RELEASE skill. Inspect available tools and call status(start=false).
 Review this small change with artifact_validate(use_model=false), using its absolute repository

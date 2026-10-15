@@ -17,6 +17,7 @@
 #   off   - no model: deterministic tools only; Kev-backed verdicts report null
 # backend = "off"                              # KRITIC_KEV_BACKEND
 # cpu_only = false                             # KRITIC_KEV_CPU_ONLY: true only for a CPU Kev service
+# externally_managed = false                    # KRITIC_KEV_EXTERNALLY_MANAGED: owner starts/stops/provisions laya; Kritic only connects
 # CPU-only launches use --device cpu. Kev calls bypass GPU leases and never stop the shared
 # service or evict vision. Existing/external services must already run on CPU; restart them
 # explicitly before changing this flag. Vision tools still hold the GPU lease.
@@ -31,7 +32,7 @@
 # chunk_chars = 1300                            # KRITIC_CHUNK_CHARS: code per Kev request (context is 2,048 tokens)
 # token_budget = 2900                           # KRITIC_TOKEN_BUDGET: rows x tokens per laya batch (latency cliff above ~3.7k)
 # max_seq_tokens = 2048                         # KRITIC_MAX_SEQ_TOKENS
-# request_s = 60                                # KRITIC_KEV_REQUEST_S: one request; a stall stops laya so the next call restarts it
+# request_s = 60                                # KRITIC_KEV_REQUEST_S: one request; recovery never stops externally managed laya
 # critic_deadline_s = 600                       # KRITIC_CRITIC_DEADLINE_S: a whole critic pass returns what it has after this
 
 [cloud]
@@ -52,6 +53,7 @@
 
 [vision]
 # backend = "off"                              # KRITIC_VISION_BACKEND: off | local (Ollama) | cloud
+# externally_managed = false                    # KRITIC_VISION_EXTERNALLY_MANAGED: no service launch/provision/eviction or keep_alive override
 # cloud_model = ""                             # KRITIC_VISION_CLOUD_MODEL: defaults to cloud.model; must support images
 # Qwen2.5-VL through Ollama: visual_critic scores and the ux_critic novice.
 # ollama_url = "http://127.0.0.1:11434"         # KRITIC_OLLAMA_URL
@@ -121,6 +123,7 @@
 # contracts = true                             # KRITIC_CAP_CONTRACTS: requirement evidence and enforcement wiring
 # repository = true                            # KRITIC_CAP_REPOSITORY: scoped commits and organization rules
 # history = false                              # KRITIC_CAP_HISTORY: explicit private review snapshots and jcode-format export
+# debt = false                                 # KRITIC_CAP_DEBT: optional offline dependency/maintenance review; online lookup is a separate per-call opt-in
 # plugins = true                               # KRITIC_CAP_PLUGINS: repository-defined checks
 # context = false                              # KRITIC_CAP_CONTEXT: optional model routing/locate/trim
 # domain_maps = false                          # KRITIC_CAP_DOMAIN_MAPS: Beat Saber map evaluator

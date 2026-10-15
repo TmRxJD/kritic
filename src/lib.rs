@@ -11,6 +11,7 @@ pub mod config;
 pub mod context;
 pub mod contract;
 pub mod critic;
+pub mod debt;
 pub mod events;
 pub mod files;
 pub mod gpu;

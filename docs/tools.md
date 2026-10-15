@@ -1,7 +1,6 @@
 # Tools — test release
 
-The `repository_critic` and expanded organization checks below describe current source builds;
-the published `v0.5.0-test.3` binary predates them. The minimal profile hides repository tools
+The `repository_critic` and expanded organization checks below require test.4 or later. The minimal profile hides repository tools
 until `capabilities.repository=true`. [Policy/hook setup and limits](repository-policy.md).
 
 Validate every finding independently. Deterministic checking is the default; model tools may
@@ -16,7 +15,8 @@ scores, and a model opinion never removes a deterministic failure.
 
 | Tool | Deterministic part | Kev / model part | Approval rule |
 |---|---|---|---|
-| `review_history` (source only, opt-in) | explicit private report snapshots, input/context hashes, bounded historical comparison and sanitized jcode-format export | none | no approval; always historical/unverified, never cached acceptance or current freshness; [guide](memory-adapter.md) |
+| `technical_debt_critic` (opt-in) | bounded dependency inventory, explicit maintenance/migration evidence, optional selected comment markers; offline by default, explicit public registry/cache evidence | none | advisory, no approval; unknown versions, missing evidence and coverage gaps remain explicit; [guide](technical-debt.md) |
+| `review_history` (opt-in) | explicit private report snapshots, input/context hashes, bounded historical comparison and sanitized jcode-format export | none | no approval; always historical/unverified, never cached acceptance or current freshness; [guide](memory-adapter.md) |
 | `contract_critic` | declared acceptance checks, fresh commands when opted in, evidence hashes/age, static enforcement wiring | none; calling agent reviews prose/coverage | false on required violations; null on uncovered/stale/unrun required checks; only declared assertions may be verified |
 | `repository_critic` | staged commit budgets and tree-bound scope, file LoC, repository-defined naming/layers, folder structure, comment-review signals | none; agent reviews semantic relevance, cohesion and explanation quality | deterministic declared rules only; does not certify architecture or sufficient comments |
 | `critic_score` | chunking (a truncated chunk is split and re-scored), git diff, missing files | per unit (spec `code_chunk` / `code_change`; the request is not included): defect, severity, security, unfinished, quality, reviewer text; once per call: completeness (`completeness` on code, `completeness_digest` on a digest) | only the specs' calibrated gates, at the family-wise threshold for the number of units (`status().gates` lists them); `null` if Kev is offline or coverage was partial |

@@ -2,6 +2,7 @@
 //! how MCP clients start it); in a terminal it prints a short guide instead of waiting silently.
 
 pub mod context;
+pub mod debt;
 pub mod detect;
 pub mod doctor;
 pub mod fetch;
@@ -50,6 +51,8 @@ pub enum Cmd {
     Repository(repository::RepositoryArgs),
     /// Optional, unverified review history and sanitized jcode-format export; never cached approval.
     History(history::HistoryArgs),
+    /// Rank maintenance and dependency update candidates (network only with --online).
+    Debt(debt::DebtArgs),
 }
 
 #[derive(Args, Debug)]

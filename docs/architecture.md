@@ -21,6 +21,12 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
 - history.rs/history_api.rs/history/: opt-in private report snapshots, explicit input/context
   fingerprints and historical comparison; a separate sanitized jcode-format export. No model,
   workspace indexing, live jcode mutation or cached verification. [Memory adapter](memory-adapter.md).
+- debt.rs/debt/: opt-in dependency/maintenance evidence. `inventory` reads only bounded manifests
+  and explicit declarations; `registry` separates offline cached evidence from authorized HTTPS
+  lookups; `ranking` estimates urgency/effort without applying upgrades; `maintenance` reads
+  version-bound declarations and caller-selected comment markers. `cli/debt.rs` exposes the
+  same capability through the CLI. No model, package-manager script or automatic update runs.
+  [Privacy, coverage and budgets](technical-debt.md).
 - vision.rs/ux.rs: optional local/cloud screenshot and novice judgments; deterministic workflow rules.
 
 GPU coordination applies only to explicitly selected local inference. One selected model at a
@@ -32,5 +38,4 @@ Run reports/logs/models default under KRITIC_HOME. They can contain private sour
 before sharing. Contract reports are evidence ledgers, not cryptographic execution attestations.
 External commands execute with the user's privileges, not inside a security sandbox.
 
-Repository policy/hook functionality is newer source code, outside the published
-`v0.5.0-test.3` binary. See [policy and coverage boundaries](repository-policy.md).
+Repository policy/hook functionality is included in `v0.5.0-test.4` and later. See [policy and coverage boundaries](repository-policy.md).

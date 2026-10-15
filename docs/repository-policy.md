@@ -2,8 +2,7 @@
 
 `repository_critic` and `kritic repository check` need no model or GPU. Their explicit
 repository policy lives in `.kritic/repository.toml`; start with
-[`examples/repository.toml`](../examples/repository.toml). This is source functionality,
-not included in the older v0.5.0-test.3 release binary.
+[`examples/repository.toml`](../examples/repository.toml). These features require v0.5.0-test.4 or later.
 
 Ordinary `code_quality_critic` also includes the file-size, explanation-review and organization
 report for its supplied source files. Without a policy it uses the default LoC thresholds and

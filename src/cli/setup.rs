@@ -321,6 +321,15 @@ async fn install_local_kev(
     quant: &str,
     doc: &mut toml_edit::DocumentMut,
 ) -> Result<(), String> {
+    if !cfg.config_errors.is_empty() {
+        return Err("Fix config_errors before local model setup".into());
+    }
+    if cfg.kev_externally_managed {
+        ui::skip(
+            "Kev is externally managed; no service/model provisioning (probe with doctor --online)",
+        );
+        return Ok(());
+    }
     if !gpu.fits_local_kev() {
         ui::warn(
             "this GPU is below the ~6 GB local Kev needs; expect slow answers (consider --backend cloud)",
@@ -441,6 +450,15 @@ fn run_visible(cmd: &mut Command, what: &str) -> Result<(), String> {
 }
 
 async fn install_vision(cfg: &Config, plan: &Plan, forced: bool) -> Result<(), String> {
+    if !cfg.config_errors.is_empty() {
+        return Err("Fix config_errors before vision setup".into());
+    }
+    if cfg.vision_externally_managed {
+        ui::skip(
+            "Vision is externally managed; no service/model provisioning (probe with doctor --online)",
+        );
+        return Ok(());
+    }
     let ollama = detect::tool("ollama", &[])
         .or_else(|| cfg.ollama_exe.is_file().then(|| cfg.ollama_exe.clone()));
     let Some(ollama) = ollama else {

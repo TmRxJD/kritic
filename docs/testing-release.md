@@ -1,17 +1,37 @@
 # Test-release protocol
 
-Distinguish the executable under test from current documentation: repository policies/hooks and
-expanded organization review require current source and are absent from `v0.5.0-test.3`.
+Use matching binary/configuration versions: repository policies/hooks, expanded organization
+review, history and technical-debt tools require `v0.5.0-test.4` or later.
 For repository tests, record `broad`/`focused`/`atomic`, explicit overrides, staged-tree identity,
 inventory/exclusions and unresolved import coverage. Exercise stale plans, out-of-scope paths,
 oversized changes, malformed policy and hook failure/bypass cases. A green static gate cannot
 establish semantic cohesion or sufficient explanations. [Repository policy](repository-policy.md).
 
-Optional source-only history tests must preserve its boundary: historical reports never approve
+Optional history tests must preserve its boundary: historical reports never approve
 current work. Check disabled-tool behavior, malformed/tampered records, corpus/path/size limits,
 context mismatch, paginated metadata and truncated comparisons. Inspect exports for raw source,
 report/context strings and local paths; a format fixture alone does not validate live jcode
 import or memory savings. [Commands and limitations](memory-adapter.md).
+
+Technical-debt tests must distinguish a declared requirement, a resolved lockfile version and
+an observed registry default. Exercise offline misses, stale caches, private sources, failed
+lookups, newer installed versions, qualifiers and the online batch deadline. Upgrade effort is
+an estimate: validate exact-version migration notes, environment-variable names and actual
+upgrade/test results before treating the estimate as demonstrated work. [Debt guide](technical-debt.md).
+
+## Unreleased Windows test binaries
+
+A CI run stages `kritic-windows-test` after its Rust checks pass. It contains `kritic.exe` and
+`manifest.json`, with the PR head, tested checkout, run ID and executable SHA-256. Artifacts are
+retained for three days. Choose the run for the source revision you intend to test and confirm
+its checks passed; compare the executable hash with that manifest before using it.
+
+This is a standalone Windows test executable, not the published release ZIP or a complete
+optional-harness package. Use configuration/examples from the matching source revision and
+the [installation guide](getting-started.md); the core needs no Rust installation, model or GPU.
+For example, the hash can be checked with `Get-FileHash .\kritic.exe -Algorithm SHA256`.
+Keep an existing working executable/configuration until the replacement has passed `doctor`
+and an actual MCP initialization/tool-discovery test in your client.
 
 The objective is to evaluate the viability of Kritic's skill, tools, configuration and findings.
 Do not inherently trust a critic, including a deterministic checker. Validate its inputs, scope,

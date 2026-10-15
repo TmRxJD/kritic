@@ -1,0 +1,33 @@
+# Copy to .kritic/debt.toml and replace commented placeholders with verified project evidence.
+# Source-only optional capability: enable [capabilities] debt=true in Kritic's server config.
+version = 1
+# Automatic inventory does not require explicit package declarations.
+
+# Explicit package inventory for unsupported manifests or unresolved custom sources.
+# [[packages]]
+# ecosystem = "nuget" # cargo | npm | pypi | go | maven | nuget | rubygems
+# name = "Example.Package" # Placeholder: use the ecosystem's real package identifier.
+# current = "1.2.3" # Exact declared version, never ^1.2, >=1 or a guessed installation.
+# requirement = ">=1.2.0"
+# scope = "direct" # direct | transitive
+# public_registry = true # Set false for private/Git/path/workspace/alternate registry sources.
+
+# Version-bound migration evidence. The HTTPS source is declared, not fetched/attested.
+# [[migrations]]
+# ecosystem = "npm"
+# name = "example-package"
+# from = "1.2.3"
+# to = "2.0.0"
+# effort = 3 # 1..5 estimate; does not prove the upgrade succeeds.
+# summary = "Review the documented runtime configuration migration."
+# source_url = "https://upstream.example/migration-guide"
+# required_env_vars = ["EXAMPLE_MODE"] # Names only. Never put secret values here.
+
+# Explicit maintenance claim, independently reviewed by the caller.
+# [[maintenance]]
+# id = "example-runtime-retirement"
+# summary = "Validate the project runtime before its declared retirement deadline."
+# urgency = "medium" # low | medium | high | critical
+# effort = 3 # Optional; omit when unknown.
+# source_url = "https://upstream.example/support-policy"
+# due_date = "2030-01-01" # Optional YYYY-MM-DD; replace the placeholder with real evidence.
