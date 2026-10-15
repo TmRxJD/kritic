@@ -1,8 +1,8 @@
 use kritic::commit_policy::{CommitPolicy, check, plan, source_files};
-use std::{path::Path, process::Command};
+use std::path::Path;
 
 fn git(base: &Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = kritic::proc::hidden_command("git")
         .arg("-C")
         .arg(base)
         .args(args)

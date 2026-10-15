@@ -1,11 +1,11 @@
 //! Git plumbing uses NUL-separated paths; invalid UTF-8 is rejected, never lossy-mapped.
 use std::{
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
 };
 
 pub(super) fn output(base: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let result = Command::new("git")
+    let result = crate::proc::hidden_command("git")
         .arg("--literal-pathspecs")
         .arg("-C")
         .arg(base)
@@ -113,7 +113,7 @@ pub(super) fn line_counts(base: &Path) -> Result<(usize, usize, Vec<String>), St
 
 pub(super) fn patch_bytes(base: &Path) -> Result<u64, String> {
     // Count a stream rather than retaining or spooling a potentially huge binary patch.
-    let mut child = Command::new("git")
+    let mut child = crate::proc::hidden_command("git")
         .arg("-C")
         .arg(base)
         .args([

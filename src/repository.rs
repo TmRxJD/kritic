@@ -39,7 +39,7 @@ pub struct RepositoryReport {
 /// A hook reads its policy from the index too: an unstaged edit cannot weaken its checks.
 pub fn load(base: &Path, staged: bool) -> Result<RepositoryPolicy, String> {
     let bytes = if staged {
-        let size = std::process::Command::new("git")
+        let size = crate::proc::hidden_command("git")
             .arg("-C")
             .arg(base)
             .args(["cat-file", "-s", ":.kritic/repository.toml"])
@@ -56,7 +56,7 @@ pub fn load(base: &Path, staged: bool) -> Result<RepositoryPolicy, String> {
         if size > 1024 * 1024 {
             return Err("repository policy exceeds 1 MiB".into());
         }
-        let output = std::process::Command::new("git")
+        let output = crate::proc::hidden_command("git")
             .arg("-C")
             .arg(base)
             .args(["show", ":.kritic/repository.toml"])

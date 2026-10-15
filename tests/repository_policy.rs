@@ -1,7 +1,7 @@
-use std::{path::Path, process::Command};
+use std::path::Path;
 
 fn git(base: &Path, args: &[&str]) {
-    let result = Command::new("git")
+    let result = kritic::proc::hidden_command("git")
         .arg("-C")
         .arg(base)
         .args(args)

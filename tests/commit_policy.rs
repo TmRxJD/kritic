@@ -1,10 +1,11 @@
 use kritic::commit_policy::{
     CommitPolicy, check, install_hook, plan, source_files, source_files_with_exclusions,
 };
-use std::{path::Path, process::Command};
+use kritic::proc::hidden_command;
+use std::path::Path;
 
 fn git(base: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = hidden_command("git")
         .arg("-C")
         .arg(base)
         .args(args)
@@ -169,7 +170,7 @@ fn hook_preserves_existing_hook_and_honors_hooks_path() {
     let exe = std::env::current_exe().unwrap();
     assert!(install_hook(base, &exe).unwrap_err().contains("preserved"));
     assert!(
-        !Command::new("git")
+        !hidden_command("git")
             .arg("-C")
             .arg(base)
             .args(["config", "--get", "kritic.executable"])
@@ -247,7 +248,7 @@ fn cloned_hook_fails_closed_without_a_local_executable() {
         std::fs::read(cloned.join(".hooks/pre-commit")).unwrap()
     );
     assert!(
-        !Command::new("git")
+        !hidden_command("git")
             .arg("-C")
             .arg(&cloned)
             .args(["config", "--local", "--get", "kritic.executable"])
@@ -255,7 +256,7 @@ fn cloned_hook_fails_closed_without_a_local_executable() {
             .unwrap()
             .success()
     );
-    let result = Command::new("git")
+    let result = hidden_command("git")
         .arg("-C")
         .arg(&cloned)
         .args(["-c", "core.hooksPath=.hooks", "hook", "run", "pre-commit"])
@@ -374,7 +375,7 @@ fn unresolved_index_is_rejected() {
     let entry = git(base, &["ls-files", "--stage", "conflict.rs"]);
     let hash = entry.split_whitespace().nth(1).unwrap();
     git(base, &["update-index", "--force-remove", "conflict.rs"]);
-    let mut child = Command::new("git")
+    let mut child = hidden_command("git")
         .arg("-C")
         .arg(base)
         .args(["update-index", "--index-info"])
@@ -473,7 +474,7 @@ fn windows_junction_root_is_supported_but_internal_escape_is_rejected() {
     let outer = tempfile::tempdir().unwrap();
     let alias = outer.path().join("root-alias");
     let make_junction = |link: &Path, target: &Path| {
-        let result = Command::new("cmd")
+        let result = hidden_command("cmd")
             .args(["/c", "mklink", "/J"])
             .arg(link)
             .arg(target)

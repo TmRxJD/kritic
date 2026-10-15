@@ -7,6 +7,18 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 
+/// Noninteractive helpers must not create console windows when launched from a desktop MCP host.
+pub fn hidden_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    command.stdin(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW; GUI apps retain their own windows.
+    }
+    command
+}
+
 pub struct Output {
     pub stdout: String,
     /// Non-event stderr lines (last ~40), for error messages.
@@ -19,6 +31,8 @@ pub async fn run_streaming(
     timeout_s: u64,
     tool: &str,
 ) -> Result<Output, String> {
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000);
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
