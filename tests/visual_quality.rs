@@ -155,7 +155,7 @@ fn reference_payload_keeps_subject_first_and_records_provenance() {
     std::fs::write(&reference, reference_bytes).unwrap();
     let payload = kritic::vision::prepare_visual_payload(
         &subject,
-        &[reference.clone()],
+        std::slice::from_ref(&reference),
         "Settings app",
         QualityTarget::Professional,
         6.0,
