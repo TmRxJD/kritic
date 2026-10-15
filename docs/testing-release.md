@@ -7,6 +7,12 @@ inventory/exclusions and unresolved import coverage. Exercise stale plans, out-o
 oversized changes, malformed policy and hook failure/bypass cases. A green static gate cannot
 establish semantic cohesion or sufficient explanations. [Repository policy](repository-policy.md).
 
+Optional source-only history tests must preserve its boundary: historical reports never approve
+current work. Check disabled-tool behavior, malformed/tampered records, corpus/path/size limits,
+context mismatch, paginated metadata and truncated comparisons. Inspect exports for raw source,
+report/context strings and local paths; a format fixture alone does not validate live jcode
+import or memory savings. [Commands and limitations](memory-adapter.md).
+
 The objective is to evaluate the viability of Kritic's skill, tools, configuration and findings.
 Do not inherently trust a critic, including a deterministic checker. Validate its inputs, scope,
 test discovery, assertions, execution evidence and applicability. A correct parser check cannot

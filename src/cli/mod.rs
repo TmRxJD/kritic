@@ -5,6 +5,7 @@ pub mod context;
 pub mod detect;
 pub mod doctor;
 pub mod fetch;
+pub mod history;
 pub mod register;
 pub mod repository;
 pub mod setup;
@@ -16,11 +17,11 @@ use clap::{Args, Parser, Subcommand};
 #[command(
     name = "kritic",
     version,
-    about = "Local, advisory end-of-task review for coding agents",
-    long_about = "Local, advisory end-of-task review for coding agents: real tools produce the findings, \
-                  the Kev typed-decision model scores them, code decides.\n\n\
+    about = "Experimental evidence-based review for coding agents; no model required",
+    long_about = "Test release: deterministic tools produce evidence; optional local or cloud reviewers \
+                  help prioritize it. Validate findings independently; approval is scoped to checks.\n\n\
                   First time? Run `kritic setup`.",
-    after_help = "With no command, kritic runs as an MCP server on stdio (how Claude Code and Hermes start it)."
+    after_help = "With no command, kritic runs as an MCP server on stdio for your coding client."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -47,6 +48,8 @@ pub enum Cmd {
     Contract(ContractArgs),
     /// Enforce scoped commits and repository-owned code organization policy
     Repository(repository::RepositoryArgs),
+    /// Optional, unverified review history and sanitized jcode-format export; never cached approval.
+    History(history::HistoryArgs),
 }
 
 #[derive(Args, Debug)]

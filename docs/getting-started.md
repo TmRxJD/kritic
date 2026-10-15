@@ -24,6 +24,10 @@ for those environments from the Windows measurements.
 
 ## Prebuilt Windows package
 
+Use the configuration and examples from the same ZIP as the binary. Current-source keys such
+as `capabilities.repository` and `capabilities.history` require a matching source build; copying
+them into the older test.3 package does not add those features.
+
 Extract the test ZIP into your chosen persistent directory, open that `kritic` folder, and on
 a fresh install select the included minimal profile before running setup:
 
@@ -52,6 +56,7 @@ deterministic review and avoid automatic Claude/Hermes registration; restart MCP
 | Windows desktop UI | `desktop=true`; optionally `ux=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
 | Project code quality | `quality=true` | Install your project's lint/typecheck dependencies, then run doctor; no model/setup needed |
 | Scoped commits / organization (current source) | `repository=true`; minimal profile defaults false | Build current source, configure `.kritic/repository.toml`, then follow [explicit hook setup](repository-policy.md); Git required, no model/download |
+| Review history (current source) | `history=true`; built-in/minimal default false | Git plus private storage; [record selected reports/inputs explicitly](memory-adapter.md); no model, embedding or extra runtime |
 | Repository plugins / map domain | `plugins=true` / `domain_maps=true` | Install the relevant project plugin/evaluator dependencies; no model required for map_eval |
 
 Browser provisioning uses installed Chrome/Edge/Chromium or downloads Chrome for Testing.

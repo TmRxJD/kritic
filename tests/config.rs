@@ -74,6 +74,10 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     }
     let c = Config::load();
     assert!(c.config_file.is_none() && c.config_errors.is_empty());
+    assert!(!c.capability("history") && !c.tool_enabled("review_history"));
+    unsafe { std::env::set_var("KRITIC_CAP_HISTORY", "true") };
+    assert!(Config::load().tool_enabled("review_history"));
+    unsafe { std::env::remove_var("KRITIC_CAP_HISTORY") };
     assert!(!c.kev_cpu_only, "GPU behavior is the default");
     assert_eq!(c.disabled_tools, ["route", "context_trim"]);
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };

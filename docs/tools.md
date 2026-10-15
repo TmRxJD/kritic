@@ -9,13 +9,14 @@ be disabled and absent from discovery. A scoped approval is not task completion 
 `status.enabled_tools` lists the effective tool surface after capability toggles.
 
 
-Every tool returns JSON with a published output schema. `approval` is `true`, `false`, or `null`
+Review tools return JSON with a published output schema. Their `approval` is `true`, `false`, or `null`
 when the tool could not reach a verdict (a dependency offline, partial coverage, a run that could
 not finish). Approval is always computed in code from stated thresholds; Kev only triages and
 scores, and a model opinion never removes a deterministic failure.
 
 | Tool | Deterministic part | Kev / model part | Approval rule |
 |---|---|---|---|
+| `review_history` (source only, opt-in) | explicit private report snapshots, input/context hashes, bounded historical comparison and sanitized jcode-format export | none | no approval; always historical/unverified, never cached acceptance or current freshness; [guide](memory-adapter.md) |
 | `contract_critic` | declared acceptance checks, fresh commands when opted in, evidence hashes/age, static enforcement wiring | none; calling agent reviews prose/coverage | false on required violations; null on uncovered/stale/unrun required checks; only declared assertions may be verified |
 | `repository_critic` | staged commit budgets and tree-bound scope, file LoC, repository-defined naming/layers, folder structure, comment-review signals | none; agent reviews semantic relevance, cohesion and explanation quality | deterministic declared rules only; does not certify architecture or sufficient comments |
 | `critic_score` | chunking (a truncated chunk is split and re-scored), git diff, missing files | per unit (spec `code_chunk` / `code_change`; the request is not included): defect, severity, security, unfinished, quality, reviewer text; once per call: completeness (`completeness` on code, `completeness_digest` on a digest) | only the specs' calibrated gates, at the family-wise threshold for the number of units (`status().gates` lists them); `null` if Kev is offline or coverage was partial |

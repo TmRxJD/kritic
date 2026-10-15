@@ -18,6 +18,9 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
 - organization.rs/organization/: line budgets, declared naming/layers/import aliases and bounded
   comment/import heuristics. Ordinary code-quality review applies them to supplied files;
   `repository_critic` additionally offers the tracked inventory and staged commit gate.
+- history.rs/history_api.rs/history/: opt-in private report snapshots, explicit input/context
+  fingerprints and historical comparison; a separate sanitized jcode-format export. No model,
+  workspace indexing, live jcode mutation or cached verification. [Memory adapter](memory-adapter.md).
 - vision.rs/ux.rs: optional local/cloud screenshot and novice judgments; deterministic workflow rules.
 
 GPU coordination applies only to explicitly selected local inference. One selected model at a

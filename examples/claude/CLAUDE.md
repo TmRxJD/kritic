@@ -1,5 +1,9 @@
 # Kritic — TEST RELEASE
 
+Optional source-only review_history retains explicit private snapshots, not acceptance results.
+Never treat historical records as current verification or proof a report ran over supplied input
+hashes. jcode-format export writes a separate low-trust file; it does not modify live jcode data.
+
 Use the Kritic skill to test its viability at the end of relevant tasks. Never inherently trust
 critics: independently verify findings, execution evidence, requirement coverage and false positives.
 Default to deterministic checks; models are optional and no GPU/API is required. Inspect status
