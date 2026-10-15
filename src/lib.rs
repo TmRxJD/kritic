@@ -18,6 +18,7 @@ pub mod kev;
 pub mod map;
 pub mod metrics;
 pub mod native;
+pub mod organization;
 pub mod phase3;
 pub mod plugins;
 pub mod proc;
