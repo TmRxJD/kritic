@@ -1,5 +1,11 @@
 ## Kritic TEST RELEASE
 
+Optional source-only `technical_debt_critic` is disabled by default. Use it for an explicit
+maintenance review, offline unless the user authorizes public package metadata lookup.
+Inspect coverage gaps and source/date/status evidence; validate urgency and estimated effort.
+Never invent installed versions, migration requirements or environment-variable values, and
+never apply an upgrade merely because the report lists a newer release. See docs/technical-debt.md.
+
 Optional source-only review_history is disabled by default. Record only an explicitly selected
 saved report and exact input corpus/context. Historical hashes are not fresh verification or
 proof that a report ran over those inputs. jcode-format exports are separate low-trust files,

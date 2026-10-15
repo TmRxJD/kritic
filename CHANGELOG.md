@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Optional, disabled-by-default technical-debt review: offline dependency inventory, pnpm v9
+  workspace resolutions, explicit maintenance/migration notes and bounded comment-marker leads.
+  Online public-registry evidence is separately authorized; urgency/effort remain advisory,
+  with no automatic upgrades or compatibility guarantee.
+- Corrected the MCP review-history output schema to declare object-shaped results; regression
+  coverage guards client schema validation. This is source functionality, not a published binary claim.
+
 - Optional, disabled-by-default review history: explicit reports and input/context hashes,
   bounded historical comparison and sanitized low-trust jcode-format export. No cached approval,
   automatic indexing, live jcode modification or demonstrated memory-savings claim.

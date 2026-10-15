@@ -22,6 +22,7 @@ resources = true
 contracts = true
 repository = true
 history = false
+debt = false
 plugins = true
 context = false
 domain_maps = false
@@ -46,6 +47,12 @@ or `KRITIC_CAP_HISTORY=true` for `review_history` / `kritic history`; no model o
 needed. It retains selected reports privately in `runs_dir/history`, hashes explicitly supplied
 inputs/context, and exports a separate low-trust jcode-format file. It never reuses a historical
 pass as current verification. [Commands, privacy, bounds and limitations](memory-adapter.md).
+
+`capabilities.debt=false` is the built-in and minimal-profile default. Set `debt=true` or
+`KRITIC_CAP_DEBT=true` for source-only `technical_debt_critic` / `kritic debt`. It needs no
+model and defaults to no HTTP. Registry lookups require explicit per-call `online=true` /
+`--online`; `refresh` additionally requires that online opt-in. Repository declarations live
+in `.kritic/debt.toml`. [Coverage, privacy, cache, ratings and upgrade workflow](technical-debt.md).
 
 `review.backend`: off, local, cloud, or explicitly selected auto (discover local installation
 only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting values disable

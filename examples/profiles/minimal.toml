@@ -15,6 +15,7 @@ contracts = true
 # Source builds: opt in to repository policy tools; no extra runtime/model needed.
 repository = false
 history = false
+debt = false
 plugins = false
 context = false
 domain_maps = false

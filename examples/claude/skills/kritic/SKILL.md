@@ -26,6 +26,19 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### Optional technical-debt review
+
+Source builds expose `technical_debt_critic` only when `capabilities.debt=true` (default false).
+Use it for an explicit dependency/maintenance review, with `online=false` unless public package
+metadata disclosure is authorized. No model or GPU is required. Inspect version provenance,
+coverage gaps, cache age, source URLs and lookup errors. Lock resolutions are not runtime
+installation proof; a newer default does not itself establish urgency or compatibility.
+Effort 1–5 is an estimate with possible configuration/runtime/API work, never a one-click claim.
+Validate declared migration/maintenance evidence; never invent required variable names or
+collect their values. Optional explicit source paths produce comment-marker leads, not proved
+bugs. Use a coherent upgrade branch and meaningful project checks; Kritic never applies updates.
+See `docs/technical-debt.md` and `examples/debt.toml`. Published test.3 binaries predate this tool.
+
 ### Optional history never substitutes for verification
 
 Current source offers `review_history` only when `capabilities.history=true` (default false).

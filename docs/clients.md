@@ -76,6 +76,13 @@ use its skill mechanism or merge the AGENTS.md instruction block.
 
 ## Prove the connection before a real task
 
+Current source builds can optionally expose `technical_debt_critic` to any of these clients.
+Set `[capabilities] debt=true`, restart the server/client and confirm the tool appears in
+`status.enabled_tools`. Its default call is `{"base_dir":".","online":false,"refresh":false,"source_paths":[]}`;
+no model, GPU or cloud credentials are needed. Public package metadata lookup is a separate
+`online=true` opt-in, not implied by connecting Codex, Cursor or another client. The published
+test.3 binary predates it. [Maintenance review guide](technical-debt.md).
+
 Ask: “Use Kritic's TEST RELEASE skill. Inspect available tools and call status(start=false).
 Review this small change with artifact_validate(use_model=false), using its absolute repository
 path. Independently verify the results and report any skipped coverage. Do not enable models.”

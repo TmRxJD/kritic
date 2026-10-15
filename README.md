@@ -59,6 +59,16 @@ hook; the minimal profile leaves this capability off. The first Tracker audit ex
 review noise as well as rule violations; [the evidence and limits](docs/repository-policy.md#first-tracker-audit)
 are recorded without treating every recommendation as a confirmed bug.
 
+## Optional technical-debt review
+
+Source builds offer model-free dependency and maintenance review through `technical_debt_critic`
+or `kritic debt`. It is disabled by default and makes no HTTP requests unless you explicitly
+enable online registry evidence. It covers Cargo, npm/pnpm v9 and Python manifests/locks, with
+explicit package declarations for other supported registries. Urgency and effort are estimates;
+unknown versions, coverage gaps and missing migration evidence remain visible. It never applies
+upgrades or certifies compatibility. [Quickstart, ratings, privacy and coverage](docs/technical-debt.md).
+The published `v0.5.0-test.3` binary predates this feature.
+
 ## Experimental local semantic map
 
 Separately, source builds offer optional [review history and jcode-format export](docs/memory-adapter.md).
@@ -114,7 +124,7 @@ Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
 ```
 
 The minimal profile exposes artifact, contract and native resource/hygiene checks plus utility
-tools. Browser/UX, security, quality, repository, history, desktop, plugins and model helpers are deliberately hidden.
+tools. Browser/UX, security, quality, repository, history, technical-debt, desktop, plugins and model helpers are deliberately hidden.
 Installing a dependency does not turn its group on. Enabling a group does not install its dependencies.
 
 ### Add only the capabilities you need
@@ -130,6 +140,7 @@ for the named keys, then restart your MCP connection. Keep `[review].backend` an
 | Quality | `quality=true` | Your project's linter/typechecker and its normal dependencies; Ruff where applicable. | `code_quality_critic`; Kritic does not install your project's toolchain. |
 | Scoped commits and organization (source build) | `repository=true` | Git, repository-owned `.kritic/repository.toml`; explicitly install the hook. No extra runtime/model. | `repository_critic`, tracked-source audits, staged budgets and scope plans; [setup and limitations](docs/repository-policy.md). |
 | Review history (source build) | `history=true` | Git and private local report storage; explicitly select saved report and input files. No model/embedding install. | `review_history` record/list/compare and separate low-trust jcode-format export; [privacy and limits](docs/memory-adapter.md). |
+| Technical debt (source build) | `debt=true` | No model/package-manager install. Offline by default; `online=true` separately permits public package metadata lookup. | Dependency/maintenance evidence with estimated urgency/effort; no automatic upgrades; [guide](docs/technical-debt.md). |
 | Windows desktop / Unity | `desktop=true` (and `ux=true` for workflows) | Python 3.11+, uv, pywinauto harness; interactive Windows session. Run setup with `--no-scanners --no-register`. Unity checks also need the matching Unity editor. | `desktop_test`, `unity_tests`, desktop UX evidence. No GPU model required; the app under test may require one. |
 | Repository checks / Beat Saber maps | `plugins=true` / `domain_maps=true` | Relevant repository plugin or map evaluator and its dependencies. | Project-defined checks / `map_eval`; not general model review. |
 | Text model review | No capability group; select `[review].backend` | Optional [cloud API](docs/cloud.md) or [local Kev](docs/getting-started.md#optional-local-models). | `critic_score`, `decide`; advisory model assessments. |

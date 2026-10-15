@@ -121,6 +121,7 @@
 # contracts = true                             # KRITIC_CAP_CONTRACTS: requirement evidence and enforcement wiring
 # repository = true                            # KRITIC_CAP_REPOSITORY: scoped commits and organization rules
 # history = false                              # KRITIC_CAP_HISTORY: explicit private review snapshots and jcode-format export
+# debt = false                                 # KRITIC_CAP_DEBT: optional offline dependency/maintenance review; online lookup is a separate per-call opt-in
 # plugins = true                               # KRITIC_CAP_PLUGINS: repository-defined checks
 # context = false                              # KRITIC_CAP_CONTEXT: optional model routing/locate/trim
 # domain_maps = false                          # KRITIC_CAP_DOMAIN_MAPS: Beat Saber map evaluator
