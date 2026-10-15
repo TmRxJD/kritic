@@ -26,6 +26,22 @@ with the repeated-prefix projection. Its minimal profile has seven tools: 7,639 
 1,791 reference tokens raw, or 11,405 bytes / 2,715 tokens in that projection.
 Configurations and enabled tools affect these numbers; they are not billing measurements.
 
+The CI-tested optimization produced these actual executable measurements with unchanged
+tool names, input constraints, parameter descriptions and meaningful defaults:
+
+| Capture | Tools | Test.4 reference tokens | Compact reference tokens | Reduction |
+| --- | ---: | ---: | ---: | ---: |
+| Configured, raw list | 20 | 6,524 | 5,352 | 18.0% |
+| Configured, repeated-prefix projection | 20 | 9,164 | 6,192 | 32.4% |
+| Minimal, raw list | 7 | 1,791 | 1,391 | 22.3% |
+| Minimal, repeated-prefix projection | 7 | 2,715 | 1,685 | 37.9% |
+
+These are `o200k_base` reference counts from the released test.4 baseline and the Windows
+CI optimization candidate (`87c6fe2`). The projection simulates a client wrapper; it is not
+an observed bill or a promise of the same savings in every client. The raw configured list
+fell from 27,598 to 23,032 UTF-8 bytes. A separate model-off profile retained its enabled
+history/debt/repository tools; valid, malformed and wrong-type calls were checked independently.
+
 The benchmark helper in `bench/schema_budget.py` documents its input format and comparison
 options. Token counting is optional; byte counts need only Python's standard library.
 No tokenizer is needed to run Kritic. The benchmark neither invokes review tools nor changes
