@@ -479,10 +479,19 @@ impl KevClient {
 
     /// Start laya if it isn't answering. Returns Err with a human-readable reason on failure.
     pub async fn ensure_up(&self) -> Result<(), String> {
+        if !self.cfg.config_errors.is_empty() {
+            return Err("Kev unavailable until config_errors are fixed".into());
+        }
         if let Some(health) = self.health().await {
             crate::gpu::validate_cpu_health(self.cfg.kev_cpu_only, &health)?;
             crate::events::ready("laya", "up", "");
             return Ok(());
+        }
+        if self.cfg.kev_externally_managed {
+            return Err(format!(
+                "externally managed laya unreachable at {}; Kritic will not launch or restart it",
+                self.cfg.laya_url
+            ));
         }
         let _guard = self.start_lock.lock().await;
         if let Some(health) = self.health().await {
@@ -499,6 +508,11 @@ impl KevClient {
     }
 
     async fn start_laya(&self) -> Result<(), String> {
+        if self.cfg.kev_externally_managed || !self.cfg.config_errors.is_empty() {
+            return Err(
+                "Kritic cannot launch externally managed laya or launch with config errors".into(),
+            );
+        }
         crate::events::ready("laya", "starting", "loading Kev-4B");
         let exe = &self.cfg.laya_exe;
         if !exe.exists() {
@@ -580,6 +594,8 @@ impl KevClient {
                 let stopped = crate::gpu::stop_laya(&self.cfg).await;
                 let recovery = if stopped {
                     "stopped it; the next call restarts it"
+                } else if self.cfg.kev_externally_managed {
+                    "externally managed service left running"
                 } else if self.cfg.kev_cpu_only {
                     "CPU-only service left running"
                 } else {

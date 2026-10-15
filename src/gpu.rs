@@ -1,7 +1,8 @@
 //! One model on the GPU at a time. With Kev (laya, ~4-5 GB) and Qwen2.5-VL (Ollama, ~5 GB) both
 //! resident next to a desktop on a 12 GB card, Windows spills VRAM to system memory and vision
 //! calls go from ~1.3 s to ~66 s (measured). So: unload the vision model before Kev work, stop
-//! laya before vision work. Explicit CPU-only Kev is excluded from GPU coordination and cleanup.
+//! laya before vision work. Externally managed services are never stopped or evicted here;
+//! their inference requests retain ordinary coordination. CPU-only Kev skips GPU ownership.
 
 use std::time::Duration;
 
@@ -105,6 +106,8 @@ pub async fn lock_across_processes(cfg: &Config, tool: &str) -> Result<GpuFileLo
 /// Ask Ollama to evict `model` now (keep_alive 0). No-op if Ollama isn't running.
 pub async fn unload_vision(cfg: &Config) {
     if cfg.kev_cpu_only
+        || cfg.vision_externally_managed
+        || !cfg.config_errors.is_empty()
         || !matches!(cfg.backend.as_str(), "local" | "auto")
         || cfg.vision_backend != "local"
     {
@@ -122,6 +125,9 @@ pub async fn unload_vision(cfg: &Config) {
 
 /// Stop laya so the vision model gets the GPU. Returns whether a process was stopped.
 pub async fn stop_laya(cfg: &Config) -> bool {
+    if cfg.kev_externally_managed || !cfg.config_errors.is_empty() {
+        return false;
+    }
     if !matches!(cfg.backend.as_str(), "local" | "auto") {
         return false;
     }

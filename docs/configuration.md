@@ -38,8 +38,8 @@ execution. Explicit `tools.disabled` exclusions take precedence. Restart the ser
 `capabilities.repository` (default true in current source) exposes `repository_critic` and enables
 explicit repository CLI checks. The minimal profile sets it false. Set it true deliberately for
 [repository-owned policies and hooks](repository-policy.md); installing Kritic does not install a
-Git hook. These repository features require a current source build, not the published
-`v0.5.0-test.3` binary. Repository rules live in `.kritic/repository.toml`, separately from this
+Git hook. These repository features require `v0.5.0-test.4` or later; the older
+`v0.5.0-test.3` binary predates them. Repository rules live in `.kritic/repository.toml`, separately from this
 user/server configuration; unknown repository-policy keys fail rather than being ignored.
 
 `capabilities.history=false` is the built-in and minimal-profile default. Opt in with `history=true`
@@ -49,7 +49,7 @@ inputs/context, and exports a separate low-trust jcode-format file. It never reu
 pass as current verification. [Commands, privacy, bounds and limitations](memory-adapter.md).
 
 `capabilities.debt=false` is the built-in and minimal-profile default. Set `debt=true` or
-`KRITIC_CAP_DEBT=true` for source-only `technical_debt_critic` / `kritic debt`. It needs no
+`KRITIC_CAP_DEBT=true` for `technical_debt_critic` / `kritic debt` in `v0.5.0-test.4` or later. It needs no
 model and defaults to no HTTP. Registry lookups require explicit per-call `online=true` /
 `--online`; `refresh` additionally requires that online opt-in. Repository declarations live
 in `.kritic/debt.toml`. [Coverage, privacy, cache, ratings and upgrade workflow](technical-debt.md).
@@ -63,6 +63,26 @@ sending data through another backend.
 `vision.backend` is independently off/local/cloud. Local uses Ollama. Cloud uses the selected
 cloud transport and `vision.cloud_model` (defaults to cloud.model). The model must accept images;
 JEV is a text decision backend, not a cloud vision backend. Cloud vision scores are advisory.
+
+## Externally managed local models
+
+In `v0.5.0-test.4` or later, set `kev.externally_managed=true` and/or
+`vision.externally_managed=true` when a shared router or service manager owns those endpoints.
+Their environment overrides are `KRITIC_KEV_EXTERNALLY_MANAGED` and
+`KRITIC_VISION_EXTERNALLY_MANAGED`; both default false and require real booleans.
+The selected backend still controls whether Kritic uses the local endpoint.
+
+Kritic can connect and send authorized inference requests, but will not start, restart, stop,
+provision or explicitly evict the externally managed service/model. An unavailable endpoint
+returns an ownership-specific error. External vision requests omit the `keep_alive` override;
+the provider owns loading/residency and may load the requested model for ordinary inference.
+No `/api/ps` residency endpoint is required. Existing GPU leases remain in force; this setting
+does not assert GPU separation, sufficient VRAM or shared-router scheduling compatibility.
+
+GPU device selection/pinning belongs in the external owner's configuration. Keys such as
+`device`, `gpu_uuid`, `max_batch` and `vulkan_visible_devices` are not Kritic configuration;
+unsupported keys produce diagnostics rather than silently configuring hardware. Preserve
+external-owner details as comments/provenance, not unsupported active TOML settings.
 
 ## Credentials and network
 

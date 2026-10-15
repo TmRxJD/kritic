@@ -27,7 +27,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     let file = dir.path().join("kritic.toml");
     std::fs::write(
         &file,
-        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\ncpu_only = true\nbogus = 1\n\n[cloud]\nkey_env = \"TYPESAFE_API_KEY\"\n\n[tools]\ndisabled = []\n",
+        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\ncpu_only = true\nexternally_managed = true\nbogus = 1\n\n[vision]\nexternally_managed = true\n\n[cloud]\nkey_env = \"TYPESAFE_API_KEY\"\n\n[tools]\ndisabled = []\n",
     )
     .unwrap();
     // SAFETY: no other test in this binary reads the environment.
@@ -43,6 +43,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert_eq!(c.config_file.as_deref(), Some(file.as_path()));
     assert_eq!(c.chunk_chars, 999, "file value");
     assert!(c.kev_cpu_only, "CPU-only TOML boolean is accepted");
+    assert!(c.kev_externally_managed && c.vision_externally_managed);
     assert_eq!(c.cloud_key_env, "TYPESAFE_API_KEY");
     assert_eq!(c.model, "from-env", "env beats file");
     assert_eq!(c.token_budget, 2900, "default");
@@ -61,6 +62,26 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
             .any(|e| e.contains("kev.cpu_only: expected true or false"))
     );
     unsafe { std::env::remove_var("KRITIC_KEV_CPU_ONLY") };
+    for key in [
+        "KRITIC_KEV_EXTERNALLY_MANAGED",
+        "KRITIC_VISION_EXTERNALLY_MANAGED",
+    ] {
+        unsafe { std::env::set_var(key, "false") };
+        let value = Config::load();
+        assert!(!if key == "KRITIC_KEV_EXTERNALLY_MANAGED" {
+            value.kev_externally_managed
+        } else {
+            value.vision_externally_managed
+        });
+        unsafe { std::env::set_var(key, "invalid") };
+        assert!(
+            Config::load()
+                .config_errors
+                .iter()
+                .any(|error| error.contains("externally_managed: expected true or false"))
+        );
+        unsafe { std::env::remove_var(key) };
+    }
     assert_eq!(
         c.runs_dir,
         dir.path().join("runs"),
@@ -80,6 +101,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert!(Config::load().tool_enabled("review_history"));
     unsafe { std::env::remove_var("KRITIC_CAP_HISTORY") };
     assert!(!c.kev_cpu_only, "GPU behavior is the default");
+    assert!(!c.kev_externally_managed && !c.vision_externally_managed);
     assert_eq!(c.disabled_tools, ["route", "context_trim"]);
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };
     assert_eq!(Config::load().disabled_tools, DEFAULT_DISABLED);
@@ -123,6 +145,28 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     // An explicit KRITIC_CONFIG that doesn't exist is an error, not silently ignored.
     unsafe { std::env::set_var("KRITIC_CONFIG", dir.path().join("missing.toml")) };
     assert_eq!(Config::load().config_errors.len(), 1);
+    let unsupported = dir.path().join("unsupported.toml");
+    std::fs::write(
+        &unsupported,
+        "[kev]\ndevice='cuda'\ngpu_uuid='test'\nmax_batch=4\nvulkan_visible_devices='0'\n",
+    )
+    .unwrap();
+    unsafe { std::env::set_var("KRITIC_CONFIG", unsupported) };
+    let unsupported = Config::load();
+    for key in [
+        "kev.device",
+        "kev.gpu_uuid",
+        "kev.max_batch",
+        "kev.vulkan_visible_devices",
+    ] {
+        assert!(
+            unsupported
+                .config_errors
+                .iter()
+                .any(|error| error.contains(key)),
+            "{key} must not be accepted as a no-op"
+        );
+    }
 }
 
 #[test]

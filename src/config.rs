@@ -20,6 +20,8 @@ pub struct Config {
     pub backend: String,
     /// Explicit CPU-only Kev service: never acquire its GPU lease or stop its process.
     pub kev_cpu_only: bool,
+    /// External owner controls service start/stop; inference still uses normal GPU leases.
+    pub kev_externally_managed: bool,
     /// Agent reply style kritic installs: "concise" (default) or "default" (leave the agent alone).
     pub output_style: String,
     /// Cloud Jev (TypeSafe's model through an AI Gateway `/v1/evaluate` endpoint).
@@ -53,6 +55,7 @@ pub struct Config {
     pub ollama_exe: PathBuf,
     pub vision_model: String,
     pub vision_backend: String,
+    pub vision_externally_managed: bool,
     pub vision_cloud_model: String,
     pub capabilities: std::collections::BTreeMap<String, bool>,
     /// Requested craft target; scores remain provisional, never a calibrated approval.
@@ -91,6 +94,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("review.backend", "KRITIC_BACKEND"),
     ("kev.backend", "KRITIC_KEV_BACKEND"),
     ("kev.cpu_only", "KRITIC_KEV_CPU_ONLY"),
+    ("kev.externally_managed", "KRITIC_KEV_EXTERNALLY_MANAGED"),
     ("cloud.url", "KRITIC_CLOUD_URL"),
     ("cloud.model", "KRITIC_CLOUD_MODEL"),
     ("cloud.provider", "KRITIC_CLOUD_PROVIDER"),
@@ -112,6 +116,10 @@ pub const KEYS: &[(&str, &str)] = &[
     ("vision.ollama_exe", "KRITIC_OLLAMA_EXE"),
     ("vision.model", "KRITIC_VISION_MODEL"),
     ("vision.backend", "KRITIC_VISION_BACKEND"),
+    (
+        "vision.externally_managed",
+        "KRITIC_VISION_EXTERNALLY_MANAGED",
+    ),
     ("vision.cloud_model", "KRITIC_VISION_CLOUD_MODEL"),
     ("vision.quality_target", "KRITIC_VISUAL_QUALITY_TARGET"),
     ("vision.visual_min", "KRITIC_VISUAL_MIN"),
@@ -508,6 +516,10 @@ impl Config {
         let harness_dir = default_harness_dir();
         let mut config_errors = config_errors;
         let kev_cpu_only = bool_setting(&s, "kev.cpu_only", false, &mut config_errors);
+        let kev_externally_managed =
+            bool_setting(&s, "kev.externally_managed", false, &mut config_errors);
+        let vision_externally_managed =
+            bool_setting(&s, "vision.externally_managed", false, &mut config_errors);
         let backend = review_backend(&s, &mut config_errors);
         let output_style = choice_setting(
             &s,
@@ -541,6 +553,8 @@ impl Config {
             cloud_provider,
             cloud_max_tokens: s.num("cloud.max_output_tokens", 4096),
             kev_cpu_only,
+            kev_externally_managed,
+            vision_externally_managed,
             output_style,
             backend,
             cloud_url: s.str("cloud.url", default_url),
