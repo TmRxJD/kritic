@@ -162,7 +162,7 @@ pub(super) fn manifest(
     inv: &mut Inventory,
 ) {
     let value: Value = match serde_json::from_str(text) {
-        Ok(Value::Object(value)) => value,
+        Ok(value @ Value::Object(_)) => value,
         _ => {
             inv.coverage_gaps
                 .push(format!("Malformed npm manifest {name:?}"));

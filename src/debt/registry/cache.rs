@@ -29,7 +29,10 @@ struct Entry {
 }
 
 fn hash(value: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(value))
+    Sha256::digest(value)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 fn key(identity: &str) -> String {
     format!("{}.json", hash(identity.as_bytes()))
