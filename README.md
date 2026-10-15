@@ -43,6 +43,15 @@ the minimum Windows installation small in dependencies: no Python or Node runtim
 for the core. Optional tools still have their own dependencies. Rust supports a dependable
 orchestrator; it does not make model judgments correct, sandbox commands or eliminate all bugs.
 
+## Experimental local semantic map
+
+The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
+current test-release binary. Five model variants were measured without a GPU. The smallest,
+8-bit MiniLM-L3, used 17.5 MB of weights and about 286 MB sampled process memory, with a
+65 ms warm-query p95 on the test machine. **None met the declared retrieval quality gate.**
+The experiment therefore does not enable semantic evidence selection by default. See the
+[measured comparison and limitations](docs/semantic-map.md#measured-results-2026-10-15).
+
 ## What your hardware can run
 
 **A GPU unlocks optional local reviewers, not the deterministic checks.** Capabilities are
@@ -145,6 +154,19 @@ Local inference is optional: roughly 8 GB VRAM for Kev Q8, 12 GB recommended for
 Kev and vision. The 8 GB vision configuration remains a field-testing target, not a guarantee.
 No GPU is required for deterministic checks or cloud review. 16 GB system RAM is a practical
 recommendation; the tested project may require more. See [hardware and dependencies](docs/getting-started.md).
+
+## Professional UI and showcase quality
+
+Passing interaction or accessibility checks does not establish visual quality. The optional
+visual critic now assesses typography, composition, identity, asset coherence and finishing
+detail separately, against functional (6), professional (8, default) or showcase (9) anchors.
+`aaa` selects the showcase target; it never certifies a whole product as AAA.
+
+The [reference bank](specs/visual-reference-anchors.md) includes restrained task apps, data-heavy
+dashboards, controller interfaces and expressive/minimalist games, plus competent-but-generic
+counterexamples. You can supply two actual comparison screenshots with `reference_images`.
+New model assessments are **uncalibrated and provisional**: `approval` is always `null`;
+missing evidence stays unverified. See [visual quality and examples](docs/visual-quality.md).
 
 ## Review a work contract
 

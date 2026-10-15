@@ -116,19 +116,21 @@ fn vision_output_is_validated() {
 }
 
 #[test]
-fn vision_approval_is_min_score_threshold() {
+fn vision_legacy_threshold_is_diagnostic_only() {
     let mut r = vision::VisualResult::default();
     let (s, obs) = vision::parse(&vjson(7.0)).unwrap();
     vision::judge(&mut r, s, obs, 6.0);
-    assert_eq!(r.approval, Some(true));
+    assert_eq!(r.approval, None);
+    assert_eq!(r.legacy_scores_meet_threshold, Some(true));
     assert_eq!(r.unverified_observations, vec!["a", "b"]);
     let mut low = vjson(7.0);
     low["color_contrast"] = json!(3);
     let mut r = vision::VisualResult::default();
     let (s, obs) = vision::parse(&low).unwrap();
     vision::judge(&mut r, s, obs, 6.0);
-    assert_eq!(r.approval, Some(false));
-    assert_eq!(r.reasons, vec!["color_contrast 3/10 < 6"]);
+    assert_eq!(r.approval, None);
+    assert_eq!(r.legacy_scores_meet_threshold, Some(false));
+    assert_eq!(r.reasons[0], "color_contrast 3/10 < 6");
 }
 
 // ------------------------------------------------------------------ live
@@ -256,13 +258,13 @@ async fn live_ui_test_good_vs_broken() {
 }
 
 #[tokio::test]
-async fn live_visual_polished_vs_messy() {
+async fn live_visual_fixtures_are_uncalibrated_advice() {
     if !live() {
         return;
     }
     let cfg = Config::from_env();
     let base = serve_fixtures().await;
-    for (page, expect) in [("polished.html", true), ("messy.html", false)] {
+    for page in ["polished.html", "messy.html"] {
         let out = vision::run_dir(&cfg, "test").join(format!("{page}.png"));
         kritic::ui::screenshot(&cfg, &format!("{base}/{page}"), &out, false, false)
             .await
@@ -273,7 +275,8 @@ async fn live_visual_polished_vs_messy() {
             r.approval, r.scores, r.unverified_observations, r.error, r.stopped_laya, r.latency_ms
         );
         assert!(r.model_ok, "{:?}", r.error);
-        assert_eq!(r.approval, Some(expect), "{page}");
+        assert_eq!(r.approval, None, "{page}");
+        assert!(r.quality_assessment.is_some(), "{page}");
     }
 }
 

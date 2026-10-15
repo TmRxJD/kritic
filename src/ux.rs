@@ -909,6 +909,9 @@ pub struct UxResult {
     /// false on any hard fail; null when the run could not complete (adapter error, or the
     /// novice was requested but unavailable).
     pub approval: Option<bool>,
+    /// Approval covers declared functional tasks/rules, never visual craft.
+    pub approval_scope: String,
+    pub visual_quality_status: String,
     /// Missing top-level mode entries, unreachable / trivially-done / over-budget tasks, error-level
     /// rule findings, primary tasks the novice failed 2 of 3 times. Restructure, don't patch.
     pub hard_fails: Vec<String>,
@@ -1764,6 +1767,8 @@ impl<'s> Run<'s> {
             kind: spec.app.kind.clone(),
             purpose: spec.app.purpose.clone(),
             approval,
+            approval_scope: "functional_tasks_and_rules_only".into(),
+            visual_quality_status: "unassessed".into(),
             hard_fails: hard,
             modes,
             tasks,
@@ -1824,6 +1829,9 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
     json!({
         "agent": "ux-critic",
         "agent_file": "~/.claude/agents/ux-critic.md",
+        "approval_scope": "functional_tasks_and_rules_only",
+        "visual_quality_status": "unassessed",
+        "craft_reference_bank": "specs/visual-reference-anchors.md",
         "continuity_pairs": pairs,
         "purpose": spec.app.purpose,
         "modes": spec.modes.iter().map(|m| &m.name).collect::<Vec<_>>(),
@@ -1832,7 +1840,7 @@ pub fn critic_brief(r: &UxResult, spec: &Spec) -> Value {
         "screenshots": shots,
         "failed_novice_screenshots": novice,
         "prompt": format!(
-            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. {}Hard fails: {}.",
+            "Review this {} app as the ux-critic. Purpose: {} Read the ux_critic report at {} (rules, tasks with optimal_steps and novice traces, screens), then open every screenshot listed in it before judging. Functional approval does not establish professional visual quality. Independently assess typography, composition/density, purpose/identity, asset coherence and finishing detail against specs/visual-reference-anchors.md in the Kritic checkout. Inspect real genre-appropriate reference images before claiming a comparison. Competent generic is 7, professional 8, exceptional/showcase 9; every dimension needs named visible evidence. Do not require ornament or penalize intentional minimalism. Missing screenshots, viewports, interaction states or motion stay unverified; never certify AAA from a still. Report functional findings separately from verified craft observations and unresolved coverage. {}Hard fails: {}.",
             spec.app.kind, spec.app.purpose, r.full_result.as_deref().unwrap_or("(not saved)"),
             if r.continuity.is_empty() { String::new() } else { format!("Continuity: {} screen(s) were not the same when reached again; open each before/after pair in continuity_pairs side by side and say what a person would see change (layout shift, leftover or missing elements, a half-drawn area, a loading state, overlap), not only what the control list says. ", r.continuity.len()) },
             if r.hard_fails.is_empty() { "none".to_string() } else { r.hard_fails.join("; ") }),

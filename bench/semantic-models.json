@@ -1,0 +1,13 @@
+{
+  "description": "CPU research candidates. Revisions must be resolved to immutable Hugging Face commit IDs in each run manifest before downloading or encoding.",
+  "models": [
+    {"id":"sentence-transformers/paraphrase-MiniLM-L3-v2","revision":"4ca70771034acceecb2e72475f72050fcdde4ddc","backend":"onnx","onnx_file":"onnx/model.onnx","pooling":"mean","parameter_quantization":"none","query_prefix":"","document_prefix":"","matryoshka":false},
+    {"id":"sentence-transformers/all-MiniLM-L6-v2","revision":"1110a243fdf4706b3f48f1d95db1a4f5529b4d41","backend":"onnx","onnx_file":"onnx/model.onnx","pooling":"mean","parameter_quantization":"none","query_prefix":"","document_prefix":"","matryoshka":false},
+    {"id":"BAAI/bge-small-en-v1.5","revision":"5c38ec7c405ec4b44b94cc5a9bb96e735b38267a","backend":"onnx","onnx_file":"onnx/model.onnx","pooling":"cls","parameter_quantization":"none","query_prefix":"Represent this sentence for searching relevant passages: ","document_prefix":"","matryoshka":false},
+    {"id":"nomic-ai/nomic-embed-text-v1.5","revision":"e9b6763023c676ca8431644204f50c2b100d9aab","backend":"onnx","onnx_file":"onnx/model.onnx","pooling":"mean","parameter_quantization":"none","query_prefix":"search_query: ","document_prefix":"search_document: ","matryoshka":true},
+    {"id":"nomic-ai/CodeRankEmbed","revision":"3c4b60807d71f79b43f3c4363786d9493691f8b1","backend":"sentence-transformers","loader_adapter":"coderank-cls-v1","query_prefix":"Represent this query for searching relevant code: ","document_prefix":"","matryoshka":false}
+  ],
+  "variants": [
+    {"id":"sentence-transformers/paraphrase-MiniLM-L3-v2","revision":"4ca70771034acceecb2e72475f72050fcdde4ddc","backend":"onnx","onnx_file":"onnx/model_quint8_avx2.onnx","pooling":"mean","parameter_quantization":"int8","query_prefix":"","document_prefix":"","matryoshka":false}
+  ]
+}

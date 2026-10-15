@@ -25,6 +25,29 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### UI craft is a separate acceptance requirement
+
+An interaction/a11y pass or a successful `ux_critic` task path does not establish professional
+visual quality. For UI work, independently inspect the actual current screenshots and relevant
+interaction states. Use `docs/visual-quality.md` and `specs/visual-reference-anchors.md` from the
+Kritic checkout: choose references appropriate to the product, audience and input device.
+Inspect real examples before asserting a comparison; never imply that a URL in a prompt was
+visually reviewed. Optional `reference_images` attaches two local comparison screenshots.
+
+Report functional results separately from typography, composition/density, purpose/identity,
+asset coherence and finishing detail. Competent generic cards are not automatically professional;
+visual complexity is not automatically better. Professional and showcase targets require each
+dimension to meet its floor, with named visible evidence. Respect intentional minimalism.
+
+The revised visual rubric is uncalibrated: `visual_critic.approval` is always null, including for
+the old local model. Its observations and provisional status require verification. Missing
+viewports/states, unseen interactions or uninspected motion remain unverified. Never claim
+"professional", "AAA" or task completion merely because no functional bug was found. If the
+user requested that quality and it has not been independently established, report the gap and
+fix evidenced craft problems within scope; do not relabel the target or chase model scores.
+
+### Checks
+
 1. Finish the requested change and run meaningful project tests/typecheck/lint. Check test counts,
    discovery and assertions: exit 0 with no useful tests is not acceptance evidence.
 2. Call `status(start=false)` and inspect the exposed capability/tool list. Do not enable models,

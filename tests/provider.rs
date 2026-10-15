@@ -232,6 +232,59 @@ fn image_envelopes_follow_each_provider() {
 }
 
 #[test]
+fn visual_references_preserve_subject_order_for_every_provider() {
+    let dir = tempfile::tempdir().unwrap();
+    for provider in ["openai-compatible", "openai", "anthropic", "gemini"] {
+        let mut cfg = config(dir.path(), provider, "http://localhost/api".into());
+        cfg.cloud_model = "vision-model".into();
+        let images = [
+            ("image/png", "SUBJECT"),
+            ("image/jpeg", "REFERENCE_ONE"),
+            ("image/webp", "REFERENCE_TWO"),
+        ];
+        let body = kritic::provider::request_images(
+            &cfg,
+            "vision-model",
+            "review",
+            "image 1 is subject",
+            &images,
+        )
+        .unwrap();
+        let parts = if provider == "gemini" {
+            body["contents"][0]["parts"].as_array().unwrap()
+        } else {
+            body["messages"].as_array().unwrap().last().unwrap()["content"]
+                .as_array()
+                .unwrap()
+        };
+        assert_eq!(parts.len(), 4, "text plus three ordered images: {provider}");
+        for (part, marker) in parts[1..]
+            .iter()
+            .zip(["SUBJECT", "REFERENCE_ONE", "REFERENCE_TWO"])
+        {
+            assert!(
+                part.to_string().contains(marker),
+                "wrong image binding: {provider}"
+            );
+        }
+        assert!(
+            kritic::provider::request_images(
+                &cfg,
+                "vision-model",
+                "s",
+                "u",
+                &[("image/png", "x"); 4]
+            )
+            .is_err()
+        );
+        assert!(
+            kritic::provider::request_images(&cfg, "vision-model", "s", "u", &[("text/html", "x")])
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn default_saved_credentials_do_not_follow_provider_or_origin_changes() {
     let dir = tempfile::tempdir().unwrap();
     let mut cfg = config(
