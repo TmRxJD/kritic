@@ -7,6 +7,16 @@ use kritic::{
 use serde_json::json;
 
 #[test]
+fn history_request_schema_has_the_object_root_required_by_mcp() {
+    let schema = schemars::schema_for!(Request);
+    assert_eq!(schema.as_value()["type"], "object");
+    assert_eq!(schema.as_value()["oneOf"].as_array().unwrap().len(), 4);
+    let cfg = Config::load();
+    // Constructing the real router validates every registered input schema.
+    let _server = kritic::server::Kritic::new(cfg);
+}
+
+#[test]
 fn disabled_history_never_creates_storage_or_reads_report() {
     let temp = tempfile::tempdir().unwrap();
     let mut cfg = Config::load();

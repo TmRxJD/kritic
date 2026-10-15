@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+// Every action is an object; MCP requires this explicit root type alongside `oneOf`.
+#[schemars(extend("type" = "object"))]
 pub enum Request {
     Record {
         base_dir: String,
