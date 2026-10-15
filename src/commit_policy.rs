@@ -6,11 +6,14 @@ use std::path::Path;
 
 mod git;
 mod hook;
+mod profile;
 pub use hook::{HookReport, install_hook};
+pub use profile::{CommitLevel, CommitLimits};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(default, deny_unknown_fields)]
+#[serde(from = "profile::PolicyInput")]
 pub struct CommitPolicy {
+    pub level: CommitLevel,
     pub max_files: usize,
     pub max_changed_lines: usize,
     pub max_patch_bytes: u64,
@@ -21,10 +24,23 @@ pub struct CommitPolicy {
 
 impl Default for CommitPolicy {
     fn default() -> Self {
+        Self::for_level(CommitLevel::Focused)
+    }
+}
+
+impl CommitPolicy {
+    /// Resolve a preset before applying explicit repository-specific numeric overrides.
+    pub fn for_level(level: CommitLevel) -> Self {
+        let (max_files, max_changed_lines, max_patch_bytes) = match level {
+            CommitLevel::Broad => (64, 1600, 2_097_152),
+            CommitLevel::Focused => (32, 800, 1_048_576),
+            CommitLevel::Atomic => (8, 200, 262_144),
+        };
         Self {
-            max_files: 32,
-            max_changed_lines: 800,
-            max_patch_bytes: 1_048_576,
+            level,
+            max_files,
+            max_changed_lines,
+            max_patch_bytes,
             require_scope_plan: true,
             forbidden_paths: vec![
                 ".env*".into(),
@@ -49,6 +65,8 @@ pub struct ScopePlan {
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct CommitReport {
+    pub level: CommitLevel,
+    pub limits: CommitLimits,
     pub approval: bool,
     pub approval_scope: String,
     pub staged_paths: Vec<String>,
@@ -148,6 +166,7 @@ pub fn check(base: &Path, policy: &CommitPolicy) -> Result<CommitReport, String>
         );
     }
     Ok(CommitReport {
+        level: policy.level, limits: CommitLimits::from(policy),
         approval: findings.is_empty(), approval_scope: "staged_budget_and_declared_scope_only".into(),
         staged_paths: paths, added_lines: added, deleted_lines: deleted, changed_lines: changed,
         binary_paths: binary, binary_blob_bytes: binary_bytes, patch_bytes: bytes, staged_tree: tree, purpose, findings,

@@ -19,6 +19,25 @@ retains explicit coverage errors and continues through other files; any such gap
 
 ## Commit enforcement
 
+Choose `[commit] level = "broad"`, `"focused"` (default), or `"atomic"`:
+
+| Level | Maximum paths | Added + deleted lines | Patch / uncompressed binary budget |
+| --- | ---: | ---: | ---: |
+| broad | 64 | 1,600 | 2 MiB |
+| focused | 32 | 800 | 1 MiB |
+| atomic | 8 | 200 | 256 KiB |
+
+`focused` preserves the previous defaults. `atomic` encourages smaller review units;
+review `broad` as one coherent milestone, `focused` as one behavior or fix with its
+necessary support, and `atomic` as the smallest independently reviewable purpose.
+The name does not prove one logical change, reversibility, or semantic cohesion.
+Use `broad` for a justified larger unit rather than unrelated work. Reports include
+the chosen level and resolved budgets. Explicit `max_files`, `max_changed_lines`, and
+`max_patch_bytes` values override only the supplied preset limits. Unknown levels or
+configuration keys fail. All presets retain exact scope plans and forbidden-path checks;
+existing explicit `require_scope_plan = false` or `forbidden_paths` overrides remain
+supported for compatibility and must be reviewed deliberately.
+
 Configure maximum changed files, added-plus-deleted lines and patch bytes. The hook checks
 the Git index, not an unstaged copy of a source file or policy. A rename includes its old
 and new paths. Generated files, binary payloads and large deletions still affect commit

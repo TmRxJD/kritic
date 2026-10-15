@@ -2,9 +2,13 @@
 version = 1
 
 [commit]
-max_files = 32
-max_changed_lines = 800
-max_patch_bytes = 1048576
+level = "focused" # broad | focused (default) | atomic
+# Preset budgets: broad 64 files / 1600 lines / 2 MiB;
+# focused 32 / 800 / 1 MiB; atomic 8 / 200 / 256 KiB.
+# Optional numeric overrides replace ONLY the specified preset budget:
+# max_files = 16
+# max_changed_lines = 400
+# max_patch_bytes = 524288
 require_scope_plan = true
 
 [organization]
