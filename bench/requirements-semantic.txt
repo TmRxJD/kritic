@@ -4,4 +4,8 @@ numpy==2.3.3
 onnxruntime==1.28.0
 tokenizers==0.23.3
 huggingface_hub==1.33.0
+# Explicit HTTP transitives prevent vulnerable versions in reused environments.
+# GHSA-82r6-8w77-94w6 (AnyIO), GHSA-65pc-fj4g-8rjx (IDNA).
+anyio==4.14.2
+idna==3.20
 psutil==7.2.2
