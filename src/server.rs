@@ -827,6 +827,24 @@ impl Kritic {
             .map(Json)
     }
 
+    /// Rank dependency and maintenance debt without changing the project. Registry requests
+    /// require explicit online=true; migration difficulty is estimated, never a successful update.
+    #[tool(name = "technical_debt_critic")]
+    pub async fn technical_debt_critic(
+        &self,
+        Parameters(p): Parameters<crate::debt::Request>,
+    ) -> Result<Json<crate::debt::DebtReport>, String> {
+        let t0 = started("technical_debt_critic");
+        let mut report = crate::debt::execute(&self.kev.cfg, p).await?;
+        report.full_result =
+            crate::tools::save_full(&self.kev.cfg, "technical_debt_critic", &report);
+        report.items.truncate(crate::tools::MAX_ITEMS);
+        report.coverage_gaps.truncate(crate::tools::MAX_ITEMS);
+        finished("technical_debt_critic", t0, &report);
+        audit(&self.kev.cfg, "technical_debt_critic", &report);
+        Ok(Json(report))
+    }
+
     /// Deterministic staged commit size/scope and repository-owned organization policy.
     /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
     #[tool(name = "repository_critic")]
