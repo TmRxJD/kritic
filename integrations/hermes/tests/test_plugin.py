@@ -175,3 +175,33 @@ def test_null_absolute_budget_preserves_window_policy(env):
     e.update_model("test-model", 1_000_000)
     assert e.context_length == 1_000_000
     assert e.threshold_tokens == 500000
+
+
+def test_whole_request_overhead_reduces_message_budget(env, monkeypatch):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    mod = load_plugin()
+    message_tokens = mod._rough_tokens(messages)
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    e.compress(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000  # 14k total target minus 9k fixed overhead
+    e.prune_tool_results_only(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000
+    e.compress(messages, current_tokens=message_tokens + 20000)
+    assert payloads[-1]["target_tokens"] == 1
+
+
+def test_schema_heavy_request_actually_shrinks_with_real_backend(env):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    estimate = load_plugin()._rough_tokens(messages)
+    assert estimate < 14000
+    result = e.compress(messages, current_tokens=estimate + 12000)
+    after = load_plugin()._rough_tokens(result)
+    assert after < estimate
+    assert e.last_prompt_tokens >= 12000  # fixed tool/system cost is not erased by archiving
+    assert [m.get("tool_call_id") for m in result if m["role"] == "tool"] == [
+        m["tool_call_id"] for m in messages if m["role"] == "tool"]

@@ -176,13 +176,18 @@ class KriticContextEngine(ContextEngine):
             logger.warning("kritic: %s", self.last_error)
             return None
 
-    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None,
+                current_tokens: Optional[int] = None) -> Optional[Dict[str, Any]]:
         target = int(self.context_length * self.target_percent) if self.context_length else 0
         if self.threshold_tokens_cap is not None and self.threshold_tokens:
             # Preserve retention without overstating actual model capacity.
             target = min(target, int(self.threshold_tokens * self.target_percent / self.threshold_percent))
         if self.threshold_tokens > 1:
             target = min(target, self.threshold_tokens - 1)
+        # Hermes supplies the whole-request estimate; the backend receives only messages.
+        # Reserve the system/tool overhead instead of spending the full budget twice.
+        if type(current_tokens) is int and current_tokens >= 0:
+            target -= max(0, current_tokens - _rough_tokens(messages))
         return self._run("compress", {
             "messages": messages, "target_tokens": max(target, 1), "session_id": self.session_id,
             "focus": focus, "protect_first_n": self.protect_first_n, "protect_last_n": self.protect_last_n,
@@ -229,16 +234,17 @@ class KriticContextEngine(ContextEngine):
 
     def compress(self, messages: List[Dict[str, Any]], current_tokens: Optional[int] = None,
                  focus_topic: Optional[str] = None, force: bool = False, memory_context: str = "") -> List[Dict[str, Any]]:
-        result = self._shrink(messages, "compress", focus_topic)
+        result = self._shrink(messages, "compress", focus_topic, current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages
         self.compression_count += 1
         self.archived_total += len(result.get("archived") or [])
-        self.last_prompt_tokens = int(result.get("tokens_after") or 0)
+        overhead = max(0, current_tokens - _rough_tokens(messages)) if type(current_tokens) is int and current_tokens >= 0 else 0
+        self.last_prompt_tokens = int(result.get("tokens_after") or 0) + overhead
         return result["messages"]
 
     def prune_tool_results_only(self, messages: List[Dict[str, Any]], current_tokens: int = None):
-        result = self._shrink(messages, "prune")
+        result = self._shrink(messages, "prune", current_tokens=current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages, 0
         n = len(result.get("archived") or [])
