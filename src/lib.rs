@@ -32,6 +32,7 @@ pub mod scan;
 pub mod scout;
 pub mod server;
 pub mod spec;
+mod tool_metadata;
 pub mod tools;
 pub mod ui;
 pub mod unity;

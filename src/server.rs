@@ -734,6 +734,10 @@ impl Kritic {
         // tool list the agent carries in every turn (about three quarters of it, measured).
         for route in tool_router.map.values_mut() {
             route.attr.output_schema = None;
+            if let Some(description) = crate::tool_metadata::description(route.attr.name.as_ref()) {
+                route.attr.description = Some(description.into());
+            }
+            crate::tool_metadata::compact_schema(Arc::make_mut(&mut route.attr.input_schema));
         }
         let disabled: Vec<_> = tool_router
             .map
@@ -1812,13 +1816,7 @@ impl ServerHandler for Kritic {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("kritic", env!("CARGO_PKG_VERSION")))
-            .with_instructions(
-            "kritic: advisory end-of-task review. After finishing a task that changed code/config/map files: \
-             critic_score(git_diff or paths, task) then artifact_validate(paths, commands, use_model=false); map_eval for maps; \
-             for web UIs also ui_test(url) and visual_critic(url); for any UI change ux_critic(base_dir) with the repo's \
-             .kritic/ux.toml, then hand its critic_brief to the ux-critic agent (hard fails mean restructure, not patch). \
-             Revise at most twice (revision=1,2). Never fabricate scores; if kev_ok=false report the critic as offline.",
-        )
+            .with_instructions(crate::tool_metadata::INSTRUCTIONS)
     }
 }
 
