@@ -813,6 +813,20 @@ impl Kritic {
         Ok(Json(r))
     }
 
+    /// Explicit, opt-in historical review snapshots. Records are unverified evidence, never a
+    /// fresh check or cached approval. Export writes a sanitized jcode-format artifact only.
+    #[tool(name = "review_history")]
+    pub async fn review_history(
+        &self,
+        Parameters(p): Parameters<crate::history_api::Request>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        let cfg = self.kev.cfg.clone();
+        tokio::task::spawn_blocking(move || crate::history_api::execute(&cfg, p))
+            .await
+            .map_err(|e| format!("history worker: {e}"))?
+            .map(Json)
+    }
+
     /// Deterministic staged commit size/scope and repository-owned organization policy.
     /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
     #[tool(name = "repository_critic")]

@@ -203,3 +203,143 @@ fn revisions_and_repository_identity_are_separate() {
             .revision_changed
     );
 }
+
+#[test]
+fn tampering_and_invalid_ids_fail_closed() {
+    let repo = repo();
+    let storage = tempfile::tempdir().unwrap();
+    let store = Store::new(storage.path());
+    let record = store
+        .record(
+            repo.path(),
+            &repo.path().join("report.json"),
+            &inputs(),
+            CONTEXT,
+        )
+        .unwrap();
+    assert!(store.compare(repo.path(), "../escape", &record.id).is_err());
+    let file = storage
+        .path()
+        .join(&record.snapshot.repository_sha256)
+        .join(format!("{}.json", record.id));
+    let mut value: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    value["snapshot"]["report"]["approval"] = json!(false);
+    std::fs::write(file, value.to_string()).unwrap();
+    assert!(store.list(repo.path()).unwrap_err().contains("integrity"));
+}
+
+#[test]
+fn explicit_paths_and_file_budgets_are_enforced() {
+    let repo = repo();
+    let storage = tempfile::tempdir().unwrap();
+    let store = Store::new(storage.path());
+    let report = repo.path().join("report.json");
+    for paths in [
+        vec![],
+        vec![PathBuf::from("../source.rs")],
+        vec![repo.path().join("source.rs")],
+        vec![PathBuf::from("source.rs"), PathBuf::from("source.rs")],
+    ] {
+        assert!(store.record(repo.path(), &report, &paths, CONTEXT).is_err());
+    }
+    assert!(store.record(repo.path(), &report, &inputs(), "").is_err());
+    std::fs::write(repo.path().join("source.rs"), vec![b'x'; 2_097_153]).unwrap();
+    assert!(
+        store
+            .record(repo.path(), &report, &inputs(), CONTEXT)
+            .unwrap_err()
+            .contains("limit")
+    );
+}
+
+#[test]
+fn malformed_unknown_and_oversized_reports_are_rejected() {
+    let repo = repo();
+    let storage = tempfile::tempdir().unwrap();
+    let store = Store::new(storage.path());
+    let report = repo.path().join("report.json");
+    for raw in ["[]", "{}", "{broken", "{\"tool\":\"arbitrary-provider\"}"] {
+        std::fs::write(&report, raw).unwrap();
+        assert!(
+            store
+                .record(repo.path(), &report, &inputs(), CONTEXT)
+                .is_err()
+        );
+    }
+    std::fs::write(&report, vec![b' '; 8_388_609]).unwrap();
+    assert!(
+        store
+            .record(repo.path(), &report, &inputs(), CONTEXT)
+            .unwrap_err()
+            .contains("limit")
+    );
+}
+
+#[test]
+fn jcode_export_contains_only_low_trust_sanitized_summaries() {
+    let repo = repo();
+    let storage = tempfile::tempdir().unwrap();
+    let store = Store::new(storage.path());
+    store
+        .record(
+            repo.path(),
+            &repo.path().join("report.json"),
+            &inputs(),
+            CONTEXT,
+        )
+        .unwrap();
+    let export = store.export_jcode(repo.path()).unwrap();
+    let raw = serde_json::to_string(&export).unwrap();
+    let roundtrip: Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(roundtrip, export);
+    assert!(!raw.contains("raw-report-secret"));
+    assert!(!raw.contains("source.rs"));
+    assert!(!raw.contains(CONTEXT));
+    let entry = &export["entries"][0];
+    assert_eq!(entry["category"], json!({"custom":"kritic_review"}));
+    assert_eq!(entry["trust"], "low");
+    assert_eq!(entry["confidence"], 0.0);
+    assert!(
+        entry["content"]
+            .as_str()
+            .unwrap()
+            .contains("not current verification")
+    );
+    chrono::DateTime::parse_from_rfc3339(entry["created_at"].as_str().unwrap()).unwrap();
+    if let Some(path) = std::env::var_os("KRITIC_HISTORY_EXPORT_FIXTURE") {
+        std::fs::write(path, raw).unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn input_symlink_and_parent_symlink_escape_are_rejected() {
+    let repo = repo();
+    let outside = tempfile::tempdir().unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let store = Store::new(storage.path());
+    std::fs::write(outside.path().join("secret.rs"), "private source").unwrap();
+    std::os::unix::fs::symlink(outside.path(), repo.path().join("escape")).unwrap();
+    assert!(
+        store
+            .record(
+                repo.path(),
+                &repo.path().join("report.json"),
+                &[PathBuf::from("escape/secret.rs")],
+                CONTEXT
+            )
+            .is_err()
+    );
+    std::os::unix::fs::symlink(repo.path().join("source.rs"), repo.path().join("alias.rs"))
+        .unwrap();
+    assert!(
+        store
+            .record(
+                repo.path(),
+                &repo.path().join("report.json"),
+                &[PathBuf::from("alias.rs")],
+                CONTEXT
+            )
+            .is_err()
+    );
+}

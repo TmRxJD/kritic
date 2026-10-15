@@ -144,6 +144,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.resources", "KRITIC_CAP_RESOURCES"),
     ("capabilities.contracts", "KRITIC_CAP_CONTRACTS"),
     ("capabilities.repository", "KRITIC_CAP_REPOSITORY"),
+    ("capabilities.history", "KRITIC_CAP_HISTORY"),
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
@@ -157,6 +158,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "artifact_validate",
     "contract_critic",
     "repository_critic",
+    "review_history",
     "critic_score",
     "decide",
     "visual_critic",
@@ -438,12 +440,13 @@ fn capability_settings(
         "resources",
         "contracts",
         "repository",
+        "history",
         "plugins",
         "context",
         "domain_maps",
     ] {
         let enabled = match s.get(&format!("capabilities.{name}")) {
-            None => !matches!(name, "context" | "domain_maps"),
+            None => !matches!(name, "context" | "domain_maps" | "history"),
             Some(v) => v.parse::<bool>().unwrap_or_else(|_| {
                 config_errors.push(format!(
                     "capabilities.{name}: expected true or false (using false)"
@@ -724,6 +727,7 @@ impl Config {
             "resource_critic" | "hygiene_critic" => self.capability("resources"),
             "contract_critic" => self.capability("contracts"),
             "repository_critic" => self.capability("repository"),
+            "review_history" => self.capability("history"),
             "plugin_list" | "plugin_run" => self.capability("plugins"),
             "route" | "context_trim" | "locate" => {
                 self.capability("context") && self.backend != "off"

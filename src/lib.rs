@@ -1,5 +1,5 @@
-//! kritic: local, advisory, end-of-task governance for Claude Code.
-//! Kev-4B (via laya) answers typed questions; deterministic checks and real project commands
+//! Kritic test release: advisory end-of-task review for coding agents.
+//! Optional local/cloud reviewers answer typed questions; deterministic checks and real commands
 //! supply facts. Deterministic approval is scoped to declared checks; visual craft assessments
 //! are provisional and never confer aesthetic approval.
 
@@ -15,6 +15,7 @@ pub mod events;
 pub mod files;
 pub mod gpu;
 pub mod history;
+pub mod history_api;
 pub mod hygiene;
 pub mod kev;
 pub mod map;
