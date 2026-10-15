@@ -188,6 +188,25 @@ due_date='2000-01-01'
     assert!(!report.coverage_gaps.is_empty());
     let json = serde_json::to_value(report).unwrap();
     assert!(json.get("approval").is_none());
+    let report_path = base.join("debt-report.json");
+    std::fs::write(&report_path, serde_json::to_vec(&json).unwrap()).unwrap();
+    let git = kritic::proc::hidden_command("git")
+        .arg("-C")
+        .arg(&base)
+        .arg("init")
+        .output()
+        .unwrap();
+    assert!(git.status.success());
+    let stored = kritic::history::Store::new(&temp.path().join("history"))
+        .record(
+            &base,
+            &report_path,
+            &[std::path::PathBuf::from(".kritic/debt.toml")],
+            "tool=technical_debt_critic;model=off;online=false",
+        )
+        .unwrap();
+    assert_eq!(stored.summary().tool, "technical_debt_critic");
+    assert!(stored.summary().historical_unverified);
     assert!(
         !temp.path().join("cache").exists(),
         "offline cache misses must not create a fake cache"
