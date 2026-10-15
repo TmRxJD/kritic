@@ -46,6 +46,13 @@ the test.4 external-service ownership flags, preventing service startup, shutdow
 without hiding model tools. Startup may still check endpoint health; use a model-off config
 if even health checks must be avoided. These benchmark-only overrides are reported explicitly.
 
+Launch only trusted executables that you explicitly choose with `--binary`; resolving an
+existing absolute path does not establish trust. Windows requires `.exe`, rejecting batch and
+shell scripts. Arguments come only from explicit `--arg` options, never project files or model
+output. The helper passes an argument list with `shell=False` and hides Windows child consoles.
+Two specific Bandit annotations cover the necessary `subprocess` import (B404) and this
+user-selected executable launch (B603); scanners remain enabled and unsuppressed elsewhere.
+
 ## Client limits
 
 Reconnect the MCP client after updating: an existing connection can retain old definitions.

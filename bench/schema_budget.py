@@ -12,7 +12,8 @@ import json
 import os
 import pathlib
 import queue
-import subprocess
+# Explicitly user-selected executable; validated regular absolute path; no shell.
+import subprocess  # nosec B404
 import threading
 import time
 
@@ -55,6 +56,15 @@ def discovery_env(base):
     return dict(base, KRITIC_KEV_EXTERNALLY_MANAGED="true", KRITIC_VISION_EXTERNALLY_MANAGED="true")
 
 
+def validated_binary(value, windows=None):
+    path = pathlib.Path(value).expanduser().resolve(strict=True)
+    if not path.is_file():
+        raise ValueError("Binary must be a regular file: " + str(path))
+    if (os.name == "nt" if windows is None else windows) and path.suffix.lower() != ".exe":
+        raise ValueError("Windows discovery requires an .exe file, not a batch/shell script")
+    return str(path)
+
+
 def minimal_env(base, profile, folder):
     env = base.copy()
     for key in list(env):
@@ -67,6 +77,7 @@ def minimal_env(base, profile, folder):
 
 
 def collect(args):
+    binary = validated_binary(args.binary)
     if args.config and not args.config.is_file():
         raise ValueError("Config file does not exist: " + str(args.config))
     if not args.minimal_profile.is_file():
@@ -83,8 +94,10 @@ def collect(args):
         if profile == "minimal":
             env = minimal_env(env, args.minimal_profile, folder)
         stderr = (folder / "stderr.log").open("wb")
-        process = subprocess.Popen([args.binary, *args.arg], env=env, stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE, stderr=stderr,
+        # Explicitly user-selected executable; validated regular absolute path; no shell.
+        process = subprocess.Popen(  # nosec B603
+                                   [binary, *args.arg], env=env, stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=stderr, shell=False,
                                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         messages = queue.Queue()
 
@@ -158,7 +171,7 @@ def collect(args):
                 process.terminate()
                 process.wait(timeout=5)
             stderr.close()
-    report = {"binary": args.binary, "config": str(args.config.resolve()) if args.config else None,
+    report = {"binary": binary, "config": str(args.config.resolve()) if args.config else None,
               "minimal_profile": str(args.minimal_profile.resolve()), "tokenizer": args.tokenizer if encoding else None,
               "benchmark_lifecycle_overrides": {"KRITIC_KEV_EXTERNALLY_MANAGED": True, "KRITIC_VISION_EXTERNALLY_MANAGED": True},
               "tokenizer_error": error, "profiles": profiles,

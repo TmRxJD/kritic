@@ -10,6 +10,22 @@ import schema_budget as budget
 
 
 class SchemaBudgetTests(unittest.TestCase):
+    def test_binary_validation_rejects_missing_directories_and_windows_shell_scripts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            executable = root / "kritic.exe"
+            executable.write_bytes(b"explicit fixture; never executed")
+            self.assertEqual(budget.validated_binary(executable, windows=True), str(executable.resolve()))
+            with self.assertRaises(FileNotFoundError):
+                budget.validated_binary(root / "missing.exe", windows=True)
+            with self.assertRaises(ValueError):
+                budget.validated_binary(root, windows=True)
+            for name in ("kritic.cmd", "kritic.bat", "kritic.ps1"):
+                path = root / name
+                path.write_text("fixture; never executed", encoding="utf-8")
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    budget.validated_binary(path, windows=True)
+
     def test_discovery_overrides_only_lifecycle_ownership_without_hiding_tools(self):
         original = {"KRITIC_KEV_EXTERNALLY_MANAGED": "false", "KRITIC_CAP_REVIEW": "true",
                     "KRITIC_BACKEND": "local", "UNRELATED": "preserved"}
