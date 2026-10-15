@@ -60,6 +60,8 @@ jobs:
           python-version: '3.11'
       - name: Semantic map harness (offline, no model downloads)
         run: python -m unittest discover -s bench -p test_semantic_map.py
+      - name: Schema budget harness (offline, no tokenizer dependencies)
+        run: python -m unittest discover -s bench -p test_schema_budget.py
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false

@@ -58,6 +58,12 @@ hook; the minimal profile leaves this capability off. The first Tracker audit ex
 review noise as well as rule violations; [the evidence and limits](docs/repository-policy.md#first-tracker-audit)
 are recorded without treating every recommendation as a confirmed bug.
 
+## MCP context overhead
+
+For MCP discovery overhead and the unreleased metadata compaction work, see
+[tool-schema budget and measurement](docs/schema-budget.md). Compaction preserves enabled
+tools and their input constraints; capability toggles remain an explicit availability tradeoff.
+
 ## Optional technical-debt review
 
 Test.4 offers model-free dependency and maintenance review through `technical_debt_critic`

@@ -8,7 +8,8 @@ be disabled and absent from discovery. A scoped approval is not task completion 
 `status.enabled_tools` lists the effective tool surface after capability toggles.
 
 
-Review tools return JSON with a published output schema. Their `approval` is `true`, `false`, or `null`
+Review tools return JSON evidence. Output schemas are omitted from MCP discovery to avoid
+duplicating large result definitions in the client's context. Their `approval` is `true`, `false`, or `null`
 when the tool could not reach a verdict (a dependency offline, partial coverage, a run that could
 not finish). Approval is always computed in code from stated thresholds; Kev only triages and
 scores, and a model opinion never removes a deterministic failure.

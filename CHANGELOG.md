@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Compact MCP discovery: short shared instructions and tool summaries; redundant schema
+  titles/examples/empty defaults are omitted. All tools, input constraints, field descriptions,
+  meaningful defaults and execution opt-ins remain available. No tools are disabled to save tokens.
+
 ## 0.5.0-test.4 — test release
 
 - Optional, disabled-by-default technical-debt review: offline dependency inventory, pnpm v9
