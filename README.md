@@ -43,6 +43,15 @@ the minimum Windows installation small in dependencies: no Python or Node runtim
 for the core. Optional tools still have their own dependencies. Rust supports a dependable
 orchestrator; it does not make model judgments correct, sandbox commands or eliminate all bugs.
 
+## Experimental local semantic map
+
+The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
+current test-release binary. Five model variants were measured without a GPU. The smallest,
+8-bit MiniLM-L3, used 17.5 MB of weights and about 286 MB sampled process memory, with a
+65 ms warm-query p95 on the test machine. **None met the declared retrieval quality gate.**
+The experiment therefore does not enable semantic evidence selection by default. See the
+[measured comparison and limitations](docs/semantic-map.md#measured-results-2026-10-15).
+
 ## What your hardware can run
 
 **A GPU unlocks optional local reviewers, not the deterministic checks.** Capabilities are

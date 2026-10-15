@@ -461,7 +461,8 @@ class OnnxEncoder:
                                    filename=filename, cache_dir=str(cache))
         self.tokenizer = Tokenizer.from_file(download('tokenizer.json'))
         self.tokenizer.enable_truncation(max_length=256)
-        self.tokenizer.enable_padding(pad_id=self.tokenizer.token_to_id('[PAD]') or 0, pad_token='[PAD]')
+        # B106: public tokenizer padding symbol, not a password or credential.
+        self.tokenizer.enable_padding(pad_id=self.tokenizer.token_to_id('[PAD]') or 0, pad_token='[PAD]')  # nosec B106
         self.weights_path = Path(download(config['onnx_file']))
         options = ort.SessionOptions()
         options.intra_op_num_threads = 2

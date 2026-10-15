@@ -95,7 +95,10 @@ fn bounded_image(path: &Path, role: String) -> Result<(String, VisualReference),
     }
     let provenance = VisualReference {
         path: path.display().to_string(),
-        sha256: format!("{:x}", Sha256::digest(&bytes)),
+        sha256: Sha256::digest(&bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
         bytes: bytes.len() as u64,
         role,
     };

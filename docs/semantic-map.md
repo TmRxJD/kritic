@@ -79,6 +79,42 @@ candidate evidence; validate the underlying code, commands and current results i
 Exact identifiers, source dependencies and lexical search remain necessary when semantic
 ranking misses relevant material.
 
+## Measured results (2026-10-15)
+
+No candidate qualified on the 12 development questions. The 24 confirmation questions below
+are comparative results, not a basis for selecting a winner after inspecting the test set.
+All inference used two CPU threads on an Intel Core i7-9700K, with zero model VRAM.
+Sizes use decimal MB; memory is sampled process RSS, not total system commit.
+
+| Encoder | Weights MB | Peak RSS MB | Warm p95 ms | Development hybrid Hit@5 | Confirmation hybrid Hit@5 |
+|---|---:|---:|---:|---:|---:|
+| MiniLM-L3, 8-bit ONNX | 17.5 | 286 | 65 | 16.7% | 25.0% |
+| MiniLM-L3, float ONNX | 69.0 | 325 | 69 | 16.7% | 25.0% |
+| MiniLM-L6, float ONNX | 90.4 | 348 | 103 | 33.3% | 45.8% |
+| BGE-small-en-v1.5, float ONNX | 133.1 | 389 | 67 | 33.3% | 37.5% |
+| Nomic embed-text-v1.5, float ONNX | 547.3 | 1222 | 211 | 25.0% | 50.0% |
+| BM25, no encoder | — | — | — | 25.0% | 54.2% |
+
+The 8-bit L3 variant preserved its float counterpart's aggregate scores, but both missed
+the quality bar. Fixed equal-weight reciprocal-rank fusion underperformed BM25 on the
+confirmation set. There is no evidence here to replace lexical search or enable automatic
+semantic evidence selection. A local map remains an experimental navigation aid whose
+results require source inspection.
+
+The frozen corpus contains 649 token-aware chunks from 30 files at commit
+`42362069a77e458dddc70eb4e2c226f80bcbcae9`; its SHA-256 is
+`93f67a5532cd35766fbde6ed8631eb7f16b2e0be852cb662a4310b7f938dc869`.
+All completed runs had zero truncated passages. An earlier word-based pilot was discarded
+because 312 of 449 passages exceeded the encoder limit. Relevance labels identify exact
+source anchors and are incomplete; file-level hits are diagnostic only. These numbers do
+not establish general code-search quality.
+
+CodeRankEmbed has no quality result. Its saved loader config initially raised
+`TypeError: NomicBertModel.__init__() got an unexpected keyword argument 'safe_serialization'`.
+The explicit CLS adapter below corrected loading, but the resource guard stopped encoding
+at `commit_reserve_below_8GiB`. Shared-model services were left running. Its size and accuracy
+must not be inferred from the completed candidates.
+
 ## Reproduction
 
 Use an isolated environment and explicit cache/output directories. These Windows examples use
