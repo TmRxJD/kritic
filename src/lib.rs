@@ -24,6 +24,7 @@ pub mod phase3;
 pub mod plugins;
 pub mod proc;
 pub mod provider;
+pub mod repository;
 pub mod scan;
 pub mod scout;
 pub mod server;

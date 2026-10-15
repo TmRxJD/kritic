@@ -1,0 +1,30 @@
+# Copy to .kritic/repository.toml and adapt to the repository's documented conventions.
+version = 1
+
+[commit]
+max_files = 32
+max_changed_lines = 800
+max_patch_bytes = 1048576
+require_scope_plan = true
+
+[organization]
+max_file_lines = 500
+hard_file_lines = 1000
+max_folder_files = 40
+max_depth = 8
+long_function_lines = 60
+complex_function_branches = 8
+
+[[organization.naming_rules]]
+prefix = "src"
+extensions = ["rs"]
+pattern = '^[a-z][a-z0-9_]*\.rs$'
+purpose = "Rust modules use snake_case names expressing their responsibility."
+
+# Add layers using YOUR repository's terminology and dependency directions.
+# Do not create empty helpers/types/services folders to satisfy a template.
+[[organization.layers]]
+name = "source"
+prefix = "src"
+purpose = "Rust application modules, separated by coherent responsibility."
+allow_imports_from = ["source"]

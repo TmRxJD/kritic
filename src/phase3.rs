@@ -339,6 +339,8 @@ pub struct QualityResult {
     pub lint_findings: Vec<Finding>,
     pub lint_counts: BTreeMap<String, usize>,
     pub functions_analyzed: usize,
+    /// Deterministic organization policy applied only to the explicitly supplied files.
+    pub organization: Option<crate::organization::OrganizationReport>,
     /// Worst functions by complexity, with Kev's maintainability judgment.
     pub hotspots: Vec<ScoredFunction>,
     pub duplicates: Vec<Duplicate>,
@@ -378,6 +380,31 @@ pub async fn quality<D: Decider>(
         tool: "code_quality_critic".into(),
         advisory: true,
         ..Default::default()
+    };
+    let organization_policy = match std::fs::symlink_metadata(base.join(".kritic/repository.toml"))
+    {
+        Ok(_) => crate::repository::load(base, false).map(|policy| policy.organization),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
+        Err(error) => Err(format!("read repository organization policy: {error}")),
+    };
+    let organization_failed = match organization_policy {
+        Ok(policy) => {
+            let report = crate::organization::audit(files, &policy);
+            for violation in &report.violations {
+                r.reasons.push(format!(
+                    "organization {} at {}: {}",
+                    violation.code, violation.path, violation.message
+                ));
+            }
+            let failed = !report.approval;
+            r.organization = Some(report);
+            failed
+        }
+        Err(error) => {
+            r.reasons
+                .push(format!("organization policy failed: {error}"));
+            true
+        }
     };
     // 1. linters the project is set up for
     if opts.run_linters {
@@ -590,8 +617,16 @@ pub async fn quality<D: Decider>(
             .push(format!("{} failed to run: {}", t.tool, t.detail));
     }
     let failed = r.tools.iter().any(|t| t.status == "failed");
-    let blocking = lint_high > 0 || too_complex > 0 || too_long > 0;
-    let covered = r.functions_analyzed > 0 || r.tools.iter().any(|t| t.status == "ran");
+    let blocking = lint_high > 0 || too_complex > 0 || too_long > 0 || organization_failed;
+    let covered = r.functions_analyzed > 0
+        || r.tools.iter().any(|t| t.status == "ran")
+        || r.organization
+            .as_ref()
+            .is_some_and(|report| report.policy_valid && !report.files.is_empty());
+    if organization_failed {
+        r.quality_score = None;
+        r.risk_level = "high".into();
+    }
     if failed || !covered {
         r.quality_score = None;
         r.risk_level = "unknown".into();

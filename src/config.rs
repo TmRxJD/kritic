@@ -143,6 +143,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.desktop", "KRITIC_CAP_DESKTOP"),
     ("capabilities.resources", "KRITIC_CAP_RESOURCES"),
     ("capabilities.contracts", "KRITIC_CAP_CONTRACTS"),
+    ("capabilities.repository", "KRITIC_CAP_REPOSITORY"),
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
@@ -155,6 +156,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "status",
     "artifact_validate",
     "contract_critic",
+    "repository_critic",
     "critic_score",
     "decide",
     "visual_critic",
@@ -435,6 +437,7 @@ fn capability_settings(
         "desktop",
         "resources",
         "contracts",
+        "repository",
         "plugins",
         "context",
         "domain_maps",
@@ -720,6 +723,7 @@ impl Config {
             "desktop_test" | "unity_tests" => self.capability("desktop"),
             "resource_critic" | "hygiene_critic" => self.capability("resources"),
             "contract_critic" => self.capability("contracts"),
+            "repository_critic" => self.capability("repository"),
             "plugin_list" | "plugin_run" => self.capability("plugins"),
             "route" | "context_trim" | "locate" => {
                 self.capability("context") && self.backend != "off"

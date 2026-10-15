@@ -462,3 +462,55 @@ fn working_source_cannot_escape_through_an_internal_symlink_directory() {
     let error = source_files(base, false).unwrap_err();
     assert!(error.contains("outside the repository root"), "{error}");
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_junction_root_is_supported_but_internal_escape_is_rejected() {
+    let repo = repo();
+    let base = repo.path();
+    std::fs::create_dir(base.join("internal")).unwrap();
+    stage(base, "internal/source.rs", "fn original() {}\n");
+    let outer = tempfile::tempdir().unwrap();
+    let alias = outer.path().join("root-alias");
+    let make_junction = |link: &Path, target: &Path| {
+        let result = Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    };
+    make_junction(&alias, base);
+    let through_alias = source_files(&alias, false);
+    std::fs::remove_dir(&alias).unwrap();
+    assert_eq!(through_alias.unwrap().len(), 1);
+    let external = outer.path().join("outside");
+    std::fs::create_dir(&external).unwrap();
+    std::fs::write(external.join("source.rs"), "fn outside() {}\n").unwrap();
+    std::fs::remove_file(base.join("internal/source.rs")).unwrap();
+    std::fs::remove_dir(base.join("internal")).unwrap();
+    make_junction(&base.join("internal"), &external);
+    let result = source_files(base, false);
+    std::fs::remove_dir(base.join("internal")).unwrap();
+    let error = result.unwrap_err();
+    assert!(error.contains("outside the repository root"), "{error}");
+}
+
+#[cfg(unix)]
+#[test]
+fn nul_delimited_paths_preserve_tabs_and_newlines() {
+    let repo = repo();
+    let base = repo.path();
+    let name = "tab\tand\nline.rs";
+    stage(base, name, "fn exact() {}\n");
+    plan(base, "Add unusual path fixture", &[name.into()]).unwrap();
+    let report = check(base, &CommitPolicy::default()).unwrap();
+    assert!(report.approval);
+    assert_eq!(report.staged_paths, [name]);
+    assert_eq!(report.added_lines, 1);
+}

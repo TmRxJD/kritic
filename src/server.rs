@@ -100,6 +100,14 @@ pub struct ContractParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct RepositoryParams {
+    pub base_dir: String,
+    /// Check the Git index and current scope plan; false audits tracked working-tree source.
+    #[serde(default)]
+    pub staged: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct MapParams {
     /// Path to a map file (Beat Saber difficulty .dat / JSON).
     #[serde(default)]
@@ -805,6 +813,37 @@ impl Kritic {
         Ok(Json(r))
     }
 
+    /// Deterministic staged commit size/scope and repository-owned organization policy.
+    /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
+    #[tool(name = "repository_critic")]
+    pub async fn repository_critic(
+        &self,
+        Parameters(p): Parameters<RepositoryParams>,
+    ) -> Result<Json<crate::repository::RepositoryReport>, String> {
+        let t0 = started("repository_critic");
+        let base = std::path::PathBuf::from(p.base_dir);
+        let mut r = tokio::task::spawn_blocking(move || crate::repository::check(&base, p.staged))
+            .await
+            .map_err(|e| format!("repository audit worker: {e}"))??;
+        r.full_result = crate::tools::save_full(&self.kev.cfg, "repository_critic", &r);
+        r.organization.files.truncate(crate::tools::MAX_ITEMS);
+        r.organization.violations.truncate(crate::tools::MAX_ITEMS);
+        r.organization
+            .recommendations
+            .truncate(crate::tools::MAX_ITEMS);
+        r.excluded_paths.truncate(crate::tools::MAX_ITEMS);
+        r.source_coverage_errors.truncate(crate::tools::MAX_ITEMS);
+        r.source_warnings.truncate(crate::tools::MAX_ITEMS);
+        if let Some(commit) = &mut r.commit {
+            commit.staged_paths.truncate(crate::tools::MAX_ITEMS);
+            commit.binary_paths.truncate(crate::tools::MAX_ITEMS);
+            commit.findings.truncate(crate::tools::MAX_ITEMS);
+        }
+        finished("repository_critic", t0, &r);
+        audit(&self.kev.cfg, "repository_critic", &r);
+        Ok(Json(r))
+    }
+
     /// End-of-task critic (Kev-4B). Prefer git_diff=true in a git repo: scores changed hunks
     /// ("does this change introduce a bug?"). Otherwise scores whole files in ~1,300-char chunks.
     /// Per unit: bug/correctness, severity, security, unfinished, quality, reviewer-injection;
@@ -1233,6 +1272,13 @@ impl Kritic {
         }
         r.full_result = crate::tools::save_full(cfg, "code_quality_critic", &r);
         r.lint_findings.truncate(crate::tools::MAX_ITEMS);
+        if let Some(organization) = &mut r.organization {
+            organization.files.truncate(crate::tools::MAX_ITEMS);
+            organization.violations.truncate(crate::tools::MAX_ITEMS);
+            organization
+                .recommendations
+                .truncate(crate::tools::MAX_ITEMS);
+        }
         finished("code_quality_critic", t0, &r);
         audit(cfg, "code_quality_critic", &r);
         Ok(Json(r))

@@ -6,6 +6,7 @@ pub mod detect;
 pub mod doctor;
 pub mod fetch;
 pub mod register;
+pub mod repository;
 pub mod setup;
 pub mod ui;
 
@@ -44,6 +45,8 @@ pub enum Cmd {
     Key(KeyArgs),
     /// Audit .kritic/contract.toml without an MCP client or model
     Contract(ContractArgs),
+    /// Enforce scoped commits and repository-owned code organization policy
+    Repository(repository::RepositoryArgs),
 }
 
 #[derive(Args, Debug)]

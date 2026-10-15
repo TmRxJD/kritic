@@ -43,6 +43,15 @@ the minimum Windows installation small in dependencies: no Python or Node runtim
 for the core. Optional tools still have their own dependencies. Rust supports a dependable
 orchestrator; it does not make model judgments correct, sandbox commands or eliminate all bugs.
 
+## Scoped commits and repository organization
+
+The source branch adds a model-free `repository_critic`, staged-index commit budgets and an
+explicit pre-commit hook. Repository-owned rules cover file LoC, naming, folder structure,
+layer boundaries and explanatory-comment review. Scope plans bind an explicit purpose/file list
+to the staged tree; agents still inspect semantic relevance and modularity independently.
+See [setup and limitations](docs/repository-policy.md). These features are not in the older
+published test-release binary.
+
 ## Experimental local semantic map
 
 The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
@@ -208,6 +217,11 @@ represent an unrun OS/provider/model combination as verified.
 
 ## Evidence from real use
 
+- **A false positive corrected during the Tracker audit:** the first repository collector
+  rejected a JavaScript file containing an intentional NUL string separator as binary.
+  Independent `node --check` passed. Valid UTF-8 source is now audited with a warning;
+  actual coverage failures stay explicit. Regression tests distinguish the two cases.
+  This verifies that correction, not the architectural quality of the whole Tracker.
 - **GPU-free reviews in Towerium:** its [public validation record](https://github.com/TmRxJD/towerium/blob/778febf06ef81a606829997fea8be59a2b52cbe2/VALIDATION.md)
   records Kritic running 64 controller tests while Kev was off. On 2026-10-10 we independently
   reran the focused controller/aim suite independently and through Kritic: **78 passed, zero failures/skips**, with no model or build.

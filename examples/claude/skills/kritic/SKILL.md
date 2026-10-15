@@ -5,7 +5,8 @@ description: >
   Never inherently trust critics; independently validate every claim and its evidence.
   Reproduce and fix Kritic defects directly with regression tests and open a PR to
   https://github.com/TmRxJD/kritic. Use for end-of-task code/config/UI review or explicit
-  Kritic testing. Deterministic checks are default; local/cloud critics are optional.
+  Kritic testing, scoped-commit and code-organization reviews. Deterministic checks are default;
+  local/cloud critics are optional.
   Inspect available tools before use. No GPU or separate model/API is required.
 ---
 
@@ -46,7 +47,29 @@ viewports/states, unseen interactions or uninspected motion remain unverified. N
 user requested that quality and it has not been independently established, report the gap and
 fix evidenced craft problems within scope; do not relabel the target or chase model scores.
 
-### Checks
+### Commit scope and code organization
+
+When the repo has `.kritic/repository.toml`, call `repository_critic` for organization and
+`staged=true` before a commit. Read the staged diff yourself: reject unrelated hunks, accidental
+data/logs and scope declarations that simply list everything. Split by coherent purpose, retaining
+the code, tests and documentation needed for that purpose. Never stage someone else's work.
+`kritic repository plan` binds a concrete purpose and explicit file list to the staged tree;
+any index change invalidates it. Install a pre-commit hook only when authorized. This explicit
+deterministic hook is separate from ordinary advisory critic calls; no model runs in the hook.
+
+Review total file LoC, function responsibilities, folder density/depth, naming and dependency
+direction against the repo's documented architecture. Keep helpers, types, services, components,
+composables and schemas in the repo's canonical locations, not arbitrary new category folders.
+Explain non-obvious invariants, rationale, units, sequencing and failure behavior. Neither an
+adjacent comment nor a static pass establishes explanation quality or modularity.
+Do not add boilerplate comments merely to clear a finding. Preserve
+unresolved-import and other coverage gaps. Baselines must name existing debt and prevent growth;
+never raise thresholds or exclude problem source merely to obtain approval.
+
+Local hooks can be bypassed. Report actual installation and tested rejection cases; never claim
+protected-branch or CI enforcement unless it is verified. See `docs/repository-policy.md`.
+
+### Validation checks
 
 1. Finish the requested change and run meaningful project tests/typecheck/lint. Check test counts,
    discovery and assertions: exit 0 with no useful tests is not acceptance evidence.
