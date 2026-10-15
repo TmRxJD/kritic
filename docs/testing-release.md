@@ -13,6 +13,26 @@ context mismatch, paginated metadata and truncated comparisons. Inspect exports 
 report/context strings and local paths; a format fixture alone does not validate live jcode
 import or memory savings. [Commands and limitations](memory-adapter.md).
 
+Technical-debt tests must distinguish a declared requirement, a resolved lockfile version and
+an observed registry default. Exercise offline misses, stale caches, private sources, failed
+lookups, newer installed versions, qualifiers and the online batch deadline. Upgrade effort is
+an estimate: validate exact-version migration notes, environment-variable names and actual
+upgrade/test results before treating the estimate as demonstrated work. [Debt guide](technical-debt.md).
+
+## Unreleased Windows test binaries
+
+A CI run stages `kritic-windows-test` after its Rust checks pass. It contains `kritic.exe` and
+`manifest.json`, with the PR head, tested checkout, run ID and executable SHA-256. Artifacts are
+retained for three days. Choose the run for the source revision you intend to test and confirm
+its checks passed; compare the executable hash with that manifest before using it.
+
+This is a standalone Windows test executable, not the published release ZIP or a complete
+optional-harness package. Use configuration/examples from the matching source revision and
+the [installation guide](getting-started.md); the core needs no Rust installation, model or GPU.
+For example, the hash can be checked with `Get-FileHash .\kritic.exe -Algorithm SHA256`.
+Keep an existing working executable/configuration until the replacement has passed `doctor`
+and an actual MCP initialization/tool-discovery test in your client.
+
 The objective is to evaluate the viability of Kritic's skill, tools, configuration and findings.
 Do not inherently trust a critic, including a deterministic checker. Validate its inputs, scope,
 test discovery, assertions, execution evidence and applicability. A correct parser check cannot

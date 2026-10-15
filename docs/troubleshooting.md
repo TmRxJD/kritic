@@ -30,6 +30,26 @@ exists), the config file read, any `config_errors`, and the ready states.
 
 ## Test-release/cloud/contract failures
 
+- `technical_debt_critic` missing: use a matching source build, enable `capabilities.debt=true`
+  (or `KRITIC_CAP_DEBT=true`) and restart MCP. The minimal profile and built-in default disable
+  it; the older test.3 binary does not contain the tool. No model install fixes discovery.
+- Debt review has unknown latest/current versions offline: expected when there is no suitable
+  cache or exact lock resolution. A requirement range is not an installed version. Inspect
+  manifest provenance and coverage gaps; do not invent a version to obtain an upgrade result.
+- Debt evidence says `stale_cache`: inspect its observation date. With authorization for public
+  package metadata disclosure, run `kritic debt --base-dir . --online --refresh`.
+  `--refresh` without `--online` is rejected. Neither command applies an update.
+- Debt lookup has `budget_exhausted` or errors: the batch is bounded to 60 seconds. Results are
+  partial, with explicit gaps; a later online call can use already cached evidence. A cache
+  limit needs deliberate retention work. Do not clear shared/private caches blindly.
+- Unsupported lock format or unordered/qualified versions: preserve that gap. Use exact
+  verified `[[packages]]` declarations in `.kritic/debt.toml` where appropriate, inspect
+  ecosystem/upstream release evidence and avoid treating lexical order as an upgrade path.
+  Private/Git/path/workspace dependencies intentionally skip public lookup.
+- Debt urgency/effort seems wrong: independently inspect advisories, deprecation, declared
+  deadlines and version-bound migration notes. A leading TODO is a review lead; effort 1 is
+  not a verified one-click update. [Coverage, privacy and rating limits](technical-debt.md).
+
 - `review_history` missing: it is source-only and `capabilities.history=false` by default.
   Enable it deliberately and restart MCP; no model or embedding installation is needed.
 - History comparison is not comparable: tool or caller-declared context differs. Preserve

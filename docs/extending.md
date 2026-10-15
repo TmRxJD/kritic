@@ -36,8 +36,20 @@ Follow this contract so the tool behaves like the others.
 - Types: `#[derive(Serialize, schemars::JsonSchema)]` result struct (output schema is generated).
 - MCP wrapper: `src/server.rs` inside `#[tool_router] impl Kritic`: params struct with
   doc comments (they become the tool's input schema), `started` / `finished` / `audit`.
+  MCP input schemas must explicitly have root `type: "object"`. A tagged enum can generate
+  alternatives without that root type; make the object contract explicit instead of assuming
+  the derive supplies it. Add a regression that constructs the actual server/tool router and
+  inspects every advertised input schema, including disabled/optional tools when enabled.
+  A JSON roundtrip alone cannot catch constructor-time schema rejection.
 - Tests: offline tests with a fake `Decider` in `tests/`; live tests gated on `KRITIC_LIVE=1`.
 - Docs: `docs/tools.md`, and `examples/claude/skills/kritic/SKILL.md` if agents should use it by default.
+
+Technical-debt extensions belong in `src/debt/`. Keep inventory non-executing and bounded,
+resolved versions separate from requirements, private sources out of public lookups and
+online registry disclosure explicitly opted in. Preserve observation/source/status/errors and
+unknown ordering; estimates never approve or apply an upgrade. Migration and maintenance notes
+are declared evidence, not fetched attestations. Use offline fixtures for malformed formats,
+workspace resolution, privacy, budget exhaustion and stale evidence. [Feature contract](technical-debt.md).
 
 ## Build and test
 

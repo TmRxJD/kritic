@@ -25,7 +25,7 @@ for those environments from the Windows measurements.
 ## Prebuilt Windows package
 
 Use the configuration and examples from the same ZIP as the binary. Current-source keys such
-as `capabilities.repository` and `capabilities.history` require a matching source build; copying
+as `capabilities.repository`, `capabilities.history` and `capabilities.debt` require a matching source build; copying
 them into the older test.3 package does not add those features.
 
 Extract the test ZIP into your chosen persistent directory, open that `kritic` folder, and on
@@ -57,6 +57,7 @@ deterministic review and avoid automatic Claude/Hermes registration; restart MCP
 | Project code quality | `quality=true` | Install your project's lint/typecheck dependencies, then run doctor; no model/setup needed |
 | Scoped commits / organization (current source) | `repository=true`; minimal profile defaults false | Build current source, configure `.kritic/repository.toml`, then follow [explicit hook setup](repository-policy.md); Git required, no model/download |
 | Review history (current source) | `history=true`; built-in/minimal default false | Git plus private storage; [record selected reports/inputs explicitly](memory-adapter.md); no model, embedding or extra runtime |
+| Technical-debt review (current source) | `debt=true`; built-in/minimal default false | No additional install, model or package-manager execution; run `kritic debt --base-dir .` offline. Public metadata needs a separate `--online` opt-in; [guide](technical-debt.md) |
 | Repository plugins / map domain | `plugins=true` / `domain_maps=true` | Install the relevant project plugin/evaluator dependencies; no model required for map_eval |
 
 Browser provisioning uses installed Chrome/Edge/Chromium or downloads Chrome for Testing.
@@ -93,6 +94,14 @@ Clone the repo and run these commands from its root. On Windows use `bin/kritic.
 Use [client-specific setup](clients.md) for Codex/local Work, Cursor, Claude Code and Hermes.
 `kritic doctor` reports configured/missing features;
 `--online` explicitly tests the configured reviewer and may incur API cost.
+
+## Optional technical-debt review
+
+Technical-debt review does not need a local model. After building a matching source binary,
+enable `[capabilities] debt=true`, restart the client and check discovery for
+`technical_debt_critic`. Start offline. `kritic debt --online` authorizes public package
+metadata lookup; `kritic doctor --online` probes the configured reviewer and is a different
+action. No source content or environment-variable values are needed for dependency lookup.
 
 ## Optional local models
 
