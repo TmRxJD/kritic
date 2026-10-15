@@ -45,39 +45,38 @@ orchestrator; it does not make model judgments correct, sandbox commands or elim
 
 ## Scoped commits and repository organization
 
-The source branch adds a model-free `repository_critic`, staged-index commit budgets and an
+Test.4 includes a model-free `repository_critic`, staged-index commit budgets and an
 explicit pre-commit hook. Repository-owned rules cover file LoC, naming, folder structure,
 layer boundaries and explanatory-comment review. Scope plans bind an explicit purpose/file list
 to the staged tree; agents still inspect semantic relevance and modularity independently.
-See [setup and limitations](docs/repository-policy.md). These features are not in the older
-published test-release binary.
+See [setup and limitations](docs/repository-policy.md). Use the matching test.4 package or newer.
 
 Use `broad`, `focused` (default), or `atomic` commit budgets for coherent milestones, individual
 behaviors, or small review units. Budget compliance never establishes semantic relevance.
-Enable `capabilities.repository=true` in a source build, then explicitly configure/install the
+Enable `capabilities.repository=true` in test.4 or later, then explicitly configure/install the
 hook; the minimal profile leaves this capability off. The first Tracker audit exposed substantial
 review noise as well as rule violations; [the evidence and limits](docs/repository-policy.md#first-tracker-audit)
 are recorded without treating every recommendation as a confirmed bug.
 
 ## Optional technical-debt review
 
-Source builds offer model-free dependency and maintenance review through `technical_debt_critic`
+Test.4 offers model-free dependency and maintenance review through `technical_debt_critic`
 or `kritic debt`. It is disabled by default and makes no HTTP requests unless you explicitly
 enable online registry evidence. It covers Cargo, npm/pnpm v9 and Python manifests/locks, with
 explicit package declarations for other supported registries. Urgency and effort are estimates;
 unknown versions, coverage gaps and missing migration evidence remain visible. It never applies
 upgrades or certifies compatibility. [Quickstart, ratings, privacy and coverage](docs/technical-debt.md).
-The published `v0.5.0-test.3` binary predates this feature.
+This feature requires test.4 or later.
 
 ## Experimental local semantic map
 
-Separately, source builds offer optional [review history and jcode-format export](docs/memory-adapter.md).
+Separately, test.4 offers optional [review history and jcode-format export](docs/memory-adapter.md).
 `history=false` by default: explicit saved reports and input/context hashes need no model or
 embeddings. Historical records never replace fresh checks. The export does not modify a running
 jcode store, and no memory-savings benefit is claimed.
 
-The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
-current test-release binary. Five model variants were measured without a GPU. The smallest,
+The test.4 source package includes an opt-in CPU retrieval experiment; its optional model
+weights and Python dependencies are separate downloads. Five model variants were measured without a GPU. The smallest,
 8-bit MiniLM-L3, used 17.5 MB of weights and about 286 MB sampled process memory, with a
 65 ms warm-query p95 on the test machine. **None met the declared retrieval quality gate.**
 The experiment therefore does not enable semantic evidence selection by default. See the
@@ -104,7 +103,7 @@ paths need field testing; there are no prebuilt packages for those platforms in 
 
 ## Quickstart: install the minimum, then choose extras
 
-1. **Get the binary:** download the Windows ZIP from [the test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.3).
+1. **Get the binary:** download the Windows ZIP from [the test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.4).
    Extract it into a persistent location and open its `kritic` folder in PowerShell.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
    if absent. No Rust, Python, Node, GPU, Ollama or API key is required for the minimum setup.

@@ -3,7 +3,7 @@
 
 # Measurements
 
-The optional source-only [review-history adapter](memory-adapter.md) has no measured memory,
+The optional [review-history adapter](memory-adapter.md) has no measured memory,
 token-saving or model-quality benefit. Its jcode-format export is not a verified live integration;
 historical comparison does not supply current validation or evidence of a quality trend.
 
@@ -12,13 +12,23 @@ The historical model measurements below used Windows 11 with an RTX 5070 (12 GB)
 `calibration/`. For behaviour on realistic agent changes, with and without kritic, see
 [benchmarks](benchmarks.md).
 
-## Source-only repository audit
+## Initial repository audit
 
 The initial model-free Tracker audit covered 4,309 tracked source files, zero read errors,
 486 static rule violations and 15,587 recommendations, including 11,742 `unparsed_import`
 coverage signals. Counts belong to that recorded snapshot; recommendations are not confirmed
-bugs and are sensitive to parser coverage and repository policy. This is not model calibration
-or functionality shipped in `v0.5.0-test.3`. See [triage and limitations](repository-policy.md#first-tracker-audit).
+bugs and are sensitive to parser coverage and repository policy. This is not model calibration or a current-project quality guarantee. See [triage and limitations](repository-policy.md#first-tracker-audit).
+
+## Test.4 technical-debt smoke
+
+The Windows test.4 candidate queried seven explicitly declared public package fixtures: Cargo
+serde, npm vue, PyPI requests, Go golang.org/x/text, Maven org.slf4j:slf4j-api, NuGet
+Newtonsoft.Json and RubyGems rack. All seven returned attributed, dated latest metadata without
+upstream errors or coverage gaps, then reused fresh cache entries on a second call. One run
+measured 3.914 seconds cold and 0.065 seconds cached; this is a bounded smoke case, not a general
+benchmark or proof of exhaustive advisory coverage. No packages were installed or updated.
+See [the tested source run](https://github.com/TmRxJD/kritic/actions/runs/38782796665) and
+[coverage and effort limits](technical-debt.md).
 
 ## Kev critic
 

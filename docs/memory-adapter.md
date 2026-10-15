@@ -1,7 +1,7 @@
 # Optional review history and jcode-format export
 
-Current source builds can retain explicitly selected review snapshots for later comparison.
-This feature is absent from the published `v0.5.0-test.3` binary. It is disabled by default,
+Test.4 and later can retain explicitly selected review snapshots for later comparison.
+It is disabled by default,
 including in the minimal profile; it needs Git and writable local storage, but no model,
 embeddings, GPU, cloud API, extra runtime or background indexer.
 

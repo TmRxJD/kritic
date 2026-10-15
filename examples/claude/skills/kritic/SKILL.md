@@ -28,7 +28,7 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ### Optional technical-debt review
 
-Source builds expose `technical_debt_critic` only when `capabilities.debt=true` (default false).
+Test.4 and later expose `technical_debt_critic` only when `capabilities.debt=true` (default false).
 Use it for an explicit dependency/maintenance review, with `online=false` unless public package
 metadata disclosure is authorized. No model or GPU is required. Inspect version provenance,
 coverage gaps, cache age, source URLs and lookup errors. Lock resolutions are not runtime
@@ -37,11 +37,11 @@ Effort 1–5 is an estimate with possible configuration/runtime/API work, never 
 Validate declared migration/maintenance evidence; never invent required variable names or
 collect their values. Optional explicit source paths produce comment-marker leads, not proved
 bugs. Use a coherent upgrade branch and meaningful project checks; Kritic never applies updates.
-See `docs/technical-debt.md` and `examples/debt.toml`. Published test.3 binaries predate this tool.
+See `docs/technical-debt.md` and `examples/debt.toml`. Use test.4 or later.
 
 ### Optional history never substitutes for verification
 
-Current source offers `review_history` only when `capabilities.history=true` (default false).
+Test.4 and later offer `review_history` only when `capabilities.history=true` (default false).
 Use explicit record/list/compare/export actions with a saved complete report, exact relative
 input files and concrete declared tool/model/command/policy context. No automatic indexing,
 model or embeddings are involved. Reports may contain private source/output: retain and share
@@ -73,7 +73,7 @@ fix evidenced craft problems within scope; do not relabel the target or chase mo
 
 ### Commit scope and code organization
 
-These tools require a current source build: the published `v0.5.0-test.3` binary predates them.
+These tools require test.4 or later.
 The minimal profile sets `capabilities.repository=false`; enable it deliberately and inspect
 tool discovery. Use the repository's `broad`, `focused` (default), or `atomic` budget as appropriate
 to one coherent review purpose. A larger preset never authorizes mixing unrelated work.

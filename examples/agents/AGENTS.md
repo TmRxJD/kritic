@@ -1,12 +1,12 @@
 ## Kritic TEST RELEASE
 
-Optional source-only `technical_debt_critic` is disabled by default. Use it for an explicit
+Optional `technical_debt_critic` is disabled by default. Use it for an explicit
 maintenance review, offline unless the user authorizes public package metadata lookup.
 Inspect coverage gaps and source/date/status evidence; validate urgency and estimated effort.
 Never invent installed versions, migration requirements or environment-variable values, and
 never apply an upgrade merely because the report lists a newer release. See docs/technical-debt.md.
 
-Optional source-only review_history is disabled by default. Record only an explicitly selected
+Optional review_history is disabled by default. Record only an explicitly selected
 saved report and exact input corpus/context. Historical hashes are not fresh verification or
 proof that a report ran over those inputs. jcode-format exports are separate low-trust files,
 not a live integration; never reuse a historical pass as current acceptance.
@@ -21,8 +21,8 @@ Reproduce Kritic defects, fix them in the Kritic repository with meaningful regr
 and submit a focused PR to https://github.com/TmRxJD/kritic. Keep private project data out of
 public reports. Report actual evidence, false positives, fixes and remaining limitations.
 
-On current source builds, use repository_critic for explicit repository policy and staged scope;
-it is absent from v0.5.0-test.3 and disabled by the minimal profile. Follow the repository's own
+On test.4 and later, use repository_critic for explicit repository policy and staged scope;
+it is disabled by the minimal profile. Follow the repository's own
 naming, layers and purposes. Review commit hunks for relevance and semantic cohesion, excessive
 file size, modular ownership and non-obvious function explanations. Install hooks only through
 the explicit repository workflow; budgets and scope declarations do not prove those qualities.

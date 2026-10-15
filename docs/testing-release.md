@@ -1,13 +1,13 @@
 # Test-release protocol
 
-Distinguish the executable under test from current documentation: repository policies/hooks and
-expanded organization review require current source and are absent from `v0.5.0-test.3`.
+Use matching binary/configuration versions: repository policies/hooks, expanded organization
+review, history and technical-debt tools require `v0.5.0-test.4` or later.
 For repository tests, record `broad`/`focused`/`atomic`, explicit overrides, staged-tree identity,
 inventory/exclusions and unresolved import coverage. Exercise stale plans, out-of-scope paths,
 oversized changes, malformed policy and hook failure/bypass cases. A green static gate cannot
 establish semantic cohesion or sufficient explanations. [Repository policy](repository-policy.md).
 
-Optional source-only history tests must preserve its boundary: historical reports never approve
+Optional history tests must preserve its boundary: historical reports never approve
 current work. Check disabled-tool behavior, malformed/tampered records, corpus/path/size limits,
 context mismatch, paginated metadata and truncated comparisons. Inspect exports for raw source,
 report/context strings and local paths; a format fixture alone does not validate live jcode

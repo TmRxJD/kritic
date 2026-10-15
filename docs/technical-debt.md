@@ -3,8 +3,7 @@
 `technical_debt_critic` and `kritic debt` inventory dependency evidence and declared
 maintenance work. They need no GPU, model, package-manager install or script execution.
 This is advisory prioritization: **there is no approval verdict, automatic upgrade or
-proof that the project is free of debt**. The published `v0.5.0-test.3` binary predates it.
-Use a current source build; release/CI readiness must be checked separately.
+proof that the project is free of debt**. Use v0.5.0-test.4 or later and configuration from the matching package.
 
 ## Start offline
 

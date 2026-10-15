@@ -1,6 +1,6 @@
 # Kritic — TEST RELEASE
 
-Optional source-only review_history retains explicit private snapshots, not acceptance results.
+Optional review_history retains explicit private snapshots, not acceptance results.
 Never treat historical records as current verification or proof a report ran over supplied input
 hashes. jcode-format export writes a separate low-trust file; it does not modify live jcode data.
 
@@ -13,7 +13,7 @@ PR to https://github.com/TmRxJD/kritic. Keep the user's changes separate and do 
 code/credentials. Report exact blockers if you cannot contribute. An approval flag never authorizes
 publishing the user's project. See the shipped skill, CONTRIBUTING.md and SECURITY.md.
 
-Current source adds optional repository_critic and explicit hooks (not in v0.5.0-test.3).
+Test.4 and later include optional repository_critic and explicit hooks.
 Use repository-owned naming/layer rules and broad/focused/atomic commit budgets deliberately;
 independently review staged hunks, modular cohesion, oversized files and non-obvious explanations.
 The minimal profile hides repository tools until enabled. Hook installation is a separate explicit

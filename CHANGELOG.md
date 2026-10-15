@@ -1,13 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-test.4 — test release
 
 - Optional, disabled-by-default technical-debt review: offline dependency inventory, pnpm v9
   workspace resolutions, explicit maintenance/migration notes and bounded comment-marker leads.
   Online public-registry evidence is separately authorized; urgency/effort remain advisory,
   with no automatic upgrades or compatibility guarantee.
 - Corrected the MCP review-history output schema to declare object-shaped results; regression
-  coverage guards client schema validation. This is source functionality, not a published binary claim.
+  coverage guards client schema validation. The packaged MCP server uses the corrected schema.
 
 - Optional, disabled-by-default review history: explicit reports and input/context hashes,
   bounded historical comparison and sanitized low-trust jcode-format export. No cached approval,
@@ -19,14 +19,15 @@
   and explanatory-comment review signals. Static compliance is not semantic architecture approval.
 - Stricter provisional visual-quality rubric and an optional CPU semantic-map benchmark;
   no embedding candidate met the declared retrieval gate.
-- These changes describe current source; they are not included in the published test.3 binary.
+- Explicit external ownership of Kev/vision services prevents Kritic from starting, stopping
+  or unloading services managed by the user or an external router. GPU routing stays with that owner.
 
 ## 0.5.0-test.3 — published test release
 
 [Published release and packaged binaries](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.3).
 Deterministic checks are the default; local/cloud reviewers remain optional. The release includes
 the test-release skill, work contracts, capability configuration and client setup documentation.
-New repository enforcement and expanded organization review belong to Unreleased above.
+New repository enforcement and expanded organization review are included in test.4 above.
 
 ## 0.5.0-test.1 — historical preparation (not published)
 

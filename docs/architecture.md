@@ -38,5 +38,4 @@ Run reports/logs/models default under KRITIC_HOME. They can contain private sour
 before sharing. Contract reports are evidence ledgers, not cryptographic execution attestations.
 External commands execute with the user's privileges, not inside a security sandbox.
 
-Repository policy/hook functionality is newer source code, outside the published
-`v0.5.0-test.3` binary. See [policy and coverage boundaries](repository-policy.md).
+Repository policy/hook functionality is included in `v0.5.0-test.4` and later. See [policy and coverage boundaries](repository-policy.md).
