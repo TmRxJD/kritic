@@ -22,6 +22,11 @@ Activate with ``context.engine: kritic`` in Hermes' ``config.yaml`` (``kritic re
       use_kev: true         # rank by relevance with Kev; false = oldest first
       timeout_s: 90         # one kritic call
 
+The host's ``compression.threshold_tokens`` is also an absolute trigger ceiling
+(an integer greater than one). Kritic scales its target proportionally when that
+ceiling applies, while preserving the real model context length. Built-in tail
+retention settings remain separate.
+
 Concise replies: when ``output.style = "concise"`` in kritic.toml (the default), ``kritic register``
 writes ``concise.md`` beside this file and the plugin adds it to each turn through Hermes'
 ``pre_llm_call`` hook (about 70 tokens per turn). Delete the file, or set ``output.style =
@@ -83,6 +88,7 @@ def _kritic_home() -> Path:
 def _settings() -> Dict[str, Any]:
     defaults = {"threshold": 0.5, "target": 0.35, "protect_first_n": 3, "protect_last_n": 6,
                 "big_chars": 8000, "use_kev": True, "timeout_s": 90}
+    cfg = {}
     try:
         import yaml  # Hermes depends on PyYAML
 
@@ -96,6 +102,15 @@ def _settings() -> Dict[str, Any]:
         defaults.update({k: v for k, v in (cfg.get("kritic_context") or {}).items() if k in defaults})
     except Exception as exc:  # a missing or odd config keeps the defaults
         logger.debug("kritic: using default settings (%s)", exc)
+    compression = cfg.get("compression", {})
+    if compression is None:
+        compression = {}
+    if not isinstance(compression, dict):
+        raise ValueError("compression must be an object")
+    cap = compression.get("threshold_tokens")
+    if cap is not None and (type(cap) is not int or cap < 2):
+        raise ValueError("compression.threshold_tokens must be an integer greater than one")
+    defaults["threshold_tokens_cap"] = cap
     return defaults
 
 
@@ -116,6 +131,7 @@ class KriticContextEngine(ContextEngine):
         s = _settings()
         self.threshold_percent = float(s["threshold"])
         self.target_percent = float(s["target"])
+        self.threshold_tokens_cap = s.get("threshold_tokens_cap")
         self.protect_first_n = int(s["protect_first_n"])
         self.protect_last_n = int(s["protect_last_n"])
         self.big_chars = int(s["big_chars"])
@@ -162,6 +178,11 @@ class KriticContextEngine(ContextEngine):
 
     def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None) -> Optional[Dict[str, Any]]:
         target = int(self.context_length * self.target_percent) if self.context_length else 0
+        if self.threshold_tokens_cap is not None and self.threshold_tokens:
+            # Preserve retention without overstating actual model capacity.
+            target = min(target, int(self.threshold_tokens * self.target_percent / self.threshold_percent))
+        if self.threshold_tokens > 1:
+            target = min(target, self.threshold_tokens - 1)
         return self._run("compress", {
             "messages": messages, "target_tokens": max(target, 1), "session_id": self.session_id,
             "focus": focus, "protect_first_n": self.protect_first_n, "protect_last_n": self.protect_last_n,
@@ -170,6 +191,11 @@ class KriticContextEngine(ContextEngine):
         })
 
     # ---------------------------------------------------------------- ContextEngine
+
+    def update_model(self, *args: Any, **kwargs: Any) -> None:
+        super().update_model(*args, **kwargs)
+        if self.threshold_tokens_cap is not None:
+            self.threshold_tokens = min(self.threshold_tokens, self.threshold_tokens_cap)
 
     def update_from_response(self, usage: Dict[str, Any]) -> None:
         self.last_prompt_tokens = int(usage.get("prompt_tokens") or 0)

@@ -133,3 +133,45 @@ def test_fails_open_without_kritic(env, monkeypatch):
     assert e.compress(msgs) == msgs
     assert "not found" in e.last_error
     assert json.loads(e.handle_tool_call("kritic_recall", {"id": "kr-1"}))["error"]
+
+
+def test_absolute_budget_survives_model_switches_and_clone(env, monkeypatch):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text("compression:\n  threshold_tokens: 28000\nkritic_context:\n  use_kev: false\n", encoding="utf-8")
+    e = engine()
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    original = transcript()
+    snapshot = copy.deepcopy(original)
+    for window, trigger, target in [(1_000_000, 28000, 19600), (65536, 28000, 19600), (32000, 16000, 11200)]:
+        e.update_model("test-model", window)
+        assert e.context_length == window
+        assert not e.should_compress(trigger - 1)
+        assert e.should_compress(trigger)
+        assert e.compress(original) == snapshot  # failed backend never destroys history
+        assert payloads[-1]["target_tokens"] == target < trigger
+    clone = e.clone_for_agent()
+    clone.update_model("large-model", 1_000_000)
+    assert clone.threshold_tokens == 28000
+    assert e.threshold_tokens == 16000
+    assert original == snapshot
+
+
+@pytest.mark.parametrize("cap", [True, False, 0, 1, -1, 28000.0, "28000"])
+def test_invalid_absolute_budget_fails_closed(env, cap):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text(json.dumps({"compression": {"threshold_tokens": cap}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        engine()
+
+
+def test_null_absolute_budget_preserves_window_policy(env):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text('compression: {threshold_tokens: null}\n', encoding="utf-8")
+    e = engine()
+    e.update_model("test-model", 1_000_000)
+    assert e.context_length == 1_000_000
+    assert e.threshold_tokens == 500000
