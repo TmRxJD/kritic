@@ -198,6 +198,15 @@ pub struct VisualParams {
     /// Optional context: what the screen is for, target users, design system.
     #[serde(default)]
     pub metadata: String,
+    /// Craft target; defaults to vision.quality_target (professional). AAA is a showcase alias.
+    #[serde(default)]
+    pub quality_target: Option<crate::visual_quality::QualityTarget>,
+    /// Optional extra floor from 0 to 10; cannot weaken the selected target's minimum.
+    #[serde(default)]
+    pub quality_min: Option<f64>,
+    /// Up to two local comparison screenshots, supplied with permission; subject remains image 1.
+    #[serde(default)]
+    pub reference_images: Vec<String>,
     #[serde(default = "yes")]
     pub full_page: bool,
     #[serde(default)]
@@ -1020,11 +1029,10 @@ impl Kritic {
         Ok(Json(r))
     }
 
-    /// Visual critic (Qwen2.5-VL via Ollama): scores a screenshot 0-10 on layout clarity,
-    /// spacing/alignment, visual hierarchy, color contrast, accessibility. Approval = every score
-    /// >= 6. Issue phrases are `unverified_observations` (the model sometimes invents them); use
-    /// ui_test's axe results for verified contrast/a11y problems. Pass image_path or url.
-    /// Stops laya to free the GPU (Kev restarts on its next call, ~13s).
+    /// Visual critic: provisional, evidence-linked craft assessment against functional,
+    /// professional or showcase targets. Typography, composition, identity, assets and detail
+    /// are separate from functional/a11y checks. Approval is always null: the revised rubric is
+    /// uncalibrated and screenshots cannot certify product-wide AAA quality. Verify observations.
     #[tool(name = "visual_critic")]
     pub async fn visual_critic(
         &self,
@@ -1032,6 +1040,18 @@ impl Kritic {
     ) -> Result<Json<VisualResult>, String> {
         let t0 = started("visual_critic");
         let cfg = &self.kev.cfg;
+        let target = match p.quality_target {
+            Some(target) => target,
+            None => crate::visual_quality::QualityTarget::parse(&cfg.visual_quality_target)?,
+        };
+        let minimum = p.quality_min.unwrap_or(cfg.visual_min);
+        if !minimum.is_finite() || !(0.0..=10.0).contains(&minimum) {
+            return Err("quality_min must be finite and between 0 and 10".into());
+        }
+        let minimum = minimum.max(cfg.visual_min);
+        if p.reference_images.len() > 2 {
+            return Err("at most two reference_images are supported".into());
+        }
         let image = match (&p.image_path, &p.url) {
             (Some(path), _) => std::path::PathBuf::from(path),
             (None, Some(url)) => {
@@ -1043,7 +1063,20 @@ impl Kritic {
             (None, None) => return Err("give image_path or url".into()),
         };
         let _gpu = self.gpu("visual_critic").await;
-        let r = crate::vision::critique(cfg, &image, &p.metadata).await;
+        let references = p
+            .reference_images
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<_>>();
+        let r = crate::vision::critique_with_references(
+            cfg,
+            &image,
+            &p.metadata,
+            target,
+            minimum,
+            &references,
+        )
+        .await;
         finished("visual_critic", t0, &r);
         audit(cfg, "visual_critic", &r);
         Ok(Json(r))

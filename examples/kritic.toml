@@ -57,7 +57,8 @@
 # ollama_url = "http://127.0.0.1:11434"         # KRITIC_OLLAMA_URL
 # ollama_exe = "ollama"                         # KRITIC_OLLAMA_EXE (default: ollama on PATH, else the platform install path)
 # model = "qwen2.5vl:7b"                        # KRITIC_VISION_MODEL
-# visual_min = 6.0                              # KRITIC_VISUAL_MIN: lowest per-criterion score (0-10) that still approves
+# quality_target = "professional"               # KRITIC_VISUAL_QUALITY_TARGET: functional | professional | showcase (aaa alias)
+# visual_min = 6.0                              # KRITIC_VISUAL_MIN: additional floor; target floors 6/8/9 cannot be lowered; scores never approve
 
 [review]
 # backend = "off"                              # KRITIC_BACKEND: off | local | cloud | auto (local discovery only)

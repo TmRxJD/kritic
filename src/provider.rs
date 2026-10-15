@@ -128,18 +128,45 @@ pub fn request(
     user: &str,
     image: Option<(&str, &str)>,
 ) -> Result<Value, String> {
+    request_images(
+        cfg,
+        model,
+        system,
+        user,
+        &image.into_iter().collect::<Vec<_>>(),
+    )
+}
+
+/// Ordered images: the visual critic places its subject before comparison references.
+pub fn request_images(
+    cfg: &Config,
+    model: &str,
+    system: &str,
+    user: &str,
+    images: &[(&str, &str)],
+) -> Result<Value, String> {
+    if images.len() > 3 {
+        return Err("at most three images are supported (subject plus two references)".into());
+    }
+    if images.iter().any(|(mime, data)| {
+        !matches!(*mime, "image/png" | "image/jpeg" | "image/webp") || data.len() > 8 * 1024 * 1024
+    }) {
+        return Err("unsupported image MIME type or oversized encoded image".into());
+    }
     let max = cfg.cloud_max_tokens;
     if cfg.cloud_provider == "gemini" && model != cfg.cloud_model {
         return Err("Gemini vision.cloud_model must match the model in cloud.url".into());
     }
     Ok(match cfg.cloud_provider.as_str() {
         "openai" | "openai-compatible" => {
-            let content = match image {
-                Some((mime, data)) => json!([
-                    {"type": "text", "text": user},
-                    {"type": "image_url", "image_url": {"url": format!("data:{mime};base64,{data}")}}
-                ]),
-                None => json!(user),
+            let content = if images.is_empty() {
+                json!(user)
+            } else {
+                let mut parts = vec![json!({"type": "text", "text": user})];
+                for (mime, data) in images {
+                    parts.push(json!({"type": "image_url", "image_url": {"url": format!("data:{mime};base64,{data}")}}));
+                }
+                json!(parts)
             };
             let mut body = json!({"model": model, "stream": false, "messages": [
                 {"role": "system", "content": system}, {"role": "user", "content": content}
@@ -153,14 +180,14 @@ pub fn request(
         }
         "anthropic" => {
             let mut content = vec![json!({"type":"text", "text":user})];
-            if let Some((mime, data)) = image {
+            for (mime, data) in images {
                 content.push(json!({"type":"image", "source":{"type":"base64", "media_type":mime, "data":data}}));
             }
             json!({"model":model, "max_tokens":max, "system":system, "messages":[{"role":"user", "content":content}]})
         }
         "gemini" => {
             let mut parts = vec![json!({"text":user})];
-            if let Some((mime, data)) = image {
+            for (mime, data) in images {
                 parts.push(json!({"inlineData":{"mimeType":mime, "data":data}}));
             }
             json!({"systemInstruction":{"parts":[{"text":system}]}, "contents":[{"role":"user", "parts":parts}],
@@ -262,12 +289,29 @@ pub async fn complete(
     user: &str,
     image: Option<(&str, &str)>,
 ) -> Result<Completion, String> {
+    complete_images(
+        cfg,
+        model,
+        system,
+        user,
+        &image.into_iter().collect::<Vec<_>>(),
+    )
+    .await
+}
+
+pub async fn complete_images(
+    cfg: &Config,
+    model: &str,
+    system: &str,
+    user: &str,
+    images: &[(&str, &str)],
+) -> Result<Completion, String> {
     let key = cfg.cloud_key().ok_or_else(|| {
         format!(
             "cloud API key missing: set {} or run `kritic key`",
             cfg.cloud_key_env
         )
     })?;
-    let body = request(cfg, model, system, user, image)?;
+    let body = request_images(cfg, model, system, user, images)?;
     decode(&cfg.cloud_provider, &exchange(cfg, &key, &body).await?)
 }

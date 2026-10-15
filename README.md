@@ -146,6 +146,19 @@ Kev and vision. The 8 GB vision configuration remains a field-testing target, no
 No GPU is required for deterministic checks or cloud review. 16 GB system RAM is a practical
 recommendation; the tested project may require more. See [hardware and dependencies](docs/getting-started.md).
 
+## Professional UI and showcase quality
+
+Passing interaction or accessibility checks does not establish visual quality. The optional
+visual critic now assesses typography, composition, identity, asset coherence and finishing
+detail separately, against functional (6), professional (8, default) or showcase (9) anchors.
+`aaa` selects the showcase target; it never certifies a whole product as AAA.
+
+The [reference bank](specs/visual-reference-anchors.md) includes restrained task apps, data-heavy
+dashboards, controller interfaces and expressive/minimalist games, plus competent-but-generic
+counterexamples. You can supply two actual comparison screenshots with `reference_images`.
+New model assessments are **uncalibrated and provisional**: `approval` is always `null`;
+missing evidence stays unverified. See [visual quality and examples](docs/visual-quality.md).
+
 ## Review a work contract
 
 Copy [the contract example](examples/contract.toml) to `.kritic/contract.toml` and write real,

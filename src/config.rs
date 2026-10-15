@@ -55,8 +55,9 @@ pub struct Config {
     pub vision_backend: String,
     pub vision_cloud_model: String,
     pub capabilities: std::collections::BTreeMap<String, bool>,
-    /// Minimum per-criterion visual score (0-10) for approval. Calibrated: polished UI 7-9,
-    /// plain unstyled 5-6, messy 0.
+    /// Requested craft target; scores remain provisional, never a calibrated approval.
+    pub visual_quality_target: String,
+    /// Additional score floor (0-10); cannot lower the selected craft target's minimum.
     pub visual_min: f64,
     /// Chrome or Edge for the native web tester. `None` finds an installed one.
     pub browser: Option<PathBuf>,
@@ -112,6 +113,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("vision.model", "KRITIC_VISION_MODEL"),
     ("vision.backend", "KRITIC_VISION_BACKEND"),
     ("vision.cloud_model", "KRITIC_VISION_CLOUD_MODEL"),
+    ("vision.quality_target", "KRITIC_VISUAL_QUALITY_TARGET"),
     ("vision.visual_min", "KRITIC_VISUAL_MIN"),
     ("review.max_revisions", "KRITIC_MAX_REVISIONS"),
     ("review.command_timeout_s", "KRITIC_COMMAND_TIMEOUT"),
@@ -561,6 +563,7 @@ impl Config {
             ollama_url: s.str("vision.ollama_url", "http://127.0.0.1:11434"),
             ollama_exe: s.path("vision.ollama_exe", default_ollama_exe()),
             vision_model: s.str("vision.model", "qwen2.5vl:7b"),
+            visual_quality_target: s.str("vision.quality_target", "professional"),
             visual_min: s.num("vision.visual_min", 6.0),
             browser: s.get("ui.browser").map(PathBuf::from),
             runs_dir: s.path("server.runs_dir", home.join("runs")),
@@ -598,6 +601,19 @@ impl Config {
     }
 
     fn validate_settings(&mut self) {
+        self.visual_quality_target = self.visual_quality_target.to_ascii_lowercase();
+        if self.visual_quality_target == "aaa" {
+            self.visual_quality_target = "showcase".into();
+        }
+        if !matches!(
+            self.visual_quality_target.as_str(),
+            "functional" | "professional" | "showcase"
+        ) {
+            self.config_errors.push(
+                "vision.quality_target: expected functional, professional, showcase or aaa".into(),
+            );
+            self.visual_quality_target = "professional".into();
+        }
         if !self.visual_min.is_finite() || !(0.0..=10.0).contains(&self.visual_min) {
             self.config_errors.push(
                 "vision.visual_min: expected a finite threshold from 0 to 10 (using 6)".into(),

@@ -89,6 +89,19 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert!(kritic::config::kritic_home().is_absolute());
     unsafe { std::env::set_var("KRITIC_HOME", dir.path().join("empty")) };
 
+    assert_eq!(Config::load().visual_quality_target, "professional");
+    unsafe { std::env::set_var("KRITIC_VISUAL_QUALITY_TARGET", "aaa") };
+    assert_eq!(Config::load().visual_quality_target, "showcase");
+    unsafe { std::env::set_var("KRITIC_VISUAL_QUALITY_TARGET", "unknown") };
+    let invalid_target = Config::load();
+    assert!(
+        invalid_target
+            .config_errors
+            .iter()
+            .any(|e| e.contains("vision.quality_target"))
+    );
+    unsafe { std::env::remove_var("KRITIC_VISUAL_QUALITY_TARGET") };
+
     for value in ["NaN", "-1", "11"] {
         unsafe { std::env::set_var("KRITIC_VISUAL_MIN", value) };
         let invalid = Config::load();

@@ -1,6 +1,7 @@
 //! kritic: local, advisory, end-of-task governance for Claude Code.
 //! Kev-4B (via laya) answers typed questions; deterministic checks and real project commands
-//! supply facts. Approval is always computed in code from thresholds.
+//! supply facts. Deterministic approval is scoped to declared checks; visual craft assessments
+//! are provisional and never confer aesthetic approval.
 
 pub mod checks;
 pub mod chunk;
@@ -31,3 +32,4 @@ pub mod unity;
 pub mod usage;
 pub mod ux;
 pub mod vision;
+pub mod visual_quality;
