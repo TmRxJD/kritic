@@ -6,6 +6,7 @@
 pub mod checks;
 pub mod chunk;
 pub mod cli;
+pub mod commit_policy;
 pub mod config;
 pub mod context;
 pub mod contract;
