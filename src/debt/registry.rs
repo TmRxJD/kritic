@@ -237,10 +237,13 @@ async fn lookup(
     report(dependency, data, status, Some(observed), Some(0))
 }
 
-async fn fetch(dependency: &Dependency, client: &reqwest::Client) -> Metadata {
-    let mut data = Metadata::default();
-    let name = http::segment(&dependency.name);
-    let latest_url = match dependency.ecosystem {
+fn request_name(dependency: &Dependency) -> String {
+    http::segment(&parse::normalize(dependency.ecosystem, &dependency.name))
+}
+
+fn latest_url(dependency: &Dependency) -> String {
+    let name = request_name(dependency);
+    match dependency.ecosystem {
         Ecosystem::Cargo => format!("https://crates.io/api/v1/crates/{name}"),
         Ecosystem::Npm => format!("https://registry.npmjs.org/{name}/latest"),
         Ecosystem::Pypi => format!("https://pypi.org/pypi/{name}/json"),
@@ -248,7 +251,13 @@ async fn fetch(dependency: &Dependency, client: &reqwest::Client) -> Metadata {
             "https://api.deps.dev/v3/systems/{}/packages/{name}",
             system.system()
         ),
-    };
+    }
+}
+
+async fn fetch(dependency: &Dependency, client: &reqwest::Client) -> Metadata {
+    let mut data = Metadata::default();
+    let name = request_name(dependency);
+    let latest_url = latest_url(dependency);
     data.source_url = Some(latest_url.clone());
     data.metadata_sources.push(latest_url.clone());
     match http::get(client, &latest_url).await {

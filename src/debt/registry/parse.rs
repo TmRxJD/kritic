@@ -8,7 +8,7 @@ fn text(value: &Value) -> Option<String> {
         .filter(|s| !s.is_empty() && s.len() <= 4096 && !s.chars().any(char::is_control))
         .map(str::to_owned)
 }
-fn normalize(ecosystem: Ecosystem, name: &str) -> String {
+pub(super) fn normalize(ecosystem: Ecosystem, name: &str) -> String {
     match ecosystem {
         Ecosystem::Pypi => {
             let mut normalized = String::new();

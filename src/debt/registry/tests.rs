@@ -13,6 +13,28 @@ fn dependency(ecosystem: Ecosystem, name: &str) -> Dependency {
     }
 }
 
+#[test]
+fn request_urls_use_registry_canonical_names_without_changing_report_identity() {
+    let nuget = dependency(Ecosystem::Nuget, "Newtonsoft.Json");
+    assert_eq!(
+        latest_url(&nuget),
+        "https://api.deps.dev/v3/systems/NUGET/packages/newtonsoft.json"
+    );
+    assert_eq!(request_name(&nuget), "newtonsoft.json");
+    let python = dependency(Ecosystem::Pypi, "Some__Package.Name");
+    assert_eq!(
+        latest_url(&python),
+        "https://pypi.org/pypi/some-package-name/json"
+    );
+    assert_eq!(
+        latest_url(&dependency(Ecosystem::Npm, "@scope/widget")),
+        "https://registry.npmjs.org/%40scope%2Fwidget/latest"
+    );
+    let original = report(&nuget, Metadata::default(), "fixture", None, None);
+    assert_eq!(original.name, "Newtonsoft.Json");
+    assert_eq!(original.current, nuget.current);
+}
+
 #[tokio::test]
 async fn expired_online_batch_budget_never_polls_queued_work() {
     let dependency = dependency(Ecosystem::Npm, "queued-package");
