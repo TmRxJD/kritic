@@ -102,6 +102,26 @@ class SchemaBudgetTests(unittest.TestCase):
                     budget.compare(argparse.Namespace(baseline=root/"before", candidate=root/"after", output=None))
             self.assertFalse(json.loads(output.getvalue())["pass"])
 
+    def test_legacy_tuple_schema_comparison_keeps_literal_array_payloads(self):
+        before = {"type": "object", "properties": {"tuple": {"type": "array",
+                  "items": [{"type": "string", "title": "First"}],
+                  "additionalItems": [{"type": "number", "title": "Extra"}],
+                  "const": [{"title": "literal const"}], "default": [{"title": "literal default"}]}}}
+        after = {"type": "object", "properties": {"tuple": {"type": "array",
+                 "items": [{"type": "string"}], "additionalItems": [{"type": "number"}],
+                 "const": [{"title": "literal const"}], "default": [{"title": "literal default"}]}}}
+        self.assertEqual(budget.constraint_projection(before), after)
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            for label, schema in (("before", before), ("after", after)):
+                for profile in ("current", "minimal"):
+                    path = root / label / profile / "tools-list.json"
+                    path.parent.mkdir(parents=True)
+                    path.write_text(json.dumps({"tools": [{"name": "review", "inputSchema": schema}]}), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                budget.compare(argparse.Namespace(baseline=root/"before", candidate=root/"after", output=None))
+            self.assertTrue(json.loads(output.getvalue())["pass"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -202,7 +202,10 @@ def constraint_projection(schema):
     for key in ("items", "additionalItems", "contains", "not", "if", "then", "else",
                 "additionalProperties", "unevaluatedProperties", "unevaluatedItems", "propertyNames", "contentSchema"):
         if key in result:
-            result[key] = constraint_projection(result[key])
+            if key in ("items", "additionalItems") and isinstance(result[key], list):
+                result[key] = [constraint_projection(value) for value in result[key]]
+            else:
+                result[key] = constraint_projection(result[key])
     return result
 
 
