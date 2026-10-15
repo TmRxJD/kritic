@@ -3,6 +3,13 @@
 Kritic's skill is a field-testing protocol. Verify findings independently. Fix reproducible Kritic
 defects directly and submit focused PRs with regression coverage and sanitized evidence.
 
+Keep commits scoped to one explainable purpose. Current source supports repository-owned
+`broad`, `focused` (default), or `atomic` budgets and explicit Git hooks; follow
+[the policy workflow](docs/repository-policy.md), review each staged hunk and bind an exact scope
+plan. Never widen budgets or bulk-baseline files solely to make a gate pass. Local hooks are
+bypassable; CI/review remain necessary. Record static violations separately from heuristic
+recommendations and independently judge naming, cohesion, discoverability and comment quality.
+
 1. Reproduce the defect and distinguish it from a bug in the user's project.
 2. Add a regression that fails for the demonstrated behavior (avoid vacuous/mirrored assertions).
 3. Fix the implementation without weakening checks, expanding approval scope or hiding coverage gaps.

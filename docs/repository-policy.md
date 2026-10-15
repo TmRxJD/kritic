@@ -106,3 +106,19 @@ schemas where the repository defines them; those folder names are examples, not 
 
 The capability is controlled by `capabilities.repository` / `KRITIC_CAP_REPOSITORY`; disabling
 the capability makes explicit CLI policy commands fail rather than silently pass a hook.
+
+## First Tracker audit
+
+The initial tracked-source run on the Tracker website read **4,309 files with zero read
+errors**, reporting **486 static policy violations** and **15,587 review recommendations**.
+Of those recommendations, **11,742 were `unparsed_import` coverage signals**, largely showing
+the limits of conservative textual import recognition. These are recorded snapshot counts,
+not a current clean-bill-of-health, model-accuracy measurement or 15,587 confirmed defects.
+Subsequent parser changes can change the counts; compare inventories, policy and source revision
+before comparing runs. No private project source is reproduced here.
+
+Triage by rule and responsibility before refactoring. Verify each boundary against the actual
+compiler/module resolution and each large-file recommendation against cohesive ownership. Fix
+Kritic false positives with regressions; do not rename/move thousands of files, bulk-baseline
+debt or delete legitimate comments merely to reduce the totals. The initial run demonstrates
+inventory coverage and prioritization needs, not successful architecture enforcement.

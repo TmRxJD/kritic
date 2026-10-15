@@ -52,6 +52,13 @@ to the staged tree; agents still inspect semantic relevance and modularity indep
 See [setup and limitations](docs/repository-policy.md). These features are not in the older
 published test-release binary.
 
+Use `broad`, `focused` (default), or `atomic` commit budgets for coherent milestones, individual
+behaviors, or small review units. Budget compliance never establishes semantic relevance.
+Enable `capabilities.repository=true` in a source build, then explicitly configure/install the
+hook; the minimal profile leaves this capability off. The first Tracker audit exposed substantial
+review noise as well as rule violations; [the evidence and limits](docs/repository-policy.md#first-tracker-audit)
+are recorded without treating every recommendation as a confirmed bug.
+
 ## Experimental local semantic map
 
 The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
@@ -102,7 +109,7 @@ Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
 ```
 
 The minimal profile exposes artifact, contract and native resource/hygiene checks plus utility
-tools. Browser/UX, security, quality, desktop, plugins and model helpers are deliberately hidden.
+tools. Browser/UX, security, quality, repository, desktop, plugins and model helpers are deliberately hidden.
 Installing a dependency does not turn its group on. Enabling a group does not install its dependencies.
 
 ### Add only the capabilities you need
@@ -116,6 +123,7 @@ for the named keys, then restart your MCP connection. Keep `[review].backend` an
 | Web interactions and UX rules | `web=true`, `ux=true` | Chrome/Edge/Chromium; app URL and useful workflow/spec. Run setup with `--no-scanners --no-register` to provision missing harness dependencies for enabled groups. | `ui_test`, `ux_critic(novice="off")`; interaction evidence and axe/workflow rules. No screenshot model score. No Node/Playwright required for native CDP. |
 | Security | `security=true` | Install uv first if Python scanners are absent; setup uses `uv tool install` for Semgrep/Bandit/Ruff and provisions gitleaks/osv-scanner. Run setup with `--no-harness --no-register`. Network may be needed. | `security_critic`; missing applicable scanners remain incomplete coverage. cargo-audit is optional. |
 | Quality | `quality=true` | Your project's linter/typechecker and its normal dependencies; Ruff where applicable. | `code_quality_critic`; Kritic does not install your project's toolchain. |
+| Scoped commits and organization (source build) | `repository=true` | Git, repository-owned `.kritic/repository.toml`; explicitly install the hook. No extra runtime/model. | `repository_critic`, tracked-source audits, staged budgets and scope plans; [setup and limitations](docs/repository-policy.md). |
 | Windows desktop / Unity | `desktop=true` (and `ux=true` for workflows) | Python 3.11+, uv, pywinauto harness; interactive Windows session. Run setup with `--no-scanners --no-register`. Unity checks also need the matching Unity editor. | `desktop_test`, `unity_tests`, desktop UX evidence. No GPU model required; the app under test may require one. |
 | Repository checks / Beat Saber maps | `plugins=true` / `domain_maps=true` | Relevant repository plugin or map evaluator and its dependencies. | Project-defined checks / `map_eval`; not general model review. |
 | Text model review | No capability group; select `[review].backend` | Optional [cloud API](docs/cloud.md) or [local Kev](docs/getting-started.md#optional-local-models). | `critic_score`, `decide`; advisory model assessments. |

@@ -1,5 +1,9 @@
 # Tools — test release
 
+The `repository_critic` and expanded organization checks below describe current source builds;
+the published `v0.5.0-test.3` binary predates them. The minimal profile hides repository tools
+until `capabilities.repository=true`. [Policy/hook setup and limits](repository-policy.md).
+
 Validate every finding independently. Deterministic checking is the default; model tools may
 be disabled and absent from discovery. A scoped approval is not task completion or permission.
 `status.enabled_tools` lists the effective tool surface after capability toggles.

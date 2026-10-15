@@ -5,6 +5,12 @@ Then connect **two things**: the MCP server provides checks; the skill tells the
 interpret and independently validate them. Your host's existing model does the reasoning;
 leave Kritic's model backends off. No additional inference account is needed.
 
+Current source builds also offer `repository_critic` when `capabilities.repository=true`.
+The minimal profile disables it; the published `v0.5.0-test.3` binary predates it. Client/MCP
+registration does not enforce commits: configure repository rules and explicitly
+[install the Git hook](repository-policy.md#commit-enforcement). Keep semantic scope review in
+the calling agent, including with models off.
+
 ## Codex desktop, CLI, IDE and local Work
 
 Merge [examples/codex/config.toml](../examples/codex/config.toml) into your user

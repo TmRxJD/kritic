@@ -20,6 +20,7 @@ quality = true
 desktop = true
 resources = true
 contracts = true
+repository = true
 plugins = true
 context = false
 domain_maps = false
@@ -31,6 +32,13 @@ No GPU, inference downloads or reviewer API calls are needed for this profile. O
 dependencies can still be missing; status/doctor expose configuration and availability, while
 each result reports what actually ran. Capability toggles hide tools from MCP discovery and
 execution. Explicit `tools.disabled` exclusions take precedence. Restart the server/client.
+
+`capabilities.repository` (default true in current source) exposes `repository_critic` and enables
+explicit repository CLI checks. The minimal profile sets it false. Set it true deliberately for
+[repository-owned policies and hooks](repository-policy.md); installing Kritic does not install a
+Git hook. These repository features require a current source build, not the published
+`v0.5.0-test.3` binary. Repository rules live in `.kritic/repository.toml`, separately from this
+user/server configuration; unknown repository-policy keys fail rather than being ignored.
 
 `review.backend`: off, local, cloud, or explicitly selected auto (discover local installation
 only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting values disable

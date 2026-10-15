@@ -49,6 +49,11 @@ fix evidenced craft problems within scope; do not relabel the target or chase mo
 
 ### Commit scope and code organization
 
+These tools require a current source build: the published `v0.5.0-test.3` binary predates them.
+The minimal profile sets `capabilities.repository=false`; enable it deliberately and inspect
+tool discovery. Use the repository's `broad`, `focused` (default), or `atomic` budget as appropriate
+to one coherent review purpose. A larger preset never authorizes mixing unrelated work.
+
 When the repo has `.kritic/repository.toml`, call `repository_critic` for organization and
 `staged=true` before a commit. Read the staged diff yourself: reject unrelated hunks, accidental
 data/logs and scope declarations that simply list everything. Split by coherent purpose, retaining

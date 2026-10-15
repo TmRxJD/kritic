@@ -3,10 +3,18 @@
 
 # Measurements
 
-Everything here was measured on Windows 11 with an RTX 5070 (12 GB), Kev-4B Q8_0 through laya
+The historical model measurements below used Windows 11 with an RTX 5070 (12 GB), Kev-4B Q8_0 through laya
 (CUDA sm_89 PTX JIT-compiled to sm_120) and `qwen2.5vl:7b` through Ollama. The raw records are in
 `calibration/`. For behaviour on realistic agent changes, with and without kritic, see
 [benchmarks](benchmarks.md).
+
+## Source-only repository audit
+
+The initial model-free Tracker audit covered 4,309 tracked source files, zero read errors,
+486 static rule violations and 15,587 recommendations, including 11,742 `unparsed_import`
+coverage signals. Counts belong to that recorded snapshot; recommendations are not confirmed
+bugs and are sensitive to parser coverage and repository policy. This is not model calibration
+or functionality shipped in `v0.5.0-test.3`. See [triage and limitations](repository-policy.md#first-tracker-audit).
 
 ## Kev critic
 
