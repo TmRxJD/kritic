@@ -14,6 +14,7 @@ pub mod critic;
 pub mod events;
 pub mod files;
 pub mod gpu;
+pub mod history;
 pub mod hygiene;
 pub mod kev;
 pub mod map;
