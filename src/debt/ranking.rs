@@ -21,7 +21,8 @@ fn numeric(value: &str) -> Option<Vec<u64>> {
 }
 
 pub(super) fn estimate(rating: Option<u8>, label: &str) -> Effort {
-    Effort { rating, minimum_rating: rating.map(|_| 1), maximum_rating: rating.map(|r| if r >= 4 { 5 } else { 3 }),
+    // Version metadata cannot rule out a full refactor, even for a patch.
+    Effort { rating, minimum_rating: rating.map(|_| 1), maximum_rating: rating.map(|_| 5),
         estimated: true, label: label.into(), evidence: Vec::new(),
         possibilities: vec![
             "A version bump and lockfile regeneration may be sufficient; no successful update has been attempted.".into(),

@@ -109,7 +109,8 @@ still requires independent validation.
 | 4 | Potential breaking API changes requiring investigation |
 | 5 | Explicitly declared broad refactor or migration |
 
-Ratings are estimates, with uncertainty ranges and validation steps. Even a patch can break
+Ratings are estimates, with uncertainty ranges and validation steps. Unverified migrations retain
+the full 1–5 possibility range; the point rating is a review lead, not a measured bound. Even a patch can break
 application behavior; a major version can sometimes be simple. Qualified/prerelease versions
 or unsupported ordering remain unordered. A resolved version ahead of the observed default
 does not trigger a downgrade recommendation. A deprecated target requires choosing a supported

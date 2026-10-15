@@ -38,6 +38,11 @@ fn update_effort_and_urgency_are_independent_evidence_estimates() {
     let patch = rank_dependency(&dependency(Some("1.2.3")), &release(Some("1.2.3"), "1.2.4"));
     assert_eq!(patch.version_status, "update_candidate");
     assert_eq!(patch.effort.rating, Some(1));
+    assert_eq!(
+        patch.effort.maximum_rating,
+        Some(5),
+        "version metadata cannot establish a safe upper bound on migration work"
+    );
     assert!(patch.effort.estimated && patch.effort.label.contains("not verified"));
     assert_eq!(patch.urgency, "low");
     let major = rank_dependency(&dependency(Some("1.2.3")), &release(Some("1.2.3"), "2.0.0"));
