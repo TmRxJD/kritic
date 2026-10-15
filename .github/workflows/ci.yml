@@ -77,18 +77,7 @@ jobs:
         shell: pwsh
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          $artifactDir = Join-Path $env:RUNNER_TEMP 'kritic-windows-test'
-          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
-          Copy-Item -LiteralPath target/debug/kritic.exe -Destination "$artifactDir/kritic.exe"
-          [ordered]@{
-            head_sha = $env:PR_HEAD_SHA
-            checkout_sha = (git rev-parse HEAD)
-            ci_run_id = '${{ github.run_id }}'
-            filename = 'kritic.exe'
-            platform = 'windows-x86_64'
-            sha256 = (Get-FileHash -LiteralPath "$artifactDir/kritic.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
-          } | ConvertTo-Json | Set-Content -LiteralPath "$artifactDir/manifest.json" -Encoding utf8
+        run: ./scripts/stage-ci-test-binary.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kritic-windows-test
