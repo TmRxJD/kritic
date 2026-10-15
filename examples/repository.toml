@@ -1,0 +1,34 @@
+# Copy to .kritic/repository.toml and adapt to the repository's documented conventions.
+version = 1
+
+[commit]
+level = "focused" # broad | focused (default) | atomic
+# Preset budgets: broad 64 files / 1600 lines / 2 MiB;
+# focused 32 / 800 / 1 MiB; atomic 8 / 200 / 256 KiB.
+# Optional numeric overrides replace ONLY the specified preset budget:
+# max_files = 16
+# max_changed_lines = 400
+# max_patch_bytes = 524288
+require_scope_plan = true
+
+[organization]
+max_file_lines = 500
+hard_file_lines = 1000
+max_folder_files = 40
+max_depth = 8
+long_function_lines = 60
+complex_function_branches = 8
+
+[[organization.naming_rules]]
+prefix = "src"
+extensions = ["rs"]
+pattern = '^[a-z][a-z0-9_]*\.rs$'
+purpose = "Rust modules use snake_case names expressing their responsibility."
+
+# Add layers using YOUR repository's terminology and dependency directions.
+# Do not create empty helpers/types/services folders to satisfy a template.
+[[organization.layers]]
+name = "source"
+prefix = "src"
+purpose = "Rust application modules, separated by coherent responsibility."
+allow_imports_from = ["source"]

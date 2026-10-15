@@ -1,5 +1,12 @@
 # Test-release protocol
 
+Distinguish the executable under test from current documentation: repository policies/hooks and
+expanded organization review require current source and are absent from `v0.5.0-test.3`.
+For repository tests, record `broad`/`focused`/`atomic`, explicit overrides, staged-tree identity,
+inventory/exclusions and unresolved import coverage. Exercise stale plans, out-of-scope paths,
+oversized changes, malformed policy and hook failure/bypass cases. A green static gate cannot
+establish semantic cohesion or sufficient explanations. [Repository policy](repository-policy.md).
+
 The objective is to evaluate the viability of Kritic's skill, tools, configuration and findings.
 Do not inherently trust a critic, including a deterministic checker. Validate its inputs, scope,
 test discovery, assertions, execution evidence and applicability. A correct parser check cannot

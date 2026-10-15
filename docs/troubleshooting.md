@@ -30,6 +30,17 @@ exists), the config file read, any `config_errors`, and the ready states.
 
 ## Test-release/cloud/contract failures
 
+- `repository_critic` missing: it requires current source (not `v0.5.0-test.3`) and
+  `capabilities.repository=true`; the minimal profile disables it. Restart MCP after enabling.
+- Scope plan stale: inspect and restage the intended diff, then regenerate a plan for that exact
+  staged tree. Do not bypass the hook or auto-include unrelated paths to obtain green.
+- Hook installation refuses an existing hook: integrate the existing check deliberately;
+  installation is explicit and does not overwrite it. Check `core.hooksPath`, executable mode
+  and LF line endings. Local hooks can be bypassed; use trusted CI for shared enforcement.
+- Large organization counts: distinguish static violations from review/coverage signals.
+  Unresolved/dynamic/ambiguous imports need independent review, not blind code moves or blanket
+  baselines. [First Tracker run and known noise](repository-policy.md#first-tracker-audit).
+
 - Disabled tools are absent from discovery. Inspect status.enabled_tools and capability toggles.
 - Cloud key missing after changing provider/origin: default saved keys are origin-bound; select
   the appropriate credential explicitly or save a new key. Do not copy a previous vendor's key.

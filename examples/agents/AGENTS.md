@@ -9,3 +9,9 @@ unverified. Do not install models or API credentials merely to satisfy the skill
 Reproduce Kritic defects, fix them in the Kritic repository with meaningful regression coverage,
 and submit a focused PR to https://github.com/TmRxJD/kritic. Keep private project data out of
 public reports. Report actual evidence, false positives, fixes and remaining limitations.
+
+On current source builds, use repository_critic for explicit repository policy and staged scope;
+it is absent from v0.5.0-test.3 and disabled by the minimal profile. Follow the repository's own
+naming, layers and purposes. Review commit hunks for relevance and semantic cohesion, excessive
+file size, modular ownership and non-obvious function explanations. Install hooks only through
+the explicit repository workflow; budgets and scope declarations do not prove those qualities.

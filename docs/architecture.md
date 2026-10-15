@@ -13,6 +13,11 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
   unknown/different models. Calibration is no longer process-global.
 - native/: browser CDP, process/resource/hygiene implementations; Python for Windows UI Automation.
 - scan.rs/phase3.rs: external scanners/linters and measured findings; model triage cannot erase them.
+- repository.rs/commit_policy/: repository-owned policy, tracked/staged inventories, index-bound
+  scope plans and explicit local hooks; no semantic proof that every hunk serves its purpose.
+- organization.rs/organization/: line budgets, declared naming/layers/import aliases and bounded
+  comment/import heuristics. Ordinary code-quality review applies them to supplied files;
+  `repository_critic` additionally offers the tracked inventory and staged commit gate.
 - vision.rs/ux.rs: optional local/cloud screenshot and novice judgments; deterministic workflow rules.
 
 GPU coordination applies only to explicitly selected local inference. One selected model at a
@@ -23,3 +28,6 @@ The prior measured 12 GB spillover explains the sequential design; it is not an 
 Run reports/logs/models default under KRITIC_HOME. They can contain private source/output: sanitize
 before sharing. Contract reports are evidence ledgers, not cryptographic execution attestations.
 External commands execute with the user's privileges, not inside a security sandbox.
+
+Repository policy/hook functionality is newer source code, outside the published
+`v0.5.0-test.3` binary. See [policy and coverage boundaries](repository-policy.md).

@@ -51,6 +51,11 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Uninstall(a)) => exit_on(kritic::cli::uninstall(a)),
         Some(Cmd::Context(a)) => exit_on(kritic::cli::context::run(a).await),
         Some(Cmd::Key(a)) => exit_on(kritic::cli::key(a)),
+        Some(Cmd::Repository(a)) => match kritic::cli::repository::run(a) {
+            Ok(true) => std::process::exit(0),
+            Ok(false) => std::process::exit(1),
+            Err(e) => exit_on(Err(e)),
+        },
         Some(Cmd::Contract(a)) => {
             let cfg = Config::load();
             if !cfg.capability("contracts") || !cfg.tool_enabled("contract_critic") {

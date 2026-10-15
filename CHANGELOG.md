@@ -1,4 +1,23 @@
-# 0.5.0-test.1 (prepared; not published)
+# Changelog
+
+## Unreleased
+
+- Model-free repository policy review and explicit staged-index hooks, with broad/focused/atomic
+  commit budgets, tree-bound scope plans and declared naming/layer/import rules.
+- Ordinary code-quality review includes physical/nonblank file sizes, oversized-file baselines
+  and explanatory-comment review signals. Static compliance is not semantic architecture approval.
+- Stricter provisional visual-quality rubric and an optional CPU semantic-map benchmark;
+  no embedding candidate met the declared retrieval gate.
+- These changes describe current source; they are not included in the published test.3 binary.
+
+## 0.5.0-test.3 — published test release
+
+[Published release and packaged binaries](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.3).
+Deterministic checks are the default; local/cloud reviewers remain optional. The release includes
+the test-release skill, work contracts, capability configuration and client setup documentation.
+New repository enforcement and expanded organization review belong to Unreleased above.
+
+## 0.5.0-test.1 — historical preparation (not published)
 
 - Test-release skill: independently verify critic claims, evaluate workflow viability, reproduce
   and fix Kritic defects with regressions and upstream PRs.
@@ -9,8 +28,6 @@
   final revalidation, separately reported static enforcement wiring and prose sources.
 - Capability/tool toggles, no GPU side effects for cloud/off, scoped calibration provenance,
   rejection of empty/skipped/vacuous approvals, synchronized docs and offline CI.
-
-# Changelog
 
 ## 0.4.0 — 2026-09-29: kritic
 

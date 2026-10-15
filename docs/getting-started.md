@@ -51,6 +51,7 @@ deterministic review and avoid automatic Claude/Hermes registration; restart MCP
 | Security scanners | `security=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-register` |
 | Windows desktop UI | `desktop=true`; optionally `ux=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
 | Project code quality | `quality=true` | Install your project's lint/typecheck dependencies, then run doctor; no model/setup needed |
+| Scoped commits / organization (current source) | `repository=true`; minimal profile defaults false | Build current source, configure `.kritic/repository.toml`, then follow [explicit hook setup](repository-policy.md); Git required, no model/download |
 | Repository plugins / map domain | `plugins=true` / `domain_maps=true` | Install the relevant project plugin/evaluator dependencies; no model required for map_eval |
 
 Browser provisioning uses installed Chrome/Edge/Chromium or downloads Chrome for Testing.
@@ -62,6 +63,10 @@ doctor and critic coverage; a successful setup command does not prove every opti
 or project validator works. Do not install local models to fix missing deterministic dependencies.
 
 ## Install from source and configure
+
+Repository policy tools and commit hooks described in [repository policy](repository-policy.md)
+are newer source functionality; the published `v0.5.0-test.3` ZIP does not contain them.
+Installing or registering the server never installs a Git hook automatically.
 
 ```bash
 git clone https://github.com/TmRxJD/kritic.git
