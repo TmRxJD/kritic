@@ -187,12 +187,14 @@ fn poetry_deps(name: &str, value: &toml::Value, locked: &[Locked], inv: &mut Inv
         }
         add(
             inv,
-            Ecosystem::Pypi,
-            &normalize(pkg),
-            range,
-            "direct",
-            name,
-            public,
+            super::Declaration {
+                ecosystem: Ecosystem::Pypi,
+                name: &normalize(pkg),
+                requirement: range,
+                scope: "direct",
+                manifest: name,
+                public,
+            },
             locked,
         );
     }
@@ -226,12 +228,14 @@ fn requirement(name: &str, spec: &str, locked: &[Locked], inv: &mut Inventory) {
     let range = parts[2].trim();
     add(
         inv,
-        Ecosystem::Pypi,
-        &pkg,
-        (!range.is_empty()).then(|| range.into()),
-        "direct",
-        name,
-        !range.contains('@') && !range.contains("://"),
+        super::Declaration {
+            ecosystem: Ecosystem::Pypi,
+            name: &pkg,
+            requirement: (!range.is_empty()).then(|| range.into()),
+            scope: "direct",
+            manifest: name,
+            public: !range.contains('@') && !range.contains("://"),
+        },
         locked,
     );
 }

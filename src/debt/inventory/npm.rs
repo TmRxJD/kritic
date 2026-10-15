@@ -218,12 +218,14 @@ pub(super) fn manifest(
                 .collect();
             add(
                 inv,
-                Ecosystem::Npm,
-                actual,
-                Some(requirement.into()),
-                "direct",
-                name,
-                public,
+                super::Declaration {
+                    ecosystem: Ecosystem::Npm,
+                    name: actual,
+                    requirement: Some(requirement.into()),
+                    scope: "direct",
+                    manifest: name,
+                    public,
+                },
                 &scoped,
             );
         }

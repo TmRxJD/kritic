@@ -284,16 +284,25 @@ fn exact(value: &str) -> bool {
     regex::Regex::new(r"^[0-9]+(?:\.[0-9]+)+(?:[-+._a-zA-Z][0-9A-Za-z.+_-]*)?$")
         .is_ok_and(|pattern| pattern.is_match(value))
 }
-fn add(
-    inv: &mut Inventory,
+/// Manifest-declared identity and provenance, separate from resolved lock evidence.
+struct Declaration<'a> {
     ecosystem: Ecosystem,
-    name: &str,
+    name: &'a str,
     requirement: Option<String>,
-    scope: &str,
-    manifest: &str,
+    scope: &'a str,
+    manifest: &'a str,
     public: bool,
-    locks: &[Locked],
-) {
+}
+
+fn add(inv: &mut Inventory, declaration: Declaration<'_>, locks: &[Locked]) {
+    let Declaration {
+        ecosystem,
+        name,
+        requirement,
+        scope,
+        manifest,
+        public,
+    } = declaration;
     let nearest = locks
         .iter()
         .filter(|item| {

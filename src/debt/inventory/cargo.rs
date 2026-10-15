@@ -120,12 +120,14 @@ fn visit(manifest: &str, value: &toml::Value, locked: &[Locked], inv: &mut Inven
                 }
                 add(
                     inv,
-                    Ecosystem::Cargo,
-                    actual,
-                    requirement,
-                    "direct",
-                    manifest,
-                    public,
+                    super::Declaration {
+                        ecosystem: Ecosystem::Cargo,
+                        name: actual,
+                        requirement,
+                        scope: "direct",
+                        manifest,
+                        public,
+                    },
                     locked,
                 );
             }
