@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optional, disabled-by-default review history: explicit reports and input/context hashes,
+  bounded historical comparison and sanitized low-trust jcode-format export. No cached approval,
+  automatic indexing, live jcode modification or demonstrated memory-savings claim.
+
 - Model-free repository policy review and explicit staged-index hooks, with broad/focused/atomic
   commit budgets, tree-bound scope plans and declared naming/layer/import rules.
 - Ordinary code-quality review includes physical/nonblank file sizes, oversized-file baselines

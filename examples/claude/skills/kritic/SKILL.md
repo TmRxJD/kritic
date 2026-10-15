@@ -26,6 +26,17 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### Optional history never substitutes for verification
+
+Current source offers `review_history` only when `capabilities.history=true` (default false).
+Use explicit record/list/compare/export actions with a saved complete report, exact relative
+input files and concrete declared tool/model/command/policy context. No automatic indexing,
+model or embeddings are involved. Reports may contain private source/output: retain and share
+deliberately. Historical hashes neither establish freshness nor prove the report ran over the
+associated inputs. Rerun current validators; never reuse a historical pass for acceptance.
+`export_jcode` writes a separate low-trust format file, not a live integration or memory-saving
+mechanism. See `docs/memory-adapter.md` for bounds, privacy and retention.
+
 ### UI craft is a separate acceptance requirement
 
 An interaction/a11y pass or a successful `ux_critic` task path does not establish professional

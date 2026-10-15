@@ -30,6 +30,15 @@ exists), the config file read, any `config_errors`, and the ready states.
 
 ## Test-release/cloud/contract failures
 
+- `review_history` missing: it is source-only and `capabilities.history=false` by default.
+  Enable it deliberately and restart MCP; no model or embedding installation is needed.
+- History comparison is not comparable: tool or caller-declared context differs. Preserve
+  the mismatch; do not weaken context labels to imply a valid quality trend.
+- History budget/lock failure: verify the chosen private project store and archive deliberately;
+  never delete another project's records or an active writer lock. [Limits and retention](memory-adapter.md#limits-and-retention).
+- jcode export succeeds: this only confirms a separate format file was written. It does not
+  establish live import, current verification, fewer tokens or lower memory use.
+
 - `repository_critic` missing: it requires current source (not `v0.5.0-test.3`) and
   `capabilities.repository=true`; the minimal profile disables it. Restart MCP after enabling.
 - Scope plan stale: inspect and restage the intended diff, then regenerate a plan for that exact

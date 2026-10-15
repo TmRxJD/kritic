@@ -61,6 +61,11 @@ are recorded without treating every recommendation as a confirmed bug.
 
 ## Experimental local semantic map
 
+Separately, source builds offer optional [review history and jcode-format export](docs/memory-adapter.md).
+`history=false` by default: explicit saved reports and input/context hashes need no model or
+embeddings. Historical records never replace fresh checks. The export does not modify a running
+jcode store, and no memory-savings benefit is claimed.
+
 The source branch includes an opt-in CPU retrieval experiment; it is not bundled in the
 current test-release binary. Five model variants were measured without a GPU. The smallest,
 8-bit MiniLM-L3, used 17.5 MB of weights and about 286 MB sampled process memory, with a
@@ -109,7 +114,7 @@ Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
 ```
 
 The minimal profile exposes artifact, contract and native resource/hygiene checks plus utility
-tools. Browser/UX, security, quality, repository, desktop, plugins and model helpers are deliberately hidden.
+tools. Browser/UX, security, quality, repository, history, desktop, plugins and model helpers are deliberately hidden.
 Installing a dependency does not turn its group on. Enabling a group does not install its dependencies.
 
 ### Add only the capabilities you need
@@ -124,6 +129,7 @@ for the named keys, then restart your MCP connection. Keep `[review].backend` an
 | Security | `security=true` | Install uv first if Python scanners are absent; setup uses `uv tool install` for Semgrep/Bandit/Ruff and provisions gitleaks/osv-scanner. Run setup with `--no-harness --no-register`. Network may be needed. | `security_critic`; missing applicable scanners remain incomplete coverage. cargo-audit is optional. |
 | Quality | `quality=true` | Your project's linter/typechecker and its normal dependencies; Ruff where applicable. | `code_quality_critic`; Kritic does not install your project's toolchain. |
 | Scoped commits and organization (source build) | `repository=true` | Git, repository-owned `.kritic/repository.toml`; explicitly install the hook. No extra runtime/model. | `repository_critic`, tracked-source audits, staged budgets and scope plans; [setup and limitations](docs/repository-policy.md). |
+| Review history (source build) | `history=true` | Git and private local report storage; explicitly select saved report and input files. No model/embedding install. | `review_history` record/list/compare and separate low-trust jcode-format export; [privacy and limits](docs/memory-adapter.md). |
 | Windows desktop / Unity | `desktop=true` (and `ux=true` for workflows) | Python 3.11+, uv, pywinauto harness; interactive Windows session. Run setup with `--no-scanners --no-register`. Unity checks also need the matching Unity editor. | `desktop_test`, `unity_tests`, desktop UX evidence. No GPU model required; the app under test may require one. |
 | Repository checks / Beat Saber maps | `plugins=true` / `domain_maps=true` | Relevant repository plugin or map evaluator and its dependencies. | Project-defined checks / `map_eval`; not general model review. |
 | Text model review | No capability group; select `[review].backend` | Optional [cloud API](docs/cloud.md) or [local Kev](docs/getting-started.md#optional-local-models). | `critic_score`, `decide`; advisory model assessments. |

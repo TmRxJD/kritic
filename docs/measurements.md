@@ -3,6 +3,10 @@
 
 # Measurements
 
+The optional source-only [review-history adapter](memory-adapter.md) has no measured memory,
+token-saving or model-quality benefit. Its jcode-format export is not a verified live integration;
+historical comparison does not supply current validation or evidence of a quality trend.
+
 The historical model measurements below used Windows 11 with an RTX 5070 (12 GB), Kev-4B Q8_0 through laya
 (CUDA sm_89 PTX JIT-compiled to sm_120) and `qwen2.5vl:7b` through Ollama. The raw records are in
 `calibration/`. For behaviour on realistic agent changes, with and without kritic, see

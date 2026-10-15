@@ -21,6 +21,7 @@ desktop = true
 resources = true
 contracts = true
 repository = true
+history = false
 plugins = true
 context = false
 domain_maps = false
@@ -39,6 +40,12 @@ explicit repository CLI checks. The minimal profile sets it false. Set it true d
 Git hook. These repository features require a current source build, not the published
 `v0.5.0-test.3` binary. Repository rules live in `.kritic/repository.toml`, separately from this
 user/server configuration; unknown repository-policy keys fail rather than being ignored.
+
+`capabilities.history=false` is the built-in and minimal-profile default. Opt in with `history=true`
+or `KRITIC_CAP_HISTORY=true` for `review_history` / `kritic history`; no model or embedding is
+needed. It retains selected reports privately in `runs_dir/history`, hashes explicitly supplied
+inputs/context, and exports a separate low-trust jcode-format file. It never reuses a historical
+pass as current verification. [Commands, privacy, bounds and limitations](memory-adapter.md).
 
 `review.backend`: off, local, cloud, or explicitly selected auto (discover local installation
 only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting values disable

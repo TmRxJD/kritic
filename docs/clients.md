@@ -11,6 +11,10 @@ registration does not enforce commits: configure repository rules and explicitly
 [install the Git hook](repository-policy.md#commit-enforcement). Keep semantic scope review in
 the calling agent, including with models off.
 
+The optional source-only `review_history` tool is separately gated by `capabilities.history=false`
+by default. Enabling it exposes explicit record/list/compare/export actions; it does not capture
+your session, index the workspace or install a jcode harness. [Usage and privacy](memory-adapter.md).
+
 ## Codex desktop, CLI, IDE and local Work
 
 Merge [examples/codex/config.toml](../examples/codex/config.toml) into your user

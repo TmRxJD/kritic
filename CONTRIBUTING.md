@@ -10,6 +10,10 @@ plan. Never widen budgets or bulk-baseline files solely to make a gate pass. Loc
 bypassable; CI/review remain necessary. Record static violations separately from heuristic
 recommendations and independently judge naming, cohesion, discoverability and comment quality.
 
+History/format-export changes must keep historical evidence separate from current acceptance.
+Use sanitized fixtures for report/input/context mismatch, bounded storage and private-data leakage.
+Do not present a serialization test as live jcode integration or a memory-savings benchmark.
+
 1. Reproduce the defect and distinguish it from a bug in the user's project.
 2. Add a regression that fails for the demonstrated behavior (avoid vacuous/mirrored assertions).
 3. Fix the implementation without weakening checks, expanding approval scope or hiding coverage gaps.
