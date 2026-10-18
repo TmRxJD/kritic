@@ -182,6 +182,18 @@ pub(super) fn assess(case: &Case, checked: &BTreeMap<String, Checked>) -> Vec<Fi
             break;
         }
     }
+    let mut reaches_symptom = BTreeSet::from([case.symptom_stage.clone()]);
+    loop {
+        let old = reaches_symptom.len();
+        for link in &valid_links {
+            if reaches_symptom.contains(&link.to) {
+                reaches_symptom.insert(link.from.clone());
+            }
+        }
+        if reaches_symptom.len() == old {
+            break;
+        }
+    }
     if !reached.contains(&case.symptom_stage) {
         add(
             &mut findings,
@@ -246,6 +258,18 @@ pub(super) fn assess(case: &Case, checked: &BTreeMap<String, Checked>) -> Vec<Fi
         }
     }
     for hypothesis in &case.hypotheses {
+        if hypothesis
+            .stages
+            .iter()
+            .any(|stage| !reached.contains(stage) || !reaches_symptom.contains(stage))
+        {
+            add(
+                &mut findings,
+                "hypothesis_outside_trace",
+                &hypothesis.id,
+                "An implicated stage is outside the observed entry-to-symptom corridor; unrelated/disconnected or dead-branch sources cannot justify the patch",
+            );
+        }
         if hypothesis.stages.is_empty() || !has_observations(&hypothesis.support, checked) {
             add(
                 &mut findings,

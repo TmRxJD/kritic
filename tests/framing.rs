@@ -404,3 +404,24 @@ fn path_escape_and_dangling_evidence_never_produce_a_consistent_report() {
     case["hypotheses"][0]["support"] = json!(["absent-evidence"]);
     assert!(run(root.path(), &case).is_err());
 }
+
+#[test]
+fn hypothesis_and_patch_cannot_hide_in_a_disconnected_stage_while_trace_stays_valid() {
+    let (root, mut case) = fixture();
+    case["stages"].as_array_mut().unwrap().push(json!({
+        "id":"unrelated-retry-policy",
+        "purpose":"Own a disconnected retry policy, outside the observed normalize-to-client timeout handoff.",
+        "owner":"retry policy service",
+        "sources":["normalize-source"],
+        "schemas":[],
+        "enforcement_observations":[],
+        "schema_not_applicable":"This independent in-process policy has no serialized schema boundary."
+    }));
+    case["hypotheses"][0]["stages"] = json!(["unrelated-retry-policy"]);
+    case["proposed_patch"]["paths"] = json!(["examples/framing-case/normalize.rs"]);
+    let report = run(root.path(), &case).unwrap();
+    assert!(report.evidence.iter().all(|item| item.verified));
+    assert!(!has_finding(&report, "incomplete_trace"));
+    assert!(has_finding(&report, "hypothesis_outside_trace"));
+    assert_ne!(report.status, "consistent");
+}
