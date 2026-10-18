@@ -849,6 +849,43 @@ impl Kritic {
         Ok(Json(report))
     }
 
+    /// Check supplied debugging evidence without executing commands or trusting a model verdict.
+    #[tool(name = "framing_critic")]
+    pub async fn framing_critic(
+        &self,
+        Parameters(p): Parameters<crate::framing::Request>,
+    ) -> Result<Json<crate::framing::Report>, String> {
+        if !self.kev.cfg.tool_enabled("framing_critic") {
+            return Err(
+                "framing capability is disabled; enable capabilities.framing explicitly".into(),
+            );
+        }
+        let t0 = started("framing_critic");
+        let mut report = tokio::task::spawn_blocking(move || crate::framing::execute(&p))
+            .await
+            .map_err(|e| format!("framing worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "framing_critic", &report);
+        if report.full_result.is_none() {
+            return Err("framing report could not be saved; review packet retained only in memory; fix runs_dir and retry".into());
+        }
+        // Full detail is already on disk; discovery and normal responses stay small.
+        report.findings.truncate(10);
+        report.evidence.truncate(10);
+        for finding in &mut report.findings {
+            finding.detail = finding.detail.chars().take(512).collect();
+        }
+        for evidence in &mut report.evidence {
+            evidence.path = evidence.path.chars().take(256).collect();
+            evidence.detail = evidence.detail.chars().take(512).collect();
+        }
+        report.review_packet = serde_json::json!({
+            "note": "Response limited to 10 findings/evidence entries and shortened details. Read full_result for all entries and independent-review packet. Supplied artifacts are not execution attestation."
+        });
+        finished("framing_critic", t0, &report);
+        audit(&self.kev.cfg, "framing_critic", &report);
+        Ok(Json(report))
+    }
+
     /// Deterministic staged commit size/scope and repository-owned organization policy.
     /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
     #[tool(name = "repository_critic")]

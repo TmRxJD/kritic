@@ -6,6 +6,7 @@ pub mod debt;
 pub mod detect;
 pub mod doctor;
 pub mod fetch;
+pub mod framing;
 pub mod history;
 pub mod register;
 pub mod repository;
@@ -53,6 +54,8 @@ pub enum Cmd {
     History(history::HistoryArgs),
     /// Rank maintenance and dependency update candidates (network only with --online).
     Debt(debt::DebtArgs),
+    /// Check debugging evidence and problem framing; never approves a diagnosis.
+    Framing(framing::FramingArgs),
 }
 
 #[derive(Args, Debug)]

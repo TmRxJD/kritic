@@ -97,6 +97,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert!(c.config_file.is_none() && c.config_errors.is_empty());
     assert!(!c.capability("history") && !c.tool_enabled("review_history"));
     assert!(!c.capability("debt") && !c.tool_enabled("technical_debt_critic"));
+    assert!(!c.capability("framing") && !c.tool_enabled("framing_critic"));
     unsafe { std::env::set_var("KRITIC_CAP_HISTORY", "true") };
     assert!(Config::load().tool_enabled("review_history"));
     unsafe { std::env::remove_var("KRITIC_CAP_HISTORY") };

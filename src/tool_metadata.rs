@@ -24,6 +24,9 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "technical_debt_critic" => {
             "Review dependencies and declared maintenance. Public registry requests require online=true. Urgency/effort are estimates; no upgrades are applied."
         }
+        "framing_critic" => {
+            "Check a debugging case against pinned observations, pipeline and hypotheses. No commands or models run. Consistency is not proof of root cause; inspect full_result."
+        }
         "critic_score" => {
             "Optional model review of diffs or files. Prefer git_diff for uncommitted changes. Verify flagged locations; uncalibrated scores cannot approve work."
         }
