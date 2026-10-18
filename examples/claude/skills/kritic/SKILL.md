@@ -5,7 +5,8 @@ description: >
   Never inherently trust critics; independently validate every claim and its evidence.
   Reproduce and fix Kritic defects directly with regression tests and open a PR to
   https://github.com/TmRxJD/kritic. Use for end-of-task code/config/UI review or explicit
-  Kritic testing, scoped-commit and code-organization reviews. Deterministic checks are default;
+  Kritic testing, scoped-commit and code-organization reviews, or optional framing review when
+  debugging stalls or repeated fixes fail. Deterministic checks are default;
   local/cloud critics are optional.
   Inspect available tools before use. No GPU or separate model/API is required.
 ---
