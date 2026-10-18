@@ -186,7 +186,12 @@ pub fn extract_zip(
         if entry.is_dir() {
             continue;
         }
-        let Some(rel) = pick(entry.name()) else {
+        let rel = {
+            // ZIP 9 validates and decodes names fallibly; reject an invalid entry name.
+            let name = entry.name().map_err(|e| e.to_string())?;
+            pick(name.as_ref())
+        };
+        let Some(rel) = rel else {
             continue;
         };
         let target = safe_join(out, &rel)?;
