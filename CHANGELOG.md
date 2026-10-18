@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Optional deterministic debugging-framing review and a local independent-review packet, with
+  explicit artifact/context binding and linked causal evidence. Disabled by default; no root-cause
+  attestation, automatic commands, network/indexing or model inference. The framing-only stalled-debugging
+  exception leaves ordinary critics at end of task. Published test.4 binaries predate this feature.
+
 - Compact MCP discovery: short shared instructions and tool summaries; redundant schema
   titles/examples/empty defaults are omitted. All tools, input constraints, field descriptions,
   meaningful defaults and execution opt-ins remain available. No tools are disabled to save tokens.

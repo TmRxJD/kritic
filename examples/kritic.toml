@@ -112,6 +112,7 @@
 # disabled = []                       # KRITIC_DISABLED_TOOLS (comma-separated)
 
 [capabilities]
+# framing = false                              # KRITIC_CAP_FRAMING: opt-in model-free debugging evidence checkpoint
 # These hide tools from MCP discovery and execution. Restart the client/server after changes.
 # enabled is configuration, not proof every dependency is installed; status/doctor report details.
 # web = true                                   # KRITIC_CAP_WEB: browser interaction checks

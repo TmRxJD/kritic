@@ -26,6 +26,19 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### Narrow mid-debugging framing exception
+
+Current source can expose optional `framing_critic` with `capabilities.framing=true` (default
+false). When debugging stalls, observations conflict or repeated fixes fail, review an explicit
+causal case before the next attempt. This framing-only exception does not change end-of-task
+timing for ordinary critics or authorize per-edit loops, hooks, commands, network calls or
+models. Use the emitted schema and `docs/framing.md`; preserve contradictory observations,
+failed attempts, exact artifact hashes/context and linked hypotheses. A valid case or critic
+recommendation does not prove root cause. Inspect the full artifact review packet independently,
+then choose a discriminating experiment within the user's scope. Never simply repeat failed
+interventions or scatter configuration to hide an unexplained mechanism. Final validators and
+acceptance checks still run after the actual change. Published test.4 binaries predate framing.
+
 ### Optional technical-debt review
 
 Test.4 and later expose `technical_debt_critic` only when `capabilities.debt=true` (default false).
