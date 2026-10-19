@@ -67,6 +67,15 @@ pub fn parse_diff(diff: &str, max_chars: usize) -> Vec<Hunk> {
     let mut header = String::new();
     let mut start = 0usize;
     let mut body = String::new();
+    let mut old_file = String::new();
+    let (mut old_left, mut new_left, mut new_cursor) = (0usize, 0usize, 0usize);
+    let filename = |raw: &str| {
+        let name = raw.split('\t').next().unwrap_or(raw);
+        name.strip_prefix("a/")
+            .or_else(|| name.strip_prefix("b/"))
+            .unwrap_or(name)
+            .to_string()
+    };
     let flush = |file: &str, header: &str, start: usize, body: &mut String, out: &mut Vec<Hunk>| {
         if body
             .lines()
@@ -85,6 +94,8 @@ pub fn parse_diff(diff: &str, max_chars: usize) -> Vec<Hunk> {
             flush(&file, &header, start, &mut body, &mut out);
             file = rest.rsplit(" b/").next().unwrap_or(rest).to_string();
             header.clear();
+            old_left = 0;
+            new_left = 0;
         } else if line.starts_with("@@") {
             flush(&file, &header, start, &mut body, &mut out);
             header = line.to_string();
@@ -94,17 +105,61 @@ pub fn parse_diff(diff: &str, max_chars: usize) -> Vec<Hunk> {
                 .and_then(|t| t.split(',').next())
                 .and_then(|n| n.parse().ok())
                 .unwrap_or(0);
-        } else if line.starts_with("+++")
-            || line.starts_with("---")
-            || line.starts_with("index ")
+            let count = |prefix: char| {
+                line.split_whitespace()
+                    .find_map(|part| part.strip_prefix(prefix))
+                    .map(|part| {
+                        part.split_once(',')
+                            .map_or(1, |(_, n)| n.parse().unwrap_or(0))
+                    })
+                    .unwrap_or(0)
+            };
+            old_left = count('-');
+            new_left = count('+');
+            new_cursor = start;
+        } else if old_left > 0 || new_left > 0 {
+            // Consume valid hunk data before interpreting header-like source text.
+            if body.len() + line.len() + header.len() + 2 > max_chars && !body.is_empty() {
+                flush(&file, &header, start, &mut body, &mut out);
+                start = new_cursor;
+            }
+            match line.as_bytes().first() {
+                Some(b'+') => {
+                    new_left = new_left.saturating_sub(1);
+                    new_cursor = new_cursor.saturating_add(1);
+                }
+                Some(b'-') => {
+                    old_left = old_left.saturating_sub(1);
+                }
+                Some(b' ') => {
+                    old_left = old_left.saturating_sub(1);
+                    new_left = new_left.saturating_sub(1);
+                    new_cursor = new_cursor.saturating_add(1);
+                }
+                Some(b'\\') => {}
+                _ => continue,
+            }
+            body.push_str(line);
+            body.push('\n');
+        } else if let Some(path) = line.strip_prefix("--- ") {
+            flush(&file, &header, start, &mut body, &mut out);
+            old_file = filename(path);
+            header.clear();
+        } else if let Some(path) = line.strip_prefix("+++ ") {
+            flush(&file, &header, start, &mut body, &mut out);
+            let next = filename(path);
+            file = if next == "/dev/null" {
+                old_file.clone()
+            } else {
+                next
+            };
+            header.clear();
+        } else if line.starts_with("index ")
             || line.starts_with("new file")
             || line.starts_with("deleted file")
         {
             continue;
-        } else if !header.is_empty() {
-            if body.len() + line.len() + header.len() + 2 > max_chars {
-                flush(&file, &header, start, &mut body, &mut out);
-            }
+        } else if !header.is_empty() && line.starts_with("\\ No newline") {
             body.push_str(line);
             body.push('\n');
         }
@@ -194,7 +249,10 @@ pub async fn critic_diff<D: Decider>(
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {label})"));
                 return r;
@@ -251,7 +309,14 @@ pub async fn critic_diff<D: Decider>(
             return r;
         }
     };
-    let p_complete = match d.decide(&state, &completeness_spec(basis).wire()).await {
+    let p_complete = match deadline
+        .bound(
+            d.decide(&state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            hunks.len(),
+        )
+        .await
+    {
         Err(e) => {
             r.error = Some(e);
             return r;
@@ -304,7 +369,7 @@ pub struct CriticResult {
     pub p_security_issue_max: Option<f64>,
     pub p_unfinished_max: Option<f64>,
     pub p_reviewer_injection_max: Option<f64>,
-    /// Argmax label of the worst chunk (informational; the rule uses p_severe_max).
+    /// Argmax label of the worst chunk (advisory; severity does not gate approval).
     pub worst_severity: Option<String>,
     /// Max over units of P(major) + P(critical).
     pub p_severe_max: Option<f64>,
@@ -316,6 +381,10 @@ pub struct CriticResult {
     pub reasons: Vec<String>,
     /// Chunks that failed any rule, with their probabilities. Kev does not explain; read these spots.
     pub flagged_chunks: Vec<ChunkVerdict>,
+    /// Major/critical labels are advisory, but retain their locations even when no gate fails.
+    pub advisory_chunks: Vec<ChunkVerdict>,
+    /// Explains scores that must not be interpreted as deterministic task verification.
+    pub advisory_notes: Vec<String>,
     pub chunks_scored: usize,
     pub chunks_unscored: usize,
     pub truncated_chunks: usize,
@@ -402,7 +471,10 @@ pub async fn critic<D: Decider>(
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {})", c.label()));
                 return r;
@@ -452,8 +524,12 @@ pub async fn critic<D: Decider>(
             return r;
         }
     };
-    let p_complete = match d
-        .decide(&complete_state, &completeness_spec(basis).wire())
+    let p_complete = match deadline
+        .bound(
+            d.decide(&complete_state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            chunks.len(),
+        )
         .await
     {
         Err(e) => {
@@ -492,6 +568,23 @@ impl Deadline {
                 self.limit_s
             )
         })
+    }
+
+    /// Cancel this request future at the shared pass deadline, including an
+    /// in-flight grouped decision. Dropping HTTP work does not prove a remote
+    /// inference stopped; no shared service is killed here.
+    pub async fn bound<T>(
+        &self,
+        future: impl std::future::Future<Output = Result<T, String>>,
+        done: usize,
+        total: usize,
+    ) -> Result<T, String> {
+        tokio::time::timeout_at(self.at.into(), future)
+            .await
+            .map_err(|_| format!(
+                "critic deadline exceeded: {}s; {done}/{total} units complete; request future cancelled; remote cancellation unconfirmed",
+                self.limit_s
+            ))?
     }
 }
 
@@ -616,6 +709,18 @@ pub fn aggregate(
         .filter(|(v, _)| !per_chunk(v).is_empty())
         .map(|(v, _)| v.clone())
         .collect();
+    r.advisory_chunks = verdicts
+        .iter()
+        .filter(|(v, _)| severity_rank(&v.severity) >= severity_rank("major"))
+        .map(|(v, _)| v.clone())
+        .collect();
+    r.advisory_notes.clear();
+    if basis == "digest" {
+        r.advisory_notes.push("Completeness was estimated from a digest, not task execution or the full artifact; it does not gate approval.".into());
+    }
+    if !r.advisory_chunks.is_empty() {
+        r.advisory_notes.push("Major/critical labels are uncalibrated advisory opinions. Inspect advisory_chunks for locations; approval is computed separately from calibrated gates.".into());
+    }
     let mut reasons: Vec<String> = [
         ("defect", 1.0 - p_correct),
         ("security", p_sec),

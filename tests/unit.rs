@@ -383,6 +383,14 @@ async fn likely_defect_is_reported_but_does_not_gate() {
     assert_eq!(r.approval, Some(true), "{:?}", r.reasons);
     assert!(r.p_correct_min.unwrap() < 0.2);
     assert_eq!(r.worst_severity.as_deref(), Some("major"));
+    assert!(r.flagged_chunks.is_empty());
+    assert_eq!(r.advisory_chunks.len(), 1);
+    assert!(r.advisory_chunks[0].location.starts_with("a.py:"));
+    assert!(
+        r.advisory_notes
+            .iter()
+            .any(|s| s.contains("approval is computed separately"))
+    );
     assert!(
         !r.gates.iter().any(|g| g.ends_with(".defect")),
         "{:?}",
@@ -397,6 +405,11 @@ async fn problem_in_one_chunk_is_located() {
     let r = run(&[("good.py", &clean), ("bad.py", "# EVAL\nx = 1\n")], "t").await;
     assert_eq!(r.approval, Some(false));
     assert_eq!(r.completeness_basis, "digest");
+    assert!(
+        r.advisory_notes
+            .iter()
+            .any(|s| s.contains("not task execution"))
+    );
     assert_eq!(r.flagged_chunks.len(), 1);
     assert!(r.flagged_chunks[0].location.starts_with("bad.py:"));
 }
@@ -936,12 +949,59 @@ async fn critic_past_its_deadline_reports_a_stall_instead_of_running_on() {
     assert!(e.contains("critic stalled") && e.contains("0 of 1"), "{e}");
 }
 
+#[test]
+fn plain_unified_diff_after_git_diff_keeps_file_identity() {
+    let diff = "diff --git a/a.rs b/a.rs\n--- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n--- a/C:/guard/with spaces.py\told timestamp\n+++ b/C:/guard/with spaces.py\tnew timestamp\n@@ -3 +3 @@\n-old_guard\n+new_guard\n";
+    let hunks = parse_diff(diff, 1300);
+    assert_eq!(hunks.len(), 2);
+    assert_eq!(hunks[0].file, "a.rs");
+    assert_eq!(hunks[1].file, "C:/guard/with spaces.py");
+    assert_eq!(hunks[1].new_start, 3);
+}
+
+#[test]
+fn header_like_source_and_no_newline_markers_are_preserved() {
+    let diff = "--- a/operators.rs\n+++ b/operators.rs\n@@ -1 +1 @@\n---removed literal\n+++added literal\n\\ No newline at end of file\n";
+    let hunks = parse_diff(diff, 1300);
+    assert_eq!(hunks.len(), 1);
+    assert_eq!(hunks[0].file, "operators.rs");
+    assert!(hunks[0].text.contains("---removed literal"));
+    assert!(hunks[0].text.contains("+++added literal"));
+    assert!(hunks[0].text.contains("No newline"));
+}
+
+#[test]
+fn plain_additions_and_deletions_keep_paths_and_zero_counts() {
+    let diff = "--- /dev/null\n+++ b/new.rs\n@@ -0,0 +1,2 @@\n+one\n+two\n--- a/old.rs\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n";
+    let hunks = parse_diff(diff, 1300);
+    assert_eq!(hunks.len(), 2);
+    assert_eq!((&*hunks[0].file, hunks[0].new_start), ("new.rs", 1));
+    assert_eq!((&*hunks[1].file, hunks[1].new_start), ("old.rs", 0));
+}
+
+#[test]
+fn split_hunk_locations_advance_for_additions_and_context_only() {
+    let diff = "--- a/a.rs\n+++ b/a.rs\n@@ -10,3 +20,3 @@\n context\n-old\n+new\n tail\n";
+    let hunks = parse_diff(diff, 1);
+    assert_eq!(
+        hunks.iter().map(|h| h.new_start).collect::<Vec<_>>(),
+        vec![21, 21]
+    );
+    assert_eq!(hunks.iter().filter(|h| h.text.contains("-old")).count(), 1);
+    assert_eq!(hunks.iter().filter(|h| h.text.contains("+new")).count(), 1);
+}
+
 /// A laya that answers its health check but never answers a request: the request must fail
 /// within the limit, not wait for ever (a critic call once hung for over an hour this way).
 #[tokio::test]
 async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     use kritic::kev::KevClient;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut c = cfg();
+    // Health must satisfy the configured device policy so this test reaches
+    // the request timeout rather than failing early on GPU validation.
+    let health =
+        json!({"status":"ok", "device":c.laya_device, "gpu_uuid":c.kev_gpu_uuid}).to_string();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
@@ -949,11 +1009,11 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
             let Ok((mut s, _)) = listener.accept().await else {
                 return;
             };
+            let body = health.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0u8; 8192];
                 let n = s.read(&mut buf).await.unwrap_or(0);
                 if String::from_utf8_lossy(&buf[..n]).starts_with("GET /health") {
-                    let body = r#"{"status":"ok"}"#;
                     let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await;
                 } else {
                     tokio::time::sleep(std::time::Duration::from_secs(3600)).await; // never answers
@@ -961,7 +1021,6 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
             });
         }
     });
-    let mut c = cfg();
     c.laya_url = format!("http://127.0.0.1:{port}");
     c.laya_exe = "kritic-test-no-such-laya.exe".into(); // the stall handler's stop must not touch a real laya
     c.kev_request_s = 1;
@@ -1302,7 +1361,7 @@ budget = 1
             {"id": "region", "impact": "moderate", "help": "x", "nodes": 1, "targets": ["main"]}
         ]))
         .unwrap();
-        let hits: Vec<(String, String)> = ux::audit(&controls, &axe)
+        let hits: Vec<(String, String)> = ux::audit(&controls, &axe, [1600.0, 900.0])
             .into_iter()
             .map(|(r, _, k, _)| (r.to_string(), k))
             .collect();

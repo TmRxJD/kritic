@@ -716,8 +716,11 @@ builtin_specs!(
     "function_maintainability",
     "resource_fit",
     "route",
+    "route_codex",
     "context_relevance",
     "ux_novice_step",
+    "file_relevance",
+    "task_requirements",
 );
 
 /// Every built-in spec, parsed and linted. A bad spec file is a build-time test failure and a

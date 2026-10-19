@@ -18,6 +18,18 @@ pub struct Config {
     /// Who answers Kev questions: `auto` (local Kev when installed, else cloud Jev when a key is
     /// configured), `local`, `cloud`, or `off` (deterministic tools only).
     pub backend: String,
+    /// Explicit CPU-only Kev service: never acquire its GPU lease or stop its process.
+    pub kev_cpu_only: bool,
+    /// A separately supervised laya service: never spawn or stop it.
+    pub kev_externally_managed: bool,
+    /// Explicit paired GPU placement. Both UUIDs must be configured and distinct.
+    pub kev_gpu_uuid: Option<String>,
+    pub vision_gpu_uuid: Option<String>,
+    pub laya_device: String,
+    pub laya_max_batch: Option<usize>,
+    /// Vulkan ordinal from laya's device discovery (not a CUDA ordinal).
+    pub vulkan_visible_devices: Option<String>,
+    pub ollama_externally_managed: bool,
     /// Agent reply style kritic installs: "concise" (default) or "default" (leave the agent alone).
     pub output_style: String,
     /// Cloud Jev (TypeSafe's model through an AI Gateway `/v1/evaluate` endpoint).
@@ -25,6 +37,7 @@ pub struct Config {
     pub cloud_model: String,
     /// File holding the gateway key when `AI_GATEWAY_API_KEY` is not set.
     pub cloud_key_file: PathBuf,
+    pub cloud_key_env: String,
     pub laya_url: String,
     pub laya_exe: PathBuf,
     pub kev_gguf: PathBuf,
@@ -72,14 +85,40 @@ pub struct Config {
     pub context_limit: u64,
     /// MCP tools not offered to the client. Default: `map_eval`, the Beat Saber domain pack.
     pub disabled_tools: Vec<String>,
+    /// A second Kev (laya) on the vision GPU. Used instead of `laya_url` whenever the vision
+    /// model is not loaded; stopped before vision work. None: always `laya_url`.
+    pub vision_gpu_kev_url: Option<String>,
+    /// Command that launches the vision-GPU Kev detached when it does not answer (run hidden).
+    pub vision_gpu_kev_start: Option<String>,
+    /// Command that stops the vision-GPU Kev before vision work (run hidden).
+    pub vision_gpu_kev_stop: Option<String>,
+    /// GPU of the vision-GPU Kev: only a router lane on this GPU counts as vision work.
+    pub vision_gpu_kev_uuid: Option<String>,
+    /// Stop the vision-GPU Kev after this many seconds without a request (0: never).
+    pub vision_gpu_kev_idle_s: u64,
 }
 
 /// Every key the config file accepts, as `section.key`, with the environment variable that
 /// overrides it. `examples/kritic.toml` documents each one; `tests/unit.rs` keeps them in sync.
 pub const KEYS: &[(&str, &str)] = &[
     ("kev.backend", "KRITIC_KEV_BACKEND"),
+    ("kev.cpu_only", "KRITIC_KEV_CPU_ONLY"),
+    ("kev.externally_managed", "KRITIC_KEV_EXTERNALLY_MANAGED"),
+    ("kev.gpu_uuid", "KRITIC_KEV_GPU_UUID"),
+    ("kev.device", "KRITIC_LAYA_DEVICE"),
+    ("kev.max_batch", "KRITIC_LAYA_MAX_BATCH"),
+    (
+        "kev.vulkan_visible_devices",
+        "KRITIC_VULKAN_VISIBLE_DEVICES",
+    ),
+    ("vision.gpu_uuid", "KRITIC_VISION_GPU_UUID"),
+    (
+        "vision.externally_managed",
+        "KRITIC_OLLAMA_EXTERNALLY_MANAGED",
+    ),
     ("cloud.url", "KRITIC_CLOUD_URL"),
     ("cloud.model", "KRITIC_CLOUD_MODEL"),
+    ("cloud.key_env", "KRITIC_CLOUD_KEY_ENV"),
     ("cloud.key_file", "KRITIC_CLOUD_KEY_FILE"),
     ("kev.laya_url", "KRITIC_LAYA_URL"),
     ("kev.laya_port", "KRITIC_LAYA_PORT"),
@@ -117,6 +156,11 @@ pub const KEYS: &[(&str, &str)] = &[
     ("server.log", "KRITIC_LOG"),
     ("server.runs_dir", "KRITIC_RUNS_DIR"),
     ("tools.disabled", "KRITIC_DISABLED_TOOLS"),
+    ("kev.vision_gpu_laya_url", "KRITIC_VISION_GPU_KEV_URL"),
+    ("kev.vision_gpu_start", "KRITIC_VISION_GPU_KEV_START"),
+    ("kev.vision_gpu_stop", "KRITIC_VISION_GPU_KEV_STOP"),
+    ("kev.vision_gpu_uuid", "KRITIC_VISION_GPU_KEV_UUID"),
+    ("kev.vision_gpu_idle_s", "KRITIC_VISION_GPU_KEV_IDLE_S"),
 ];
 
 /// Tools off unless the config turns them on: domain packs that most projects don't need.
@@ -323,7 +367,31 @@ impl Config {
         let port: u16 = s.num("kev.laya_port", 8089);
         let harness_dir = default_harness_dir();
         let mut config_errors = config_errors;
+        let kev_cpu_only = match s.get("kev.cpu_only") {
+            None => false,
+            Some(value) => match value.parse::<bool>() {
+                Ok(value) => value,
+                Err(_) => {
+                    config_errors.push("kev.cpu_only: expected true or false (using false)".into());
+                    false
+                }
+            },
+        };
         let backend = s.str("kev.backend", "auto");
+        let kev_externally_managed = match s.get("kev.externally_managed") {
+            None => false,
+            Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+                config_errors.push("kev.externally_managed: expected true or false (using true to avoid unintended process launch)".into());
+                true
+            }),
+        };
+        let ollama_externally_managed = match s.get("vision.externally_managed") {
+            None => false,
+            Some(value) => value.parse::<bool>().unwrap_or_else(|_| {
+                config_errors.push("vision.externally_managed: expected true or false (using true to avoid unintended process launch)".into());
+                true
+            }),
+        };
         if !["auto", "local", "cloud", "off"].contains(&backend.as_str()) {
             config_errors.push(format!(
                 "kev.backend = \"{backend}\": expected auto, local, cloud or off (using auto)"
@@ -335,7 +403,17 @@ impl Config {
                 "output.style = \"{output_style}\": expected concise or default (using concise)"
             ));
         }
-        Config {
+        let mut cfg = Config {
+            kev_cpu_only,
+            kev_externally_managed,
+            kev_gpu_uuid: s.get("kev.gpu_uuid").filter(|v| !v.trim().is_empty()),
+            vision_gpu_uuid: s.get("vision.gpu_uuid").filter(|v| !v.trim().is_empty()),
+            laya_device: s.str("kev.device", "auto"),
+            laya_max_batch: s.get("kev.max_batch").map(|v| v.parse().unwrap_or(0)),
+            vulkan_visible_devices: s
+                .get("kev.vulkan_visible_devices")
+                .filter(|v| !v.trim().is_empty()),
+            ollama_externally_managed,
             output_style: if output_style == "default" {
                 output_style
             } else {
@@ -349,6 +427,7 @@ impl Config {
             cloud_url: s.str("cloud.url", "https://ai-gateway.vercel.sh/v1/evaluate"),
             cloud_model: s.str("cloud.model", "typesafe-ai/jev"),
             cloud_key_file: s.path("cloud.key_file", home.join("ai-gateway.key")),
+            cloud_key_env: s.str("cloud.key_env", "AI_GATEWAY_API_KEY"),
             laya_url: s.str("kev.laya_url", format!("http://127.0.0.1:{port}")),
             laya_exe: s.path(
                 "kev.laya_exe",
@@ -394,16 +473,34 @@ impl Config {
             unity_hub_editors: s.path("unity.hub_editors", default_unity_hub()),
             context_limit: s.num("review.context_limit", 1_000_000),
             disabled_tools: s.list("tools.disabled", DEFAULT_DISABLED),
+            vision_gpu_kev_url: s
+                .get("kev.vision_gpu_laya_url")
+                .map(|v| v.trim().trim_end_matches('/').to_string())
+                .filter(|v| !v.is_empty()),
+            vision_gpu_kev_start: s
+                .get("kev.vision_gpu_start")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_stop: s
+                .get("kev.vision_gpu_stop")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_uuid: s
+                .get("kev.vision_gpu_uuid")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_idle_s: s.num("kev.vision_gpu_idle_s", 120),
             home,
             config_file,
             config_errors,
+        };
+        if let Err(error) = cfg.validate_gpu_placement() {
+            cfg.config_errors.push(error);
         }
+        cfg
     }
 
-    /// The AI Gateway key for cloud Jev: `AI_GATEWAY_API_KEY`, else `cloud.key_file`. Never
+    /// The explicitly configured cloud key environment, else `cloud.key_file`. Never
     /// stored in `kritic.toml`, never logged.
     pub fn cloud_key(&self) -> Option<String> {
-        if let Ok(k) = std::env::var("AI_GATEWAY_API_KEY")
+        if let Ok(k) = std::env::var(&self.cloud_key_env)
             && !k.trim().is_empty()
         {
             return Some(k.trim().to_string());
@@ -418,4 +515,52 @@ impl Config {
     pub fn from_env() -> Self {
         Self::load()
     }
+
+    /// Fail closed on partial or ambiguous dedicated placement.
+    pub fn validate_gpu_placement(&self) -> Result<(), String> {
+        if self.laya_max_batch == Some(0) {
+            return Err("kev.max_batch: expected a positive integer".into());
+        }
+        if self.laya_device == "cpu" && !self.kev_cpu_only {
+            return Err(
+                "kev.device=cpu requires kev.cpu_only=true for correct GPU coordination".into(),
+            );
+        }
+        if !["auto", "cpu", "cuda", "cuda:0", "vulkan", "vulkan:0"]
+            .contains(&self.laya_device.as_str())
+        {
+            return Err("kev.device: expected auto, cpu, cuda, cuda:0, vulkan or vulkan:0".into());
+        }
+        match (&self.kev_gpu_uuid, &self.vision_gpu_uuid) {
+            (None, None) => Ok(()),
+            (Some(kev), Some(vision)) if !kev.eq_ignore_ascii_case(vision) && valid_gpu_uuid(kev) && valid_gpu_uuid(vision) => {
+                if self.kev_cpu_only || !["cuda:0", "vulkan:0"].contains(&self.laya_device.as_str()) {
+                    return Err("dedicated GPUs require an explicit Kev cuda:0 or vulkan:0 device and cpu_only=false".into());
+                }
+                if self.laya_device.starts_with("vulkan") && !self.vulkan_visible_devices.as_ref().is_some_and(|v| v.parse::<u32>().is_ok()) {
+                    return Err("dedicated Vulkan requires kev.vulkan_visible_devices: one verified Vulkan ordinal".into());
+                }
+                Ok(())
+            }
+            _ => Err("dedicated GPUs require kev.gpu_uuid and vision.gpu_uuid as distinct full NVIDIA GPU UUIDs".into()),
+        }
+    }
+
+    pub fn dedicated_gpus(&self) -> bool {
+        self.kev_gpu_uuid.is_some() && self.validate_gpu_placement().is_ok()
+    }
+}
+
+fn valid_gpu_uuid(value: &str) -> bool {
+    let Some(id) = value.strip_prefix("GPU-") else {
+        return false;
+    };
+    id.len() == 36
+        && id.chars().enumerate().all(|(i, c)| {
+            if [8, 13, 18, 23].contains(&i) {
+                c == '-'
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
 }

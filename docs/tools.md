@@ -25,6 +25,9 @@ scores, and a model opinion never removes a deterministic failure.
 | `token_metrics` | from the Claude Code session transcript: per-session and per-task tokens, context size, peak and growth per call, compactions, cache hit rate, output tokens/s; local model usage | none | — |
 | `status` | laya health, resolved paths, config file and errors, every calibrated gate, built-in spec lint, event-stream URL, ready states | none | — |
 | `spec_lint` | the full schema and lint rules for a decision spec (JSON or path), every error at once | none | — |
+| `policy_schema` | parses a game's schema definition (state byte layout, action heads and packing, thresholds), every error at once; with no input returns the format's JSON Schema | none | `ok` only |
+| `policy_run` | framed-buffer frame loop with a local game client (loopback TCP or stdio), `lockstep` or `hold`; pluggable policy (defer, constant, cycle, rules, random, external process); per-tick latency vs the `1/tick_hz` budget; per-episode JSONL telemetry; then `trajectory_diagnose`. See [policy runner](policy-runner.md) | optional `kev` policy: one choice per action head every `every_ticks` (~0.1 s per decision: not per-tick control) | `false` when any behavior family is vetoed |
+| `trajectory_diagnose` | recorded or inline state arrays: behavior families (per-dimension mean, variance, distribution over time), stuck states, oscillation, unrecoverable metrics, all from the game's thresholds | none | `false` when any family's success rate is at or below `min_family_success` (default 0%); the veto carries each family's coordinate signature |
 
 ## Output size
 

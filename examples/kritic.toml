@@ -15,9 +15,32 @@
 #   cloud - cloud Jev only (code excerpts are sent to the AI Gateway)
 #   off   - no model: deterministic tools only; Kev-backed verdicts report null
 # backend = "auto"                              # KRITIC_KEV_BACKEND
+# cpu_only = false                             # KRITIC_KEV_CPU_ONLY: true only for a CPU Kev service
+# externally_managed = false                  # KRITIC_KEV_EXTERNALLY_MANAGED: never spawn or stop laya; supervisor owns recovery
+# gpu_uuid = ""                               # KRITIC_KEV_GPU_UUID: full GPU UUID; requires distinct vision.gpu_uuid
+# device = "auto"                             # KRITIC_LAYA_DEVICE: auto, cpu, cuda:0 or vulkan:0
+# max_batch = 4                               # KRITIC_LAYA_MAX_BATCH: optional positive override; unset uses laya default
+# vulkan_visible_devices = ""                 # KRITIC_VULKAN_VISIBLE_DEVICES: verified Vulkan ordinal (not CUDA ordinal)
+# Dedicated pair: explicit cuda:0 or vulkan:0 keeps both models resident and uses separate
+# leases. CUDA visibility uses the Kev UUID; Vulkan uses GGML_VK_VISIBLE_DEVICES instead.
+# Select an executable compiled for the chosen backend/card. Vulkan skips --cuda-graph.
+# Laya health validates the backend, but cannot prove the physical UUID: verify its PID with
+# nvidia-smi after deployment. GPU UUIDs do not translate automatically to Vulkan ordinals.
+# CPU-only launches use --device cpu. Kev calls bypass GPU leases and never stop the shared
+# service or evict vision. Existing/external services must already run on CPU; restart them
+# explicitly before changing this flag. Vision tools still hold the GPU lease.
 #
 # Kev-4B typed-decision model, served by laya. kritic starts laya itself when it is not running.
 # laya_url = "http://127.0.0.1:8089"            # KRITIC_LAYA_URL (default built from laya_port)
+# A second Kev on the vision GPU, used for every Kev call while the vision GPU is idle (Ollama
+# /api/ps lists no model, or a GPU router's /v1/lanes shows that GPU's lane idle). It is stopped
+# before vision work, when the lane gets busy, and after vision_gpu_idle_s without use.
+# Unset: always laya_url.
+# vision_gpu_laya_url = "http://127.0.0.1:8090" # KRITIC_VISION_GPU_KEV_URL
+# vision_gpu_start = ""                         # KRITIC_VISION_GPU_KEV_START: command that launches it detached
+# vision_gpu_stop = ""                          # KRITIC_VISION_GPU_KEV_STOP: command that stops it
+# vision_gpu_uuid = ""                          # KRITIC_VISION_GPU_KEV_UUID: its GPU; only that router lane counts
+# vision_gpu_idle_s = 120                       # KRITIC_VISION_GPU_KEV_IDLE_S: stop it after this long unused (0: never)
 # laya_port = 8089                              # KRITIC_LAYA_PORT
 # laya_exe = "~/.kritic/laya/laya.exe"          # KRITIC_LAYA_EXE (default: laya on PATH, else ~/.kritic/laya/)
 # gguf = "~/.kritic/models/kev_4b_q8_0.gguf"    # KRITIC_KEV_GGUF
@@ -36,9 +59,15 @@
 # gates are advisory under Jev until you run `kritic calibrate` with the cloud backend.
 # url = "https://ai-gateway.vercel.sh/v1/evaluate"   # KRITIC_CLOUD_URL
 # model = "typesafe-ai/jev"                     # KRITIC_CLOUD_MODEL
+# key_env = "AI_GATEWAY_API_KEY"                # KRITIC_CLOUD_KEY_ENV; direct TypeSafe: TYPESAFE_API_KEY
 # key_file = "~/.kritic/ai-gateway.key"         # KRITIC_CLOUD_KEY_FILE
 
 [vision]
+# gpu_uuid = ""                               # KRITIC_VISION_GPU_UUID: full UUID distinct from Kev's
+# externally_managed = false                  # KRITIC_OLLAMA_EXTERNALLY_MANAGED
+# Dedicated GPU pairs always require an externally started Ollama service. Pin that service
+# with CUDA_VISIBLE_DEVICES=<vision UUID> and OLLAMA_HOST=<configured ollama_url>.
+# Kritic cannot inspect a running Ollama server's device visibility; verify its PID placement.
 # Qwen2.5-VL through Ollama: visual_critic scores and the ux_critic novice.
 # ollama_url = "http://127.0.0.1:11434"         # KRITIC_OLLAMA_URL
 # ollama_exe = "ollama"                         # KRITIC_OLLAMA_EXE (default: ollama on PATH, else the platform install path)

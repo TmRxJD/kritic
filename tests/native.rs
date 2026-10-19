@@ -183,7 +183,12 @@ fn leftover_globs_match_files() {
     assert!(found[0].ends_with("run.lock"));
     assert_eq!(glob(&format!("{base}/a/*.txt")).len(), 1);
     assert!(glob(&format!("{base}/none/*.x")).is_empty());
-    let a = audit(&[base.clone()], &[], &[format!("{base}/**/*.lock")], false);
+    let a = audit(
+        std::slice::from_ref(&base),
+        &[],
+        &[format!("{base}/**/*.lock")],
+        false,
+    );
     assert_eq!(a["leftovers"].as_array().unwrap().len(), 1);
 }
 

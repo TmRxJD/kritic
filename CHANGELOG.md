@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Policy runner** (`policy_schema`, `policy_run`, `trajectory_diagnose`): a game-agnostic frame loop over a documented framed-buffer protocol (loopback TCP or stdio), schema-driven state/action decoding, pluggable policies (defer, scripted, external process, Kev at low frequency), `lockstep` and `hold` modes with per-tick latency against the native budget, JSONL telemetry, and trajectory diagnostics: behavior families, stuck states, oscillation, unrecoverable metrics, and a veto of 0%-success families with their coordinate signatures. See [docs/policy-runner.md](docs/policy-runner.md).
+- **Docs**: [other testing uses for Kev](docs/kev-testing-uses.md).
+
 ## 0.4.0 — 2026-09-29: kritic
 
 First public release, under the name **kritic** ("k" for Kev). Earlier versions (0.1–0.3) were a

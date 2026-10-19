@@ -49,10 +49,12 @@ pub fn claude_json() -> PathBuf {
 
 pub fn hermes_home() -> PathBuf {
     // Hermes keeps its data in %LOCALAPPDATA%\hermes on native Windows, ~/.hermes elsewhere.
-    crate::config::env_var("HERMES_HOME").map(PathBuf::from).unwrap_or_else(|| match crate::config::env_var("LOCALAPPDATA") {
-        Some(l) if cfg!(windows) => PathBuf::from(l).join("hermes"),
-        _ => user_home().join(".hermes"),
-    })
+    crate::config::env_var("HERMES_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| match crate::config::env_var("LOCALAPPDATA") {
+            Some(l) if cfg!(windows) => PathBuf::from(l).join("hermes"),
+            _ => user_home().join(".hermes"),
+        })
 }
 
 pub fn claude_present() -> bool {
@@ -374,6 +376,19 @@ pub fn register_hermes(home: &Path, exe: &Path, opts: &HermesOptions) -> Result<
         "context engine plugin installed: {}",
         plugin.display()
     ));
+    // Hermes leaves user plugins disabled until asked; do the asking when the CLI is there.
+    if let Some(h) = crate::config::which("hermes") {
+        match Command::new(h)
+            .args(["plugins", "enable", "kritic"])
+            .stdin(std::process::Stdio::null())
+            .output()
+        {
+            Ok(o) if o.status.success() => ui::ok("plugin enabled (hermes plugins enable kritic)"),
+            _ => ui::warn("could not enable the plugin: run `hermes plugins enable kritic`"),
+        }
+    } else {
+        ui::info("Hermes CLI not on PATH: run `hermes plugins enable kritic` once");
+    }
     if opts.context_engine {
         ui::ok("Hermes now uses kritic as its context engine (context.engine: kritic)");
     } else {

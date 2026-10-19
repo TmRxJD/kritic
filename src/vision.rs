@@ -145,8 +145,15 @@ async fn ollama_up(http: &reqwest::Client, cfg: &Config) -> bool {
 }
 
 pub async fn ensure_ollama(http: &reqwest::Client, cfg: &Config) -> Result<(), String> {
+    cfg.validate_gpu_placement()?;
     if ollama_up(http, cfg).await {
         return Ok(());
+    }
+    if cfg.ollama_externally_managed || cfg.dedicated_gpus() {
+        return Err(format!(
+            "externally managed Ollama unreachable at {}; start its GPU-pinned service explicitly",
+            cfg.ollama_url
+        ));
     }
     if !cfg.ollama_exe.exists() {
         return Err(format!(
@@ -213,7 +220,8 @@ pub async fn critique(cfg: &Config, image: &Path, metadata: &str) -> VisualResul
         r.error = Some(e);
         return r;
     }
-    r.stopped_laya = crate::gpu::stop_laya(cfg).await;
+    let freed = crate::gpu::free_vision_gpu(cfg).await;
+    r.stopped_laya = crate::gpu::stop_laya(cfg).await || freed;
     let prompt = if metadata.trim().is_empty() {
         "Review this UI screenshot.".to_string()
     } else {

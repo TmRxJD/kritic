@@ -27,7 +27,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     let file = dir.path().join("kritic.toml");
     std::fs::write(
         &file,
-        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\nbogus = 1\n\n[tools]\ndisabled = []\n",
+        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\ncpu_only = true\nbogus = 1\n\n[cloud]\nkey_env = \"TYPESAFE_API_KEY\"\n\n[tools]\ndisabled = []\n",
     )
     .unwrap();
     // SAFETY: no other test in this binary reads the environment.
@@ -42,11 +42,25 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     let c = Config::load();
     assert_eq!(c.config_file.as_deref(), Some(file.as_path()));
     assert_eq!(c.chunk_chars, 999, "file value");
+    assert!(c.kev_cpu_only, "CPU-only TOML boolean is accepted");
+    assert_eq!(c.cloud_key_env, "TYPESAFE_API_KEY");
     assert_eq!(c.model, "from-env", "env beats file");
     assert_eq!(c.token_budget, 2900, "default");
     assert!(c.disabled_tools.is_empty(), "file list");
     assert_eq!(c.config_errors.len(), 1, "{:?}", c.config_errors);
     assert!(c.config_errors[0].contains("kev.bogus"));
+    unsafe { std::env::set_var("KRITIC_KEV_CPU_ONLY", "false") };
+    assert!(!Config::load().kev_cpu_only, "environment overrides file");
+    unsafe { std::env::set_var("KRITIC_KEV_CPU_ONLY", "invalid") };
+    let invalid = Config::load();
+    assert!(!invalid.kev_cpu_only);
+    assert!(
+        invalid
+            .config_errors
+            .iter()
+            .any(|e| e.contains("kev.cpu_only: expected true or false"))
+    );
+    unsafe { std::env::remove_var("KRITIC_KEV_CPU_ONLY") };
     assert_eq!(
         c.runs_dir,
         dir.path().join("runs"),
@@ -60,9 +74,49 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     }
     let c = Config::load();
     assert!(c.config_file.is_none() && c.config_errors.is_empty());
+    assert!(!c.kev_cpu_only, "GPU behavior is the default");
     assert_eq!(c.disabled_tools, ["route", "context_trim"]);
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };
     assert_eq!(Config::load().disabled_tools, DEFAULT_DISABLED);
+
+    unsafe {
+        std::env::set_var(
+            "KRITIC_KEV_GPU_UUID",
+            "GPU-11111111-1111-1111-1111-111111111111",
+        );
+        std::env::set_var(
+            "KRITIC_VISION_GPU_UUID",
+            "GPU-22222222-2222-2222-2222-222222222222",
+        );
+        std::env::set_var("KRITIC_LAYA_DEVICE", "vulkan:0");
+        std::env::set_var("KRITIC_VULKAN_VISIBLE_DEVICES", "1");
+        std::env::set_var("KRITIC_LAYA_MAX_BATCH", "4");
+        std::env::set_var("KRITIC_OLLAMA_EXTERNALLY_MANAGED", "true");
+    }
+    let dedicated = Config::load();
+    assert!(dedicated.dedicated_gpus());
+    assert!(dedicated.config_errors.is_empty());
+    assert!(dedicated.ollama_externally_managed);
+    assert_eq!(dedicated.laya_max_batch, Some(4));
+    unsafe {
+        std::env::set_var(
+            "KRITIC_VISION_GPU_UUID",
+            "GPU-11111111-1111-1111-1111-111111111111",
+        )
+    };
+    assert!(!Config::load().config_errors.is_empty());
+    unsafe {
+        for key in [
+            "KRITIC_KEV_GPU_UUID",
+            "KRITIC_VISION_GPU_UUID",
+            "KRITIC_LAYA_DEVICE",
+            "KRITIC_VULKAN_VISIBLE_DEVICES",
+            "KRITIC_LAYA_MAX_BATCH",
+            "KRITIC_OLLAMA_EXTERNALLY_MANAGED",
+        ] {
+            std::env::remove_var(key);
+        }
+    }
 
     // Set-but-empty means unset; a relative home is made absolute.
     unsafe { std::env::set_var("KRITIC_HOME", "") };

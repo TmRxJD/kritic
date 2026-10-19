@@ -28,9 +28,46 @@ pub struct RouteResult {
     /// Fixed text describing the chosen tier (Kev does not write reasons).
     pub basis: Option<String>,
     pub note: String,
+    /// Exact coding model for Codex routing; classification backends are never executors.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coding_model: Option<String>,
 }
 
 pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &str) -> RouteResult {
+    route_spec(d, task, hints, artifact_type, "route").await
+}
+
+/// Conservative Codex-only tier selection; low-confidence or unavailable advice stays on Sol.
+pub async fn route_codex<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+) -> RouteResult {
+    let mut result = route_spec(d, task, hints, artifact_type, "route_codex").await;
+    result.coding_model = Some(codex_model(result.suggestion.as_deref(), result.confidence).into());
+    result.note = "Codex performs all work: Sol standard, Astra hard, Luna basic. Kev/JEV only classifies. Uncertain/unavailable routing stays on Sol; recommendations are not calibrated gates.".into();
+    result
+}
+
+pub fn codex_model(tier: Option<&str>, confidence: Option<f64>) -> &'static str {
+    if !confidence.is_some_and(|p| p.is_finite() && (0.75..=1.0).contains(&p)) {
+        return "gpt-6.1-sol";
+    }
+    match tier {
+        Some("luna") => "gpt-6-luna",
+        Some("astra") => "gpt-6-astra",
+        _ => "gpt-6.1-sol",
+    }
+}
+
+async fn route_spec<D: Decider>(
+    d: &D,
+    task: &str,
+    hints: &str,
+    artifact_type: &str,
+    name: &str,
+) -> RouteResult {
     let mut r = RouteResult {
         tool: "route".into(),
         advisory: true,
@@ -41,7 +78,7 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
         r.error = Some("empty task".into());
         return r;
     }
-    let spec = crate::spec::get("route");
+    let spec = crate::spec::get(name);
     let mut described = task.to_string();
     if !hints.trim().is_empty() {
         described.push_str(&format!("\nHints: {hints}"));
@@ -59,7 +96,14 @@ pub async fn route<D: Decider>(d: &D, task: &str, hints: &str, artifact_type: &s
     match d.decide(&state, &spec.wire()).await {
         Err(e) => r.error = Some(e),
         Ok(dec) => {
-            let a = &dec.answers["tier"];
+            let Some(a) = dec.answers.get("tier") else {
+                r.error = Some("routing decision is missing the tier answer".into());
+                return r;
+            };
+            if dec.truncated || !a.value.is_finite() || !(0.0..=1.0).contains(&a.value) {
+                r.error = Some("routing decision is truncated or has an invalid confidence".into());
+                return r;
+            }
             r.kev_ok = true;
             r.suggestion = a.choice.clone();
             r.confidence = Some(a.value);
@@ -439,6 +483,8 @@ pub struct StatusResult {
     pub cloud_key_configured: bool,
     pub laya_up: bool,
     pub laya_url: String,
+    /// Configured placement; health cannot prove physical UUID identity on older laya builds.
+    pub gpu_placement: Value,
     pub health: Option<Value>,
     pub laya_exe: String,
     pub laya_exe_exists: bool,
@@ -487,6 +533,18 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
         cloud_key_configured: cfg.cloud_key().is_some(),
         laya_up: health.is_some(),
         laya_url: cfg.laya_url.clone(),
+        gpu_placement: json!({
+            "dedicated": cfg.dedicated_gpus(),
+            "cpu_only": cfg.kev_cpu_only,
+            "kev_externally_managed": cfg.kev_externally_managed,
+            "kev_gpu_uuid": cfg.kev_gpu_uuid,
+            "vision_gpu_uuid": cfg.vision_gpu_uuid,
+            "laya_device": cfg.laya_device,
+            "vulkan_visible_devices": cfg.vulkan_visible_devices,
+            "vision_endpoint": cfg.ollama_url,
+            "error": cfg.validate_gpu_placement().err().or_else(|| health.as_ref().and_then(|h| k.validate_health(h).err())),
+            "physical_identity_verified_by_health": false,
+        }),
         health,
         laya_exe: cfg.laya_exe.display().to_string(),
         laya_exe_exists: cfg.laya_exe.exists(),

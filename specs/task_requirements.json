@@ -1,0 +1,81 @@
+{
+ "name": "task_requirements",
+ "purpose": "Read a task description and say which requirements it implies that are easy to forget (locate's checklist). Advice to the developer, never a gate.",
+ "fields": [
+  {
+   "name": "task",
+   "kind": {
+    "kind": "text",
+    "max_chars": 1500
+   },
+   "meaning": "What the developer has to build, fix or change."
+  }
+ ],
+ "questions": [
+  {
+   "id": "new_surface",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `task` add a new screen that users must be able to reach?",
+    "yes": "`task` creates a new screen, mode, page, and command that users must reach, so it needs a visible entry point",
+    "no": "`task` changes something that already exists, with no new user-facing surface"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a reminder for the developer; the critic tools decide approval"
+   }
+  },
+  {
+   "id": "data_format",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `task` change how data is stored between components?",
+    "yes": "`task` changes a stored structure that other code reads, such as a file format, schema, and message shape",
+    "no": "`task` leaves the stored data as it is"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a reminder for the developer; the critic tools decide approval"
+   }
+  },
+  {
+   "id": "security",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `task` handle untrusted input from users?",
+    "yes": "`task` reads input that a user supplies over the network, and acts on it",
+    "no": "`task` works only on trusted, internal values"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a reminder for the developer; security_critic decides"
+   }
+  },
+  {
+   "id": "behavior",
+   "ask": {
+    "type": "noul",
+    "instructions": "Does `task` change what the program does?",
+    "yes": "`task` alters observable behavior such as outputs, side effects, and rules",
+    "no": "`task` is only a rename, a formatting change, and a documentation edit"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a reminder for the developer; the project's tests decide"
+   }
+  },
+  {
+   "id": "unclear",
+   "ask": {
+    "type": "noul",
+    "instructions": "Is `task` too vague to tell when it would be finished?",
+    "yes": "`task` leaves out what done looks like",
+    "no": "`task` states clearly what the result must be"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a reminder for the developer to ask before building"
+   }
+  }
+ ]
+}

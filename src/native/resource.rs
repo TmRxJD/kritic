@@ -249,7 +249,7 @@ fn resource_blocking(
             s.t = round(t - warmup_s, 2);
             samples.push(s);
             n += 1;
-            if n % (1000 / interval.as_millis().max(1) as usize).max(1) == 0
+            if n.is_multiple_of((1000 / interval.as_millis().max(1) as usize).max(1))
                 && let Some(g) = gpu_sample()
             {
                 gpu.push(g);

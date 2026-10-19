@@ -13,6 +13,34 @@ use serde_json::{Value, json};
 
 use crate::config::Config;
 
+/// Construct launch arguments without spawning, so backend and visibility are testable.
+pub(crate) fn laya_command(cfg: &Config) -> std::process::Command {
+    let mut cmd = std::process::Command::new(&cfg.laya_exe);
+    cmd.arg("serve").arg(&cfg.kev_gguf).args([
+        "--port",
+        &cfg.laya_port.to_string(),
+        "--device",
+        if cfg.kev_cpu_only {
+            "cpu"
+        } else {
+            &cfg.laya_device
+        },
+    ]);
+    if !cfg.kev_cpu_only && !cfg.laya_device.starts_with("vulkan") && cfg.laya_device != "cpu" {
+        cmd.arg("--cuda-graph");
+    }
+    if let Some(uuid) = &cfg.kev_gpu_uuid {
+        cmd.env("CUDA_VISIBLE_DEVICES", uuid);
+    }
+    if let Some(ordinal) = &cfg.vulkan_visible_devices {
+        cmd.env("GGML_VK_VISIBLE_DEVICES", ordinal);
+    }
+    if let Some(batch) = cfg.laya_max_batch {
+        cmd.arg("--max-batch").arg(batch.to_string());
+    }
+    cmd
+}
+
 /// laya's wire format for one question. Built only by `crate::spec::DecisionSpec::wire`, so
 /// every question Kev sees names its fields and defines its answers (see src/spec.rs).
 #[derive(Debug, Clone, Serialize)]
@@ -78,7 +106,18 @@ pub struct KevClient {
     http: reqwest::Client,
     start_lock: tokio::sync::Mutex<()>,
     backend: tokio::sync::Mutex<Option<Backend>>,
+    /// Cached choice between `laya_url` and the vision-GPU Kev, with when it was made.
+    route: Arc<tokio::sync::Mutex<Option<(Instant, String)>>>,
+    /// When the vision-GPU Kev was last chosen, for the idle stop.
+    alt_used: Arc<std::sync::Mutex<Option<Instant>>>,
+    /// An idle watcher is running.
+    watching: Arc<std::sync::atomic::AtomicBool>,
+    /// The laya URL the last local request went to.
+    last_url: std::sync::Mutex<String>,
 }
+
+/// How long an endpoint choice is reused before the vision model is checked again.
+const ROUTE_TTL: Duration = Duration::from_secs(15);
 
 /// Where Kev questions go. Resolved once per process from `kev.backend`.
 #[derive(Debug, Clone, PartialEq)]
@@ -288,10 +327,14 @@ impl KevClient {
             .build()
             .expect("reqwest client");
         KevClient {
-            cfg,
             http,
             start_lock: tokio::sync::Mutex::new(()),
             backend: tokio::sync::Mutex::new(None),
+            route: Arc::new(tokio::sync::Mutex::new(None)),
+            alt_used: Arc::new(std::sync::Mutex::new(None)),
+            watching: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            last_url: std::sync::Mutex::new(cfg.laya_url.clone()),
+            cfg,
         }
     }
 
@@ -402,9 +445,13 @@ impl KevClient {
     }
 
     pub async fn health(&self) -> Option<Value> {
+        self.health_at(&self.cfg.laya_url).await
+    }
+
+    async fn health_at(&self, url: &str) -> Option<Value> {
         let r = self
             .http
-            .get(format!("{}/health", self.cfg.laya_url))
+            .get(format!("{url}/health"))
             .timeout(Duration::from_secs(3))
             .send()
             .await
@@ -415,14 +462,123 @@ impl KevClient {
         r.json::<Value>().await.ok()
     }
 
+    /// The laya URL the last local request went to.
+    pub fn last_endpoint(&self) -> String {
+        self.last_url.lock().map(|u| u.clone()).unwrap_or_default()
+    }
+
+    /// The laya for the next local request: the vision-GPU Kev while the vision model is not
+    /// loaded (started on demand), else `laya_url`. Reused for `ROUTE_TTL`.
+    pub async fn endpoint(&self) -> String {
+        let primary = self.cfg.laya_url.clone();
+        let Some(alt) = self.cfg.vision_gpu_kev_url.clone() else {
+            return primary;
+        };
+        let mut route = self.route.lock().await;
+        let url = match route.as_ref() {
+            Some((at, url)) if at.elapsed() < ROUTE_TTL => url.clone(),
+            _ => {
+                let url = if !crate::gpu::vision_idle(&self.cfg).await {
+                    // Vision work wants that GPU: hand it back.
+                    if self.health_at(&alt).await.is_some() {
+                        crate::gpu::free_vision_gpu(&self.cfg).await;
+                    }
+                    primary
+                } else {
+                    match self.ensure_vision_gpu_kev(&alt).await {
+                        Ok(()) => alt.clone(),
+                        Err(e) => {
+                            crate::events::ready("laya", "vision-gpu unavailable", &e);
+                            primary
+                        }
+                    }
+                };
+                *route = Some((Instant::now(), url.clone()));
+                url
+            }
+        };
+        if url == alt {
+            if let Ok(mut t) = self.alt_used.lock() {
+                *t = Some(Instant::now());
+            }
+            self.watch_idle();
+        }
+        url
+    }
+
+    /// Stop the vision-GPU Kev once it has gone `vision_gpu_idle_s` without being chosen, so other
+    /// work on that GPU gets its memory back.
+    fn watch_idle(&self) {
+        use std::sync::atomic::Ordering;
+        let idle = self.cfg.vision_gpu_kev_idle_s;
+        if idle == 0 || self.watching.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let (cfg, used, watching, route) = (
+            self.cfg.clone(),
+            self.alt_used.clone(),
+            self.watching.clone(),
+            self.route.clone(),
+        );
+        tokio::spawn(async move {
+            let limit = Duration::from_secs(idle);
+            loop {
+                tokio::time::sleep(limit.min(Duration::from_secs(30))).await;
+                let since = used.lock().ok().and_then(|t| *t).map(|t| t.elapsed());
+                if since.is_none_or(|s| s >= limit) {
+                    *route.lock().await = None;
+                    crate::gpu::free_vision_gpu(&cfg).await;
+                    watching.store(false, Ordering::SeqCst);
+                    return;
+                }
+            }
+        });
+    }
+
+    async fn use_primary(&self) {
+        *self.route.lock().await = Some((Instant::now(), self.cfg.laya_url.clone()));
+    }
+
+    async fn ensure_vision_gpu_kev(&self, url: &str) -> Result<(), String> {
+        if self.health_at(url).await.is_none() {
+            let cmd = self.cfg.vision_gpu_kev_start.as_deref().ok_or_else(|| {
+                format!("{url} does not answer and kev.vision_gpu_start is unset")
+            })?;
+            crate::gpu::run_hidden(cmd, Duration::from_secs(60)).await?;
+            let deadline = Instant::now() + Duration::from_secs(120);
+            while self.health_at(url).await.is_none() {
+                if Instant::now() > deadline {
+                    return Err(format!(
+                        "{url} did not answer within 120s of kev.vision_gpu_start"
+                    ));
+                }
+                tokio::time::sleep(Duration::from_secs(2)).await;
+            }
+        }
+        let health = self
+            .health_at(url)
+            .await
+            .ok_or_else(|| format!("{url} stopped answering"))?;
+        self.validate_health(&health)
+    }
+
     /// Start laya if it isn't answering. Returns Err with a human-readable reason on failure.
     pub async fn ensure_up(&self) -> Result<(), String> {
-        if self.health().await.is_some() {
+        self.cfg.validate_gpu_placement()?;
+        if let Some(health) = self.health().await {
+            self.validate_health(&health)?;
             crate::events::ready("laya", "up", "");
             return Ok(());
         }
+        if self.cfg.kev_externally_managed {
+            return Err(format!(
+                "externally managed laya unreachable at {}; restart its dedicated supervisor explicitly",
+                self.cfg.laya_url
+            ));
+        }
         let _guard = self.start_lock.lock().await;
-        if self.health().await.is_some() {
+        if let Some(health) = self.health().await {
+            self.validate_health(&health)?;
             crate::events::ready("laya", "up", "");
             return Ok(());
         }
@@ -432,6 +588,39 @@ impl KevClient {
             Err(e) => crate::events::ready("laya", "failed", e),
         }
         r
+    }
+
+    pub fn validate_health(&self, health: &Value) -> Result<(), String> {
+        crate::gpu::validate_cpu_health(
+            self.cfg.kev_cpu_only || self.cfg.laya_device == "cpu",
+            health,
+        )?;
+        if self.cfg.dedicated_gpus() {
+            let device = health
+                .get("device")
+                .and_then(Value::as_str)
+                .ok_or("dedicated Kev requires laya health to report its device")?;
+            if device != self.cfg.laya_device {
+                return Err(format!(
+                    "laya reports device {device:?}, expected {:?}; no process was stopped",
+                    self.cfg.laya_device
+                ));
+            }
+            if let Some(uuid) = health.get("gpu_uuid").and_then(Value::as_str)
+                && !self
+                    .cfg
+                    .kev_gpu_uuid
+                    .as_ref()
+                    .is_some_and(|expected| expected.eq_ignore_ascii_case(uuid))
+            {
+                return Err(format!(
+                    "laya reports GPU {uuid:?}, which differs from kev.gpu_uuid; request refused"
+                ));
+            }
+            // Laya does not expose a physical UUID. The launcher pins visibility; deployment
+            // verification must also inspect the running PID's GPU with nvidia-smi.
+        }
+        Ok(())
     }
 
     async fn start_laya(&self) -> Result<(), String> {
@@ -458,17 +647,8 @@ impl KevClient {
         let out = std::fs::File::create(&log)
             .map_err(|e| format!("cannot create {}: {e}", log.display()))?;
         let err = out.try_clone().map_err(|e| e.to_string())?;
-        let mut cmd = std::process::Command::new(exe);
-        cmd.args(["serve"])
-            .arg(&self.cfg.kev_gguf)
-            .args([
-                "--port",
-                &self.cfg.laya_port.to_string(),
-                "--device",
-                "auto",
-                "--cuda-graph",
-            ])
-            .current_dir(exe.parent().unwrap_or(std::path::Path::new(".")))
+        let mut cmd = laya_command(&self.cfg);
+        cmd.current_dir(exe.parent().unwrap_or(std::path::Path::new(".")))
             // Persist the sm_89 PTX -> sm_120 JIT so restarts skip the ~40s compile.
             .env("CUDA_CACHE_PATH", &self.cfg.cuda_cache)
             .env("CUDA_CACHE_MAXSIZE", "4294967296")
@@ -487,7 +667,8 @@ impl KevClient {
             .map_err(|e| format!("failed to start laya: {e}"))?;
         let deadline = Instant::now() + Duration::from_secs(120);
         while Instant::now() < deadline {
-            if self.health().await.is_some() {
+            if let Some(health) = self.health().await {
+                self.validate_health(&health)?;
                 return Ok(());
             }
             tokio::time::sleep(Duration::from_secs(2)).await;
@@ -505,21 +686,34 @@ impl KevClient {
     /// starts a fresh one (~13 s with the CUDA cache).
     async fn post(
         &self,
+        url: &str,
         state: &Value,
         questions: &BTreeMap<String, Question>,
     ) -> Result<(Value, u64), String> {
         let limit = Duration::from_secs(self.cfg.kev_request_s);
-        match tokio::time::timeout(limit, self.exchange(state, questions)).await {
+        match tokio::time::timeout(limit, self.exchange(url, state, questions)).await {
             Ok(result) => result,
+            // The vision-GPU Kev is someone else's service: never stop it here.
+            Err(_) if url != self.cfg.laya_url => Err(format!(
+                "kev request stalled: {url} did not answer within {}s",
+                limit.as_secs()
+            )),
             Err(_) => {
+                let stopped = crate::gpu::stop_laya(&self.cfg).await;
+                let recovery = if stopped {
+                    "stopped it; the next call restarts it"
+                } else if self.cfg.kev_cpu_only {
+                    "CPU-only service left running"
+                } else {
+                    "no process was stopped"
+                };
                 crate::events::ready(
                     "laya",
                     "stalled",
-                    &format!("no answer in {}s; restarting it", limit.as_secs()),
+                    &format!("no answer in {}s; {recovery}", limit.as_secs()),
                 );
-                crate::gpu::stop_laya(&self.cfg).await;
                 Err(format!(
-                    "kev request stalled: laya did not answer within {}s (stopped it; the next call restarts it)",
+                    "kev request stalled: laya did not answer within {}s ({recovery})",
                     limit.as_secs()
                 ))
             }
@@ -528,6 +722,7 @@ impl KevClient {
 
     async fn exchange(
         &self,
+        url: &str,
         state: &Value,
         questions: &BTreeMap<String, Question>,
     ) -> Result<(Value, u64), String> {
@@ -535,7 +730,7 @@ impl KevClient {
         let t0 = Instant::now();
         let r = self
             .http
-            .post(format!("{}/v1/decide", self.cfg.laya_url))
+            .post(format!("{url}/v1/decide"))
             .json(&body)
             .send()
             .await
@@ -569,8 +764,12 @@ impl Decider for KevClient {
         questions: &BTreeMap<String, Question>,
     ) -> Result<Decision, String> {
         let backend = self.resolve_backend().await?;
+        let mut url = String::new();
         if backend == Backend::Local {
-            self.ensure_up().await?;
+            url = self.endpoint().await;
+            if url == self.cfg.laya_url {
+                self.ensure_up().await?;
+            }
         }
         let model = self.model_for(&backend).to_string();
         // laya slows sharply above ~3.7k tokens per batch; the cloud endpoint takes one request.
@@ -581,10 +780,26 @@ impl Decider for KevClient {
         let mut out = Decision::default();
         for group in groups {
             let (v, ms) = match &backend {
-                Backend::Local => self.post(state, &group).await?,
+                Backend::Local => match self.post(&url, state, &group).await {
+                    Ok(r) => r,
+                    // The vision-GPU Kev failed: fall back to the primary for this and later calls.
+                    Err(e) if url != self.cfg.laya_url => {
+                        crate::events::ready("laya", "vision-gpu failed", &e);
+                        self.use_primary().await;
+                        url = self.cfg.laya_url.clone();
+                        self.ensure_up().await?;
+                        self.post(&url, state, &group).await?
+                    }
+                    Err(e) => return Err(e),
+                },
                 Backend::Cloud { key } => self.cloud_exchange(key, state, &group).await?,
             };
             out.latency_ms += ms;
+            if backend == Backend::Local
+                && let Ok(mut last) = self.last_url.lock()
+            {
+                last.clone_from(&url);
+            }
             let tokens = v
                 .pointer("/usage/input_tokens")
                 .and_then(Value::as_u64)

@@ -7,7 +7,8 @@ summarised, so nothing the model sees was written by another model.
 
 This module is a thin shim: every decision is made by the ``kritic`` binary (``kritic context``),
 which ranks messages with Kev when a Kev backend is available and oldest-first otherwise. The shim
-fails open: if kritic is missing or errors, messages pass through unchanged and the error is logged.
+preserves messages on backend-operation errors and records last_error. Invalid explicit executable
+selection or malformed configuration raises instead of substituting another binary or defaults.
 
 Activate with ``context.engine: kritic`` in Hermes' ``config.yaml`` (``kritic register --hermes
 --hermes-context`` does this). Optional settings, all with defaults, under a top-level
@@ -22,6 +23,10 @@ Activate with ``context.engine: kritic`` in Hermes' ``config.yaml`` (``kritic re
       use_kev: true         # rank by relevance with Kev; false = oldest first
       timeout_s: 90         # one kritic call
 
+The host's ``compression.threshold_tokens`` is also an absolute trigger ceiling.
+Kritic scales its target proportionally when that ceiling applies; the real model
+context length is preserved. Built-in tail-retention settings remain separate.
+
 Concise replies: when ``output.style = "concise"`` in kritic.toml (the default), ``kritic register``
 writes ``concise.md`` beside this file and the plugin adds it to each turn through Hermes'
 ``pre_llm_call`` hook (about 70 tokens per turn). Delete the file, or set ``output.style =
@@ -33,6 +38,7 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import math
 import os
 import shutil
 import subprocess
@@ -57,7 +63,9 @@ RECALL_TOOL = {
         "properties": {
             "id": {"type": "string", "description": "An archive id such as kr-1a2b3c4d5e6f"},
             "query": {"type": "string", "description": "Case-insensitive text to search archived content for"},
-            "max_chars": {"type": "integer", "description": "Most characters to return (default 20000)"},
+            "max_chars": {"type": "integer", "minimum": 0, "description": "Content UTF-8 byte budget (default 20000); original format counts serialized JSON"},
+            "format": {"type": "string", "enum": ["text", "original"], "description": "Text by default; original returns exact JSON without duplicate text and requires enough budget"},
+            "max_output_bytes": {"type": "integer", "minimum": 256, "maximum": 4194304, "description": "Whole compact JSON response budget including metadata (default 12000)"},
         },
     },
 }
@@ -66,13 +74,16 @@ RECALL_TOOL = {
 def _kritic_exe() -> Optional[str]:
     """KRITIC_EXE, else the path `kritic register` recorded beside this file, else PATH."""
     env = os.environ.get("KRITIC_EXE")
-    if env and Path(env).is_file():
+    if env is not None:
+        if not env or not Path(env).is_absolute() or not Path(env).is_file():
+            raise ValueError("KRITIC_EXE must be an existing absolute file; fallback disabled")
         return env
     recorded = _HERE / "kritic_exe.txt"
     if recorded.is_file():
         path = recorded.read_text(encoding="utf-8").strip()
-        if path and Path(path).is_file():
-            return path
+        if not path or not Path(path).is_absolute() or not Path(path).is_file():
+            raise ValueError("Recorded Kritic executable is invalid; PATH fallback disabled")
+        return path
     return shutil.which("kritic")
 
 
@@ -84,18 +95,50 @@ def _settings() -> Dict[str, Any]:
     defaults = {"threshold": 0.5, "target": 0.35, "protect_first_n": 3, "protect_last_n": 6,
                 "big_chars": 8000, "use_kev": True, "timeout_s": 90}
     try:
-        import yaml  # Hermes depends on PyYAML
-
         try:
-            from hermes_constants import get_hermes_home  # knows the Windows location too
+            import hermes_yaml as yaml  # Current Hermes owns its YAML parsing policy.
+        except ModuleNotFoundError as exc:
+            if exc.name != "hermes_yaml":
+                raise
+            import yaml  # Older Hermes releases use PyYAML.
 
-            home = Path(get_hermes_home())
-        except Exception:
-            home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
-        cfg = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8")) or {}
-        defaults.update({k: v for k, v in (cfg.get("kritic_context") or {}).items() if k in defaults})
-    except Exception as exc:  # a missing or odd config keeps the defaults
-        logger.debug("kritic: using default settings (%s)", exc)
+        from hermes_constants import get_hermes_home  # canonical host profile, including Windows
+        home = Path(get_hermes_home())
+        cfg = yaml.safe_load((home / "config.yaml").read_text(encoding="utf-8"))
+        if cfg is None:
+            cfg = {}
+        if not isinstance(cfg, dict):
+            raise ValueError("Hermes configuration must be an object")
+        settings = cfg.get("kritic_context", {})
+        if not isinstance(settings, dict) or set(settings) - set(defaults):
+            raise ValueError("Unknown or invalid kritic_context configuration")
+        defaults.update(settings)
+        compression = cfg.get("compression", {})
+        if compression is None:
+            compression = {}
+        if not isinstance(compression, dict):
+            raise ValueError("compression must be an object")
+        cap = compression.get("threshold_tokens")
+        if cap is not None and (type(cap) is not int or cap < 2):
+            raise ValueError("compression.threshold_tokens must be an integer greater than one")
+        defaults["threshold_tokens_cap"] = cap
+    except FileNotFoundError:
+        return defaults
+    except Exception as exc:
+        raise ValueError("Invalid Kritic configuration; defaults fallback disabled") from exc
+    for key in ("threshold", "target", "timeout_s"):
+        value = defaults[key]
+        if type(value) not in (int, float) or not math.isfinite(value):
+            raise ValueError(f"kritic_context.{key} must be a finite number")
+    if not 0 < defaults["target"] < defaults["threshold"] <= 1:
+        raise ValueError("kritic_context requires 0 < target < threshold <= 1")
+    if not 0 < defaults["timeout_s"] <= 300:
+        raise ValueError("kritic_context.timeout_s must be in (0, 300]")
+    for key in ("protect_first_n", "protect_last_n", "big_chars"):
+        if type(defaults[key]) is not int or defaults[key] < 0:
+            raise ValueError(f"kritic_context.{key} must be a nonnegative integer")
+    if type(defaults["use_kev"]) is not bool:
+        raise ValueError("kritic_context.use_kev must be boolean")
     return defaults
 
 
@@ -116,6 +159,7 @@ class KriticContextEngine(ContextEngine):
         s = _settings()
         self.threshold_percent = float(s["threshold"])
         self.target_percent = float(s["target"])
+        self.threshold_tokens_cap = s.get("threshold_tokens_cap")
         self.protect_first_n = int(s["protect_first_n"])
         self.protect_last_n = int(s["protect_last_n"])
         self.big_chars = int(s["big_chars"])
@@ -143,6 +187,7 @@ class KriticContextEngine(ContextEngine):
             proc = subprocess.run(
                 [exe, "context", op], input=json.dumps(payload), capture_output=True, text=True,
                 encoding="utf-8", timeout=self.timeout_s,
+                **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             self.last_error = f"kritic context {op}: {exc}"
@@ -153,15 +198,72 @@ class KriticContextEngine(ContextEngine):
             logger.warning("kritic: %s", self.last_error)
             return None
         try:
-            self.last_error = None
-            return json.loads(proc.stdout)
-        except json.JSONDecodeError as exc:
+            result = json.loads(proc.stdout)
+        except (ValueError, TypeError) as exc:
             self.last_error = f"kritic context {op}: bad JSON ({exc})"
             logger.warning("kritic: %s", self.last_error)
             return None
+        error = self._response_error(op, result)
+        if error is not None:
+            self.last_error = f"kritic context {op}: {error}"
+            logger.warning("kritic: %s", self.last_error)
+            return None
+        self.last_error = None
+        return result
 
-    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    @staticmethod
+    def _response_error(op: str, result: Any) -> Optional[str]:
+        """Validate the subprocess boundary before reading fields or updating counters."""
+        if not isinstance(result, dict):
+            return "invalid response schema: expected object"
+        error = result.get("error")
+        if error is not None:
+            if isinstance(error, str) and error:
+                return "backend error: " + error[:500]
+            if (isinstance(error, dict) and isinstance(error.get("code"), str)
+                    and isinstance(error.get("message"), str)):
+                return "backend error: " + json.dumps(error, ensure_ascii=True)[:500]
+            return "invalid response schema: error must be a string or code/message object"
+        if op == "compress":
+            messages = result.get("messages")
+            if not isinstance(messages, list):
+                return "invalid response schema: messages must be a list"
+            for message in messages:
+                if not isinstance(message, dict) or not isinstance(message.get("role"), str):
+                    return "invalid response schema: each message must be an object with a role"
+                content = message.get("content")
+                if content is not None and not isinstance(content, (str, list)):
+                    return "invalid response schema: message content must be text, blocks or null"
+                if isinstance(content, list) and not all(isinstance(p, dict) for p in content):
+                    return "invalid response schema: content blocks must be objects"
+                calls = message.get("tool_calls")
+                if calls is not None and (not isinstance(calls, list)
+                        or not all(isinstance(c, dict) for c in calls)):
+                    return "invalid response schema: tool_calls must be a list of objects"
+            archived = result.get("archived", [])
+            if not isinstance(archived, list) or not all(isinstance(a, dict) for a in archived):
+                return "invalid response schema: archived must be a list of objects"
+            tokens = result.get("tokens_after", 0)
+            if type(tokens) is not int or tokens < 0:
+                return "invalid response schema: tokens_after must be a nonnegative integer"
+        elif op == "recall":
+            found = result.get("found")
+            if not isinstance(found, list) or not all(isinstance(f, dict) for f in found):
+                return "invalid response schema: found must be a list of objects"
+        return None
+
+    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None,
+                current_tokens: Optional[int] = None) -> Optional[Dict[str, Any]]:
         target = int(self.context_length * self.target_percent) if self.context_length else 0
+        if self.threshold_tokens_cap is not None and self.threshold_tokens:
+            # Preserve the engine's retention ratio without overstating model capacity.
+            target = min(target, int(self.threshold_tokens * self.target_percent / self.threshold_percent))
+        if self.threshold_tokens > 1:
+            target = min(target, self.threshold_tokens - 1)
+        # Hermes supplies the whole-request estimate; the backend receives only messages.
+        # Reserve the system/tool overhead instead of spending the full budget twice.
+        if type(current_tokens) is int and current_tokens >= 0:
+            target -= max(0, current_tokens - _rough_tokens(messages))
         return self._run("compress", {
             "messages": messages, "target_tokens": max(target, 1), "session_id": self.session_id,
             "focus": focus, "protect_first_n": self.protect_first_n, "protect_last_n": self.protect_last_n,
@@ -170,6 +272,11 @@ class KriticContextEngine(ContextEngine):
         })
 
     # ---------------------------------------------------------------- ContextEngine
+
+    def update_model(self, *args: Any, **kwargs: Any) -> None:
+        super().update_model(*args, **kwargs)
+        if self.threshold_tokens_cap is not None:
+            self.threshold_tokens = min(self.threshold_tokens, self.threshold_tokens_cap)
 
     def update_from_response(self, usage: Dict[str, Any]) -> None:
         self.last_prompt_tokens = int(usage.get("prompt_tokens") or 0)
@@ -203,16 +310,17 @@ class KriticContextEngine(ContextEngine):
 
     def compress(self, messages: List[Dict[str, Any]], current_tokens: Optional[int] = None,
                  focus_topic: Optional[str] = None, force: bool = False, memory_context: str = "") -> List[Dict[str, Any]]:
-        result = self._shrink(messages, "compress", focus_topic)
+        result = self._shrink(messages, "compress", focus_topic, current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages
         self.compression_count += 1
         self.archived_total += len(result.get("archived") or [])
-        self.last_prompt_tokens = int(result.get("tokens_after") or 0)
+        overhead = max(0, current_tokens - _rough_tokens(messages)) if type(current_tokens) is int and current_tokens >= 0 else 0
+        self.last_prompt_tokens = int(result.get("tokens_after") or 0) + overhead
         return result["messages"]
 
     def prune_tool_results_only(self, messages: List[Dict[str, Any]], current_tokens: int = None):
-        result = self._shrink(messages, "prune")
+        result = self._shrink(messages, "prune", current_tokens=current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages, 0
         n = len(result.get("archived") or [])
@@ -231,9 +339,15 @@ class KriticContextEngine(ContextEngine):
     def handle_tool_call(self, name: str, args: Dict[str, Any], **kwargs) -> str:
         if name != "kritic_recall":
             return json.dumps({"error": f"Unknown context engine tool: {name}"})
+        max_output_bytes = int(args.get("max_output_bytes", 12000))
         result = self._run("recall", {"session_id": self.session_id, "id": args.get("id"),
-                                      "query": args.get("query"), "max_chars": int(args.get("max_chars") or 20000)})
-        return json.dumps(result if result is not None else {"error": self.last_error or "kritic unavailable"})
+                                      "query": args.get("query"), "max_chars": int(args.get("max_chars", 20000)),
+                                      "format": args.get("format", "text"), "max_output_bytes": max_output_bytes})
+        payload = json.dumps(result if result is not None else {"error": self.last_error or "kritic unavailable"},
+                             ensure_ascii=False, separators=(",", ":"))
+        if 256 <= max_output_bytes <= 4194304 and len(payload.encode("utf-8")) > max_output_bytes:
+            return json.dumps({"error": "recall response exceeds max_output_bytes after serialization"}, separators=(",", ":"))
+        return payload
 
     def clone_for_agent(self) -> "KriticContextEngine":
         """Each agent gets its own budget; the archive on disk is shared by session id.

@@ -995,7 +995,7 @@ async fn run_ui_test(
                 k(
                     &page,
                     "select",
-                    &[json!("@target"), json!(if n > 1 { n - 1 } else { 0 })],
+                    &[json!("@target"), json!(n.saturating_sub(1))],
                 )
                 .await?
             } else {

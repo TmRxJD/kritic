@@ -439,6 +439,13 @@ useDefault = true
 [allowlist]
 description = "vendored and generated trees"
 paths = ['(^|[\\/])({alts})[\\/]']
+
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "ACS decision content identity, only in the canonical_key JSON field"
+regexTarget = "match"
+regexes = ['^"?canonical_key"\s*:\s*"acs-decision-[a-f0-9]{{64}}"[\s,}}]*$']
 "#
     );
     let path = dir.join("kritic-gitleaks.toml");

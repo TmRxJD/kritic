@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / "specs"
-PENDING = {"gate": "advisory", "why": "not calibrated under this spec yet: scripts/calibrate-specs.mjs decides whether it may gate"}
+PENDING = {"gate": "advisory", "why": "no independently evaluated held-out gate under this spec"}
 
 
 def noul(i, ins, yes, no, gate=PENDING):
@@ -36,8 +36,8 @@ def advisory(why):
 
 
 # Gates come from measurement, never from this file: scripts/calibrate-specs.mjs writes
-# logs/calibration-specs.json, and `calibrated` turns each result into a gate (with its evidence
-# and good-case tail) or an advisory with the numbers that kept it from gating.
+# logs/calibration-specs.json. Its fitted results remain advisory because evaluation uses
+# the fitting rows; even historical promote=true reports cannot establish held-out quality.
 # The latest run (logs/, not committed); calibration/specs-<date>.json keeps the run the committed
 # specs were generated from, as reviewable evidence.
 CALIBRATION = Path(__file__).resolve().parent.parent / "logs" / "calibration-specs.json"
@@ -55,12 +55,10 @@ def calibrated(key, reason, cases, below=False, source=CODE):
     evidence = (f"{RESULTS['date']}, scripts/calibrate-specs.mjs on {source}: "
                 f"{r['good']} good vs {r['bad']} bad ({cases}); AUC {r['auc']}; at 5% false rejects "
                 f"{round(op.get('caught', 0) * 100)}% caught")
-    if not r["promote"]:
-        return advisory(f"measured {evidence}: gating needs AUC >= {RESULTS.get('minAuc', 0.85)} and at least "
-                        f"{round(RESULTS['minCatch'] * 100)}% caught at {round(RESULTS['maxFalseReject'] * 100)}% false rejects")
-    tail = [[rate, round(1 - t, 3) if below else t] for rate, t in r["goodTail"]]
-    return {"gate": "rule", "measure": "yes", "fails_when": "below" if below else "above", "threshold": tail[0][1],
-            "reason": reason, "calibration": evidence, "good_tail": tail}
+    # This legacy report fits thresholds and reports accuracy on the same rows.
+    # Even old reports with promote=true cannot justify a production rule.
+    return advisory(f"measured {evidence}: exploratory fitting only; independent grouped held-out "
+                    "evaluation with frozen thresholds and final deployed model is required before gating")
 
 
 DEFECT_CHUNK = calibrated("code_chunk.defect", "Kev: likely defect", "clean code vs the same code with one operator mutated")

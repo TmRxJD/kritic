@@ -4,10 +4,223 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use kritic::context::{
-    Archive, CompressInput, archive_id, compress, recall, text_of, total_tokens,
+    Archive, CompressInput, RecallFormat, RecallOptions, archive_id, compress, recall,
+    recall_with_options, text_of, total_tokens,
 };
 use kritic::kev::{Answer, Decider, Decision, Question};
 use serde_json::{Value, json};
+
+#[test]
+fn session_paths_and_hashes_do_not_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = ["a/b", "a_b", "A", "a", "", "default"];
+    let paths: std::collections::HashSet<_> = sessions
+        .iter()
+        .map(|s| Archive::for_session(dir.path(), s).path)
+        .collect();
+    assert_eq!(paths.len(), sessions.len());
+    let prefix = "x".repeat(96);
+    assert_ne!(
+        Archive::for_session(dir.path(), &format!("{prefix}a")).path,
+        Archive::for_session(dir.path(), &format!("{prefix}b")).path
+    );
+    assert_eq!(archive_id("tool", "payload").len(), 67);
+    let legacy = dir.path().join("context/CASE");
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(legacy.join("archive.jsonl"), "malformed").unwrap();
+    assert!(Archive::for_session(dir.path(), "CASE").load().is_err());
+    assert!(
+        Archive::for_session(dir.path(), "case")
+            .load()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn exact_content_and_legacy_recall_survive() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = Archive::for_session(dir.path(), "legacy");
+    let parts =
+        json!([{"type":"text","text":"first"},{"type":"text","text":"second","extra":true}]);
+    let inp: CompressInput = serde_json::from_value(json!({"messages":[{"role":"tool","content":parts,"tool_call_id":"call"}],"target_tokens":1,"session_id":"legacy","protect_first_n":0,"protect_last_n":0,"big_chars":1,"use_kev":false})).unwrap();
+    let out = compress(None::<&Relevance>, &archive, &inp).await;
+    assert_eq!(out.archived.len(), 1);
+    assert_ne!(out.archived[0].id, archive_id("tool", &parts.to_string()));
+    let recalled = recall(&archive, Some(&out.archived[0].id), None, 1000);
+    assert!(recalled.found[0].original_content.is_none());
+    let exact = recall_with_options(
+        &archive,
+        Some(&out.archived[0].id),
+        None,
+        RecallOptions {
+            format: RecallFormat::Original,
+            max_chars: 1000,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(exact.found[0].original_content.as_ref(), Some(&parts));
+    assert!(exact.found[0].content.is_empty());
+    assert_eq!(out.messages[0]["tool_call_id"], "call");
+    let old = dir.path().join("context/legacy");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("archive.jsonl"), r#"{"id":"kr-012345abcdef","role":"tool","content":"old record","tokens":2,"why":"old","at":"old"}"#).unwrap();
+    assert_eq!(
+        recall(&archive, Some("kr-012345abcdef"), None, 1000).found[0].content,
+        "old record"
+    );
+}
+
+#[tokio::test]
+async fn corrupt_archive_preserves_input_and_reports_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = Archive::for_session(dir.path(), "corrupt");
+    std::fs::create_dir_all(archive.path.parent().unwrap()).unwrap();
+    std::fs::write(&archive.path, "{broken\n").unwrap();
+    let msgs = transcript();
+    let out = compress(None::<&Relevance>, &archive, &input(msgs.clone(), 1)).await;
+    assert_eq!(out.messages, msgs);
+    assert!(out.archived.is_empty());
+    assert!(
+        out.notes
+            .iter()
+            .any(|s| s.contains("invalid archive record at line 1"))
+    );
+    assert!(
+        recall(&archive, Some("missing"), None, 100)
+            .error
+            .unwrap()
+            .contains("invalid archive record")
+    );
+    std::fs::remove_file(&archive.path).unwrap();
+    std::fs::create_dir(&archive.path).unwrap();
+    assert!(archive.load().is_err());
+}
+
+#[tokio::test]
+async fn recall_budgets_cover_typed_json_and_preserve_the_archive() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = Archive::for_session(dir.path(), "bounded");
+    let parts = json!([{"type":"text", "text":"é🦀ok", "extra":"x".repeat(100_000)}]);
+    let input: CompressInput = serde_json::from_value(json!({"messages":[{"role":"tool","content":parts}],"session_id":"bounded","target_tokens":1,"protect_first_n":0,"protect_last_n":0,"big_chars":1,"use_kev":false})).unwrap();
+    let compressed = compress(None::<&Relevance>, &archive, &input).await;
+    let id = &compressed.archived[0].id;
+    let text = recall(&archive, Some(id), None, 2);
+    assert_eq!(text.found[0].content, "é");
+    assert!(text.found[0].original_content.is_none());
+    assert!(serde_json::to_vec(&text).unwrap().len() < 1000);
+    assert!(recall(&archive, Some(id), None, 1).found.is_empty());
+    let options = RecallOptions {
+        format: RecallFormat::Original,
+        max_chars: 200_000,
+        max_output_bytes: 200_000,
+    };
+    let exact = recall_with_options(&archive, Some(id), None, options).unwrap();
+    assert_eq!(exact.found[0].original_content.as_ref(), Some(&parts));
+    assert!(exact.found[0].content.is_empty());
+    assert!(serde_json::to_vec(&exact).unwrap().len() <= options.max_output_bytes);
+    for limited in [
+        RecallOptions {
+            max_chars: 2,
+            ..options
+        },
+        RecallOptions {
+            max_output_bytes: 256,
+            ..options
+        },
+    ] {
+        let result = recall_with_options(&archive, Some(id), None, limited).unwrap();
+        assert!(result.found.is_empty());
+        assert!(result.error.unwrap().contains("exceeds"));
+    }
+    assert_eq!(
+        archive.load().unwrap()[0].original_content.as_ref(),
+        Some(&parts)
+    );
+    assert!(
+        recall_with_options(
+            &archive,
+            Some(id),
+            None,
+            RecallOptions {
+                max_output_bytes: 0,
+                ..options
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn recall_wire_limit_includes_escaping_metadata_and_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let archive = Archive::for_session(dir.path(), "wire");
+    std::fs::create_dir_all(archive.path.parent().unwrap()).unwrap();
+    let mut record = json!({"id":"kr-wire","role":"tool","content":"\"\n🦀".repeat(1000),"original_content":"duplicate","tokens":1000,"why":"test","at":"now"});
+    let options = RecallOptions {
+        max_chars: 10_000,
+        max_output_bytes: 256,
+        ..Default::default()
+    };
+    std::fs::write(&archive.path, record.to_string()).unwrap();
+    let recalled = recall_with_options(&archive, Some("kr-wire"), None, options).unwrap();
+    assert!(serde_json::to_vec(&recalled).unwrap().len() <= 256);
+    assert!(recalled.truncated_chars > 0);
+    assert!(recalled.found.iter().all(|a| a.original_content.is_none()));
+    record["message_uid"] = "large metadata".repeat(1000).into();
+    std::fs::write(&archive.path, record.to_string()).unwrap();
+    let recalled = recall_with_options(&archive, Some("kr-wire"), None, options).unwrap();
+    assert!(recalled.found.is_empty());
+    assert!(serde_json::to_vec(&recalled).unwrap().len() <= 256);
+    let missing =
+        recall_with_options(&archive, Some(&"missing".repeat(1000)), None, options).unwrap();
+    assert!(missing.error.is_some());
+    assert!(serde_json::to_vec(&missing).unwrap().len() <= 256);
+}
+
+#[test]
+fn archive_process_writer() {
+    let Ok(root) = std::env::var("KRITIC_CONTEXT_TEST_ROOT") else {
+        return;
+    };
+    let writer = std::env::var("KRITIC_CONTEXT_TEST_WRITER").unwrap();
+    let archive = Archive::for_session(std::path::Path::new(&root), "parallel");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    for _ in 0..5 {
+        let inp: CompressInput = serde_json::from_value(json!({"messages":[{"role":"tool","content":format!("writer {writer} {}", "x".repeat(10000))}],"target_tokens":1,"session_id":"parallel","protect_first_n":0,"protect_last_n":0,"big_chars":1,"use_kev":false})).unwrap();
+        let out = rt.block_on(compress(None::<&Relevance>, &archive, &inp));
+        assert_eq!(out.archived.len(), 1, "{:?}", out.notes);
+    }
+}
+
+#[test]
+fn simultaneous_process_appends_are_complete_and_deduplicated() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut children: Vec<_> = (0..4)
+        .map(|i| {
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "archive_process_writer"])
+                .env("KRITIC_CONTEXT_TEST_ROOT", dir.path())
+                .env("KRITIC_CONTEXT_TEST_WRITER", i.to_string())
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    for child in &mut children {
+        assert!(child.wait().unwrap().success());
+    }
+    let records = Archive::for_session(dir.path(), "parallel").load().unwrap();
+    assert_eq!(records.len(), 4);
+    assert_eq!(
+        records
+            .iter()
+            .map(|a| &a.id)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        4
+    );
+}
 
 /// Relevance = 0.9 when the chunk mentions "parser", else 0.1. Counts calls.
 struct Relevance {
@@ -165,7 +378,7 @@ async fn compaction_is_lossless_structural_and_relevance_ordered() {
         again.archived.iter().map(|a| &a.id).collect::<Vec<_>>(),
         out.archived.iter().map(|a| &a.id).collect::<Vec<_>>()
     );
-    assert_eq!(archive.load().len(), out.archived.len());
+    assert_eq!(archive.load().unwrap().len(), out.archived.len());
     // Already-compacted input is left alone: stubs are never re-archived.
     let third = compress(Some(&rel()), &archive, &input(out.messages.clone(), target)).await;
     assert!(third.archived.is_empty());

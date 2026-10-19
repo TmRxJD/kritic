@@ -1,0 +1,37 @@
+{
+ "name": "file_relevance",
+ "purpose": "Rank a repository's files by whether a task needs them (locate). A ranking score; nothing is removed or approved on it.",
+ "fields": [
+  {
+   "name": "task",
+   "kind": {
+    "kind": "text",
+    "max_chars": 800
+   },
+   "meaning": "What the developer has to build, fix or change."
+  },
+  {
+   "name": "file",
+   "kind": {
+    "kind": "code",
+    "max_chars": 1200
+   },
+   "meaning": "One file's card: its path, the names it defines, and its opening lines."
+  }
+ ],
+ "questions": [
+  {
+   "id": "needed",
+   "ask": {
+    "type": "noul",
+    "instructions": "Would someone doing `task` need to change the file described by `file`?",
+    "yes": "`file` holds code that `task` touches, so the developer must edit it",
+    "no": "`file` is unrelated to `task`: it belongs to a different feature"
+   },
+   "gate": {
+    "gate": "advisory",
+    "why": "a ranking score; the caller reads the top few and searches further if they miss"
+   }
+  }
+ ]
+}

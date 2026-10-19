@@ -7,7 +7,9 @@ use clap::{Args, ValueEnum};
 use serde_json::{Value, json};
 
 use crate::config::Config;
-use crate::context::{Archive, CompressInput, compress, recall, recall_tool_schema};
+use crate::context::{
+    Archive, CompressInput, RecallOptions, compress, recall_tool_schema, recall_with_options,
+};
 use crate::kev::KevClient;
 
 #[derive(Args, Debug)]
@@ -42,9 +44,15 @@ pub async fn run(args: ContextArgs) -> Result<(), String> {
             let v = read_stdin()?;
             let archive =
                 Archive::for_session(&cfg.home, v["session_id"].as_str().unwrap_or("default"));
-            let max = v["max_chars"].as_u64().unwrap_or(20_000) as usize;
-            serde_json::to_value(recall(&archive, v["id"].as_str(), v["query"].as_str(), max))
-                .map_err(|e| e.to_string())?
+            let options: RecallOptions =
+                serde_json::from_value(v.clone()).map_err(|e| format!("bad recall input: {e}"))?;
+            serde_json::to_value(recall_with_options(
+                &archive,
+                v["id"].as_str(),
+                v["query"].as_str(),
+                options,
+            )?)
+            .map_err(|e| e.to_string())?
         }
         ContextOp::Compress => {
             let input: CompressInput = serde_json::from_value(read_stdin()?)
@@ -57,14 +65,14 @@ pub async fn run(args: ContextArgs) -> Result<(), String> {
             let usable = wants_kev && kev.resolve_backend().await.is_ok();
             let mut quick = (*cfg).clone();
             quick.gpu_wait_s = 5;
-            let lock = if usable {
+            let lock = if usable && !cfg.kev_cpu_only {
                 crate::gpu::lock_across_processes(&quick, "context")
                     .await
                     .ok()
             } else {
                 None
             };
-            let decider = if usable && lock.is_some() {
+            let decider = if usable && (cfg.kev_cpu_only || lock.is_some()) {
                 Some(&kev)
             } else {
                 None

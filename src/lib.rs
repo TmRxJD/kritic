@@ -21,6 +21,7 @@ pub mod plugins;
 pub mod policy;
 pub mod proc;
 pub mod scan;
+pub mod scout;
 pub mod server;
 pub mod spec;
 pub mod tools;

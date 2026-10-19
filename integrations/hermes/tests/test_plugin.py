@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,23 @@ def engine():
     return ctx.engine
 
 
+def test_recall_forwards_options_and_bounds_python_serialization(monkeypatch):
+    e = engine()
+    calls = []
+
+    def recall_result(op, payload):
+        calls.append((op, payload))
+        return {"found": [{"original_content": "🦀" * 10000}]}
+
+    monkeypatch.setattr(e, "_run", recall_result)
+    result = e.handle_tool_call("kritic_recall", {"id": "kr-test", "format": "original", "max_chars": 0, "max_output_bytes": 256})
+    assert len(result.encode("utf-8")) <= 256
+    assert "error" in json.loads(result)
+    assert calls[0][1]["format"] == "original"
+    assert calls[0][1]["max_chars"] == 0
+    assert calls[0][1]["max_output_bytes"] == 256
+
+
 def test_contract_and_thresholds(env):
     e = engine()
     assert e.name == "kritic"
@@ -120,7 +138,7 @@ def test_prune_and_usage_log(env):
     assert row["session_id"] == "sess-2" and row["prompt_tokens"] == 100
 
 
-def test_fails_open_without_kritic(env, monkeypatch):
+def test_explicit_invalid_kritic_selection_fails_closed(env, monkeypatch):
     monkeypatch.setenv("KRITIC_EXE", str(env / "missing.exe"))
     monkeypatch.setenv("PATH", str(env / "empty"))
     mod = load_plugin()
@@ -130,6 +148,96 @@ def test_fails_open_without_kritic(env, monkeypatch):
     e = ctx.engine
     e.update_model("m", 12000)
     msgs = transcript()
-    assert e.compress(msgs) == msgs
-    assert "not found" in e.last_error
-    assert json.loads(e.handle_tool_call("kritic_recall", {"id": "kr-1"}))["error"]
+    with pytest.raises(ValueError, match="fallback disabled"):
+        e.compress(msgs)
+    with pytest.raises(ValueError, match="fallback disabled"):
+        e.handle_tool_call("kritic_recall", {"id": "kr-1"})
+
+
+def test_settings_prefers_hermes_yaml_without_pyyaml(env, monkeypatch):
+    parsed = []
+    parser = types.ModuleType("hermes_yaml")
+
+    def safe_load(text):
+        parsed.append(text)
+        return {"kritic_context": {"use_kev": False, "protect_first_n": 4}}
+
+    parser.safe_load = safe_load
+    monkeypatch.setitem(sys.modules, "hermes_yaml", parser)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    settings = load_plugin()._settings()
+    assert settings["protect_first_n"] == 4
+    assert settings["use_kev"] is False
+    assert len(parsed) == 1 and "kritic_context:" in parsed[0]
+
+
+def test_absolute_budget_survives_model_switches_and_clone(env, monkeypatch):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text("compression:\n  threshold_tokens: 28000\nkritic_context:\n  use_kev: false\n", encoding="utf-8")
+    e = engine()
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    original = transcript()
+    snapshot = copy.deepcopy(original)
+    for window, trigger, target in [(1_000_000, 28000, 19600), (65536, 28000, 19600), (32000, 16000, 11200)]:
+        e.update_model("test-model", window)
+        assert e.context_length == window
+        assert not e.should_compress(trigger - 1)
+        assert e.should_compress(trigger)
+        assert e.compress(original) == snapshot  # failed backend never destroys history
+        assert payloads[-1]["target_tokens"] == target < trigger
+    clone = e.clone_for_agent()
+    clone.update_model("large-model", 1_000_000)
+    assert clone.threshold_tokens == 28000
+    assert e.threshold_tokens == 16000
+    assert original == snapshot
+
+
+@pytest.mark.parametrize("cap", [True, False, 0, 1, -1, 28000.0, "28000"])
+def test_invalid_absolute_budget_fails_closed(env, cap):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text(json.dumps({"compression": {"threshold_tokens": cap}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        engine()
+
+
+def test_whole_request_overhead_reduces_message_budget(env, monkeypatch):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    mod = load_plugin()
+    message_tokens = mod._rough_tokens(messages)
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    e.compress(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000  # 14k total target minus 9k fixed overhead
+    e.prune_tool_results_only(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000
+    e.compress(messages, current_tokens=message_tokens + 20000)
+    assert payloads[-1]["target_tokens"] == 1  # infeasible protected budgets remain bounded
+
+
+def test_schema_heavy_request_actually_shrinks_with_real_backend(env):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    estimate = load_plugin()._rough_tokens(messages)
+    assert estimate < 14000
+    result = e.compress(messages, current_tokens=estimate + 12000)
+    after = load_plugin()._rough_tokens(result)
+    assert after < estimate
+    assert e.last_prompt_tokens >= 12000  # fixed tool/system cost is not erased by archiving
+    assert [m.get("tool_call_id") for m in result if m["role"] == "tool"] == [
+        m["tool_call_id"] for m in messages if m["role"] == "tool"]
+
+
+def test_null_absolute_budget_preserves_window_policy(env):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text('compression: {threshold_tokens: null}\n', encoding="utf-8")
+    e = engine()
+    e.update_model("test-model", 1_000_000)
+    assert e.context_length == 1_000_000
+    assert e.threshold_tokens == 500000
