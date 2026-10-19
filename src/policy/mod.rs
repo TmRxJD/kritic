@@ -232,7 +232,7 @@ pub fn report(
     }
     if spec.is_kev() {
         notes.push(
-            "Kev is a typed-decision classifier, not a trained control policy: its choices here are untrained guesses over the given labels, useful for smoke runs and low-rate probing, not as a competent agent. Measured on an RTX 2070: ~0.1 s per warm decision (about 8 Hz)."
+            "Kev is a typed-decision classifier, not a trained control policy: its choices here are untrained guesses over the given labels, useful for smoke runs and low-rate probing, not as a competent agent. Warm decisions take ~60-500 ms depending on GPU, state size and heads (docs/policy-runner.md); this run's own latency is in `timing`."
                 .into(),
         );
     }
