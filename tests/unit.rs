@@ -1022,6 +1022,7 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
         }
     });
     c.laya_url = format!("http://127.0.0.1:{port}");
+    c.vision_gpu_kev_url = None; // never route this test to a real second Kev
     c.laya_exe = "kritic-test-no-such-laya.exe".into(); // the stall handler's stop must not touch a real laya
     c.kev_request_s = 1;
     let kev = KevClient::new(std::sync::Arc::new(c));
