@@ -18,6 +18,7 @@ pub mod metrics;
 pub mod native;
 pub mod phase3;
 pub mod plugins;
+pub mod policy;
 pub mod proc;
 pub mod scan;
 pub mod server;

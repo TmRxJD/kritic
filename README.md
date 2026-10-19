@@ -95,7 +95,7 @@ Every setting is in [`kritic.toml`](examples/kritic.toml) ([configuration](docs/
 ## Docs
 
 - [Getting started](docs/getting-started.md) · [Configuration](docs/configuration.md) · [Claude Code](docs/claude-code.md) · [Troubleshooting](docs/troubleshooting.md)
-- [Tools](docs/tools.md) · [ux_critic](docs/ux-critic.md) · [Unity](docs/unity.md) · [Repo plugins](docs/plugins.md)
+- [Tools](docs/tools.md) · [ux_critic](docs/ux-critic.md) · [Unity](docs/unity.md) · [Repo plugins](docs/plugins.md) · [Policy runner](docs/policy-runner.md) · [Kev testing uses](docs/kev-testing-uses.md)
 - [Decision specs and calibration](docs/decision-specs.md) · [Measurements](docs/measurements.md) · [Benchmarks](docs/benchmarks.md)
 - [Architecture](docs/architecture.md) · [Extending](docs/extending.md) · [Changelog](CHANGELOG.md)
 
