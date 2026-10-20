@@ -56,6 +56,55 @@ pub fn cvss_to_severity(score: f64) -> &'static str {
     }
 }
 
+/// Parse cargo-audit's RustSec vectors using the CVSS specification, not vector presence.
+/// Advisories without a score retain the conservative medium policy and are labelled unscored;
+/// malformed vectors fail the scanner rather than silently inventing a severity.
+pub fn parse_cargo_audit(output: &str) -> Result<Vec<Finding>, String> {
+    let value: Value =
+        serde_json::from_str(output).map_err(|error| format!("cargo-audit JSON: {error}"))?;
+    value["vulnerabilities"]["list"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| {
+            let rule = item["advisory"]["id"].as_str().unwrap_or("");
+            let (severity, detail) = match item["advisory"]["cvss"].as_str() {
+                Some(vector) => {
+                    let parsed: cvss::Cvss = vector
+                        .parse()
+                        .map_err(|error| format!("cargo-audit CVSS for {rule}: {error}"))?;
+                    // The v3 library permits partial vectors and scores missing metrics as zero.
+                    // An advisory must supply every base metric exactly once before it is scored.
+                    if matches!(&parsed, cvss::Cvss::CvssV30(base) | cvss::Cvss::CvssV31(base)
+                        if base.metrics().count() != 8 || vector.split('/').count() != 9)
+                    {
+                        return Err(format!(
+                            "cargo-audit CVSS for {rule}: incomplete or duplicate base metrics"
+                        ));
+                    }
+                    let score = parsed.score();
+                    (cvss_to_severity(score), format!(" (CVSS {score:.1})"))
+                }
+                None => ("medium", " (CVSS unavailable; policy severity)".into()),
+            };
+            Ok(Finding {
+                tool: "cargo-audit".into(),
+                rule: rule.into(),
+                severity: severity.into(),
+                file: "Cargo.lock".into(),
+                line: 0,
+                message: format!(
+                    "{} {}: {}{detail}",
+                    item["package"]["name"].as_str().unwrap_or(""),
+                    item["package"]["version"].as_str().unwrap_or(""),
+                    item["advisory"]["title"].as_str().unwrap_or("")
+                ),
+                confidence: None,
+            })
+        })
+        .collect()
+}
+
 /// Where scanner binaries live (`scan.tools_bin`, default `~/.kritic/bin`, then PATH).
 pub fn tool_path(bin_dir: &Path, name: &str) -> Option<PathBuf> {
     let exe = if cfg!(windows) && Path::new(name).extension().is_none() {
