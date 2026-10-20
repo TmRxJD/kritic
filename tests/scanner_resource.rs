@@ -38,8 +38,8 @@ fn scanner_exit_and_completion_are_not_findings() {
 
 #[test]
 fn malformed_and_partial_scanner_reports_are_not_clean() {
-    assert!(scan::parse_osv("{}").is_err());
-    assert!(scan::parse_osv(r#"{"results":[{"packages":{}}]}"#).is_err());
+    assert!(scan::parse_osv(Path::new("."), "{}").is_err());
+    assert!(scan::parse_osv(Path::new("."), r#"{"results":[{"packages":{}}]}"#).is_err());
     assert!(scan::parse_eslint(Path::new("."), r#"[{"filePath":"a.js"}]"#).is_err());
     let report = r#"{"results":[{"check_id":"x","path":"a.rs","start":{"line":1},"extra":{"severity":"ERROR","message":"bad"}}],"errors":[{"message":"timeout"}]}"#;
     assert_eq!(
@@ -216,7 +216,7 @@ fn maintenance_notices_are_not_vulnerabilities_but_mixed_security_stays_high() {
     let mut report = json!({"results":[{"source":{"path":"Cargo.lock"},"packages":[{
         "package":{"name":"paste","version":"1.0.15"},"groups":[],"vulnerabilities":[info]
     }]}]});
-    let findings = scan::parse_osv(&report.to_string()).unwrap();
+    let findings = scan::parse_osv(Path::new("."), &report.to_string()).unwrap();
     assert_eq!(findings[0].severity, "info");
     assert_eq!(findings[0].rule, "informational-dependency");
     report["results"][0]["packages"][0]["vulnerabilities"]
@@ -224,7 +224,7 @@ fn maintenance_notices_are_not_vulnerabilities_but_mixed_security_stays_high() {
         .unwrap()
         .push(json!({"id":"CVE-TEST","affected":[{}]}));
     report["results"][0]["packages"][0]["groups"] = json!([{"max_severity":"9.8"}]);
-    let mixed = scan::parse_osv(&report.to_string()).unwrap();
+    let mixed = scan::parse_osv(Path::new("."), &report.to_string()).unwrap();
     assert_eq!(mixed[0].severity, "critical");
     assert_eq!(mixed[0].rule, "vulnerable-dependency");
 }
