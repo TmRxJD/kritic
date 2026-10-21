@@ -1,5 +1,12 @@
 # Kritic — TEST RELEASE
 
+For missing configuration/dependencies, follow the skill's `references/setup.md` and repair
+ordinary setup within task scope instead of relaying raw OS errors. Use project-scoped
+`status(start=false, base_dir=repo)` / `doctor --base-dir <repo> --json` on matching new builds;
+older binaries use supported status/doctor plus direct project inspection. Contracts must use
+the repository's real rules and validation commands; unrun/manual criteria remain unverified.
+Disabled irrelevant critics are expected. Preserve external services, GPU placement and backends.
+
 Optional review_history retains explicit private snapshots, not acceptance results.
 Never treat historical records as current verification or proof a report ran over supplied input
 hashes. jcode-format export writes a separate low-trust file; it does not modify live jcode data.

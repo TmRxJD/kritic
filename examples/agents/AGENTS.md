@@ -1,5 +1,13 @@
 ## Kritic TEST RELEASE
 
+Resolve the actual target repository before review. Current source supports read-only
+`status(start=false, base_dir=repo)` and `doctor --base-dir <repo> --json` for per-critic setup.
+Follow the installed skill's `references/setup.md` (or matching `docs/agent-setup.md`); on older
+binaries use supported `status`, `doctor --json` and direct project inspection. Repair ordinary
+missing project configuration from real repository rules rather than forwarding raw OS errors.
+Do not invent passing contracts, enable irrelevant critics, download models or restart external
+services merely to clear setup warnings. Preserve unrun/manual criteria as unverified.
+
 Optional source-only `framing_critic` is disabled by default. It alone may run mid-debugging
 when evidence conflicts or repeated fixes fail: review a bounded, explicit causal case and
 independently inspect the full artifact packet before choosing the next experiment. Preserve

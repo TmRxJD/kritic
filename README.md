@@ -60,6 +60,11 @@ are recorded without treating every recommendation as a confirmed bug.
 
 ## MCP context overhead
 
+For agent onboarding and missing-file/dependency recovery, see
+[setup for every critic](docs/agent-setup.md). Current source adds optional project-aware
+`status(base_dir=repo)` / `doctor --base-dir <repo> --json` and actionable contract setup reports;
+the skill teaches agents to repair missing project manifests using real repository rules.
+
 For MCP discovery overhead and the unreleased metadata compaction work, see
 [tool-schema budget and measurement](docs/schema-budget.md). Compaction preserves enabled
 tools and their input constraints; capability toggles remain an explicit availability tradeoff.

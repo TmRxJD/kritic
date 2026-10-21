@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Project-aware, read-only setup guidance for every tool through optional `status(base_dir)`
+  and `doctor --base-dir`; scoped contract loading errors now include recovery steps. The
+  packaged skill includes an offline setup reference rather than passing raw missing-file errors
+  to users. Presence checks never establish readiness, execution or acceptance.
+
 - Optional deterministic debugging-framing review and a local independent-review packet, with
   explicit artifact/context binding and linked causal evidence. Disabled by default; no root-cause
   attestation, automatic commands, network/indexing or model inference. The framing-only stalled-debugging

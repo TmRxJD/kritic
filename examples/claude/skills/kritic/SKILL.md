@@ -27,6 +27,21 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### Setup is the agent's responsibility
+
+Before a relevant critic, resolve the actual target repository and inspect
+`status(start=false, base_dir=repo)` when supported. For absent tools, missing manifests,
+dependency/configuration errors or offline optional reviewers, read
+[setup and recovery](references/setup.md). It covers every critic and older-binary fallback.
+Use `doctor --base-dir <repo> --json` with a matching executable when shell access is available.
+Repair ordinary setup within the authorized task instead of merely relaying “review unavailable”
+to the user. Missing `.kritic/contract.toml` means derive a project contract from real rules and
+validation commands, not change global model settings or copy a generic passing template.
+Preserve uncovered clauses and unrun checks as unverified; rerun after repair. Ask only for
+genuinely missing scope, requirements, credentials or resource authorization. Do not enable
+irrelevant critics, install models, alter shared GPU/services or execute arbitrary commands
+just to make the tool surface green. Configuration/binary changes need MCP reconnection.
+
 ### Narrow mid-debugging framing exception
 
 Current source can expose optional `framing_critic` with `capabilities.framing=true` (default

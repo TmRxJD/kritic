@@ -7,6 +7,10 @@ Validate every finding independently. Deterministic checking is the default; mod
 be disabled and absent from discovery. A scoped approval is not task completion or permission.
 `status.enabled_tools` lists the effective tool surface after capability toggles.
 
+For setup failures, use [agent setup and recovery](agent-setup.md). Current source supports
+`status(base_dir=repo)` and `doctor --base-dir <repo> --json` for explicit per-critic actions.
+Missing project configuration calls for an in-scope repair, not a bare “review unavailable”.
+
 
 Review tools return JSON evidence. Output schemas are omitted from MCP discovery to avoid
 duplicating large result definitions in the client's context. Their `approval` is `true`, `false`, or `null`
