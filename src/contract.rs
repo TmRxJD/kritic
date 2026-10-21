@@ -135,6 +135,10 @@ pub struct ContractResult {
     pub reasons: Vec<String>,
     pub limitations: Vec<String>,
     pub full_result: Option<String>,
+    pub base_dir: String,
+    pub contract_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup: Option<crate::setup_guidance::Recovery>,
 }
 
 pub fn hash(bytes: &[u8]) -> String {
@@ -381,6 +385,7 @@ pub async fn critique(
         tool: "contract_critic".into(), advisory: true, run_id: format!("contract-{}", now.timestamp_nanos_opt().unwrap_or_default()),
         checked_at: now.to_rfc3339(), contract_sha256: None, title: None, approval: None, coverage: 0.0,
         requirements: Vec::new(), sources: Vec::new(), task: task.into(), reasons: Vec::new(), full_result: None,
+        base_dir: base.display().to_string(), contract_path: path.unwrap_or(".kritic/contract.toml").into(), setup: None,
         limitations: vec!["Verification covers only the declared assertions; passing a weak check cannot prove the full prose requirement.".into(),
             "Enforcement bindings audit declared text in CI/hooks/tests; they do not prove that CI ran or branch protection is enabled.".into(),
             "Imported reports are not signed execution attestations. Freshness is checked using file age and current input hashes.".into(),
@@ -392,10 +397,12 @@ pub async fn critique(
             result
                 .reasons
                 .push("base_dir is not an accessible directory".into());
+            result.setup = Some(crate::setup_guidance::contract_recovery());
             return result;
         }
     };
     let path = path.unwrap_or(".kritic/contract.toml");
+    result.base_dir = base.display().to_string();
     let loaded = read(&base, path).and_then(|bytes| {
         result.contract_sha256 = Some(hash(&bytes));
         let text = std::str::from_utf8(&bytes).map_err(|_| "contract is not UTF-8")?;
@@ -403,7 +410,10 @@ pub async fn critique(
     });
     let mut sources = vec!["AGENTS.md".to_string()];
     match loaded {
-        Err(e) => result.reasons.push(e),
+        Err(e) => {
+            result.reasons.push(e);
+            result.setup = Some(crate::setup_guidance::contract_recovery());
+        }
         Ok(contract) => {
             result.title = Some(contract.title);
             sources.extend(contract.sources);

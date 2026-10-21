@@ -19,6 +19,9 @@ pub struct DoctorArgs {
     /// Print the checks as JSON on stdout
     #[arg(long)]
     pub json: bool,
+    /// Include read-only per-tool project setup guidance. Does not run project commands.
+    #[arg(long)]
+    pub base_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -99,7 +102,7 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
             "backend",
             Level::Fail,
             e,
-            Some("kritic setup"),
+            Some("inspect config_errors and the selected backend; repair supported keys, preserve external-service ownership, and reconnect MCP. Models remain optional"),
         )),
         Ok(Backend::Local) => {
             c.push(check(
@@ -109,6 +112,10 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                 format!("local Kev ({})", cfg.model),
                 None,
             ));
+            if cfg.kev_externally_managed {
+                c.push(check("kev", "runtime ownership", Level::Skip,
+                    "externally managed; local executable, weights and CUDA installation are the service owner's responsibility", None));
+            } else {
             let gguf = cfg.kev_gguf.metadata().map(|m| m.len()).unwrap_or(0);
             c.push(if gguf > 1_000_000_000 {
                 check(
@@ -145,6 +152,7 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                     ));
                 }
             }
+            }
             match kev.health().await {
                 Some(_) => c.push(check(
                     "kev",
@@ -152,6 +160,11 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                     Level::Ok,
                     format!("answering at {}", cfg.laya_url),
                     None,
+                )),
+                None if cfg.kev_externally_managed => c.push(check(
+                    "kev", "laya", Level::Fail,
+                    format!("externally managed reviewer is not reachable at {}; Kritic will not start it", cfg.laya_url),
+                    Some("verify the configured endpoint with its service owner; do not install or restart an externally managed reviewer. Deterministic critics remain available"),
                 )),
                 None => c.push(check(
                     "kev",
@@ -178,7 +191,7 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                 "gates",
                 Level::Warn,
                 "Cloud judgments are advisory; local calibrated thresholds do not apply",
-                Some("run local Kev only if you want the measured local gates: kritic setup --backend local"),
+                Some("treat uncalibrated scores as advisory; only calibration matching the actual provider/model/quantization can supply measured gates"),
             ));
         }
     }
@@ -244,10 +257,19 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                         &cfg.vision_model,
                         Level::Warn,
                         "Ollama is running but the model is not pulled",
-                        Some(&format!("ollama pull {}", cfg.vision_model)),
+                        Some(&if cfg.vision_externally_managed {
+                            format!("ask the external service owner to provision the configured model {}; do not pull or evict shared models automatically", cfg.vision_model)
+                        } else {
+                            format!("only with authorized model download/resources: ollama pull {}", cfg.vision_model)
+                        }),
                     )
                 });
             }
+            None if cfg.vision_externally_managed => c.push(check(
+                "vision", "Ollama", Level::Warn,
+                format!("external vision endpoint {} is unavailable", cfg.ollama_url),
+                Some("verify endpoint/model availability with its owner; do not start, replace or restart the external service. Model-free review remains available"),
+            )),
             None if cfg.ollama_exe.is_file() => c.push(check(
                 "vision",
                 "Ollama",
@@ -556,14 +578,25 @@ pub fn print(checks: &[Check]) {
 
 pub async fn run(args: DoctorArgs) -> Result<bool, String> {
     let cfg = Arc::new(Config::load());
+    let project_setup = args
+        .base_dir
+        .as_deref()
+        .map(|base| crate::setup_guidance::inspect(&cfg, base))
+        .transpose()?;
     let c = checks(cfg, args.online).await;
     if args.json {
         println!(
             "{}",
-            serde_json::to_string_pretty(&json!({"checks": c})).map_err(|e| e.to_string())?
+            serde_json::to_string_pretty(&json!({"checks": c, "project_setup": project_setup}))
+                .map_err(|e| e.to_string())?
         );
     } else {
         print(&c);
+        if let Some(setup) = project_setup {
+            for tool in setup.tools {
+                eprintln!("{} [{}]: {}", tool.tool, tool.config_state, tool.next_step);
+            }
+        }
     }
     Ok(!c.iter().any(|c| c.level == Level::Fail))
 }
