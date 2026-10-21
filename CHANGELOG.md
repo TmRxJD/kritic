@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Refresh certificate-verification dependencies and the optional desktop harness's Pillow
+  dependency for newly published security advisories; the CPU benchmark also explicitly pins
+  a patched certifi release for reused environments. No model download is required.
+
 - Project-aware, read-only setup guidance for every tool through optional `status(base_dir)`
   and `doctor --base-dir`; scoped contract loading errors now include recovery steps. The
   packaged skill includes an offline setup reference rather than passing raw missing-file errors
