@@ -29,7 +29,7 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ### Setup is the agent's responsibility
 
-Before a relevant critic, resolve the actual target repository and inspect
+At first project review or after a setup failure, resolve the actual target repository and inspect
 `status(start=false, base_dir=repo)` when supported. For absent tools, missing manifests,
 dependency/configuration errors or offline optional reviewers, read
 [setup and recovery](references/setup.md). It covers every critic and older-binary fallback.
@@ -41,6 +41,8 @@ Preserve uncovered clauses and unrun checks as unverified; rerun after repair. A
 genuinely missing scope, requirements, credentials or resource authorization. Do not enable
 irrelevant critics, install models, alter shared GPU/services or execute arbitrary commands
 just to make the tool surface green. Configuration/binary changes need MCP reconnection.
+Reuse that setup plan while project/binary/configuration are unchanged; ordinary status calls
+need no base_dir. Do not fetch every critic's setup matrix before each tool call.
 
 ### Narrow mid-debugging framing exception
 

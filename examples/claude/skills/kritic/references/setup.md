@@ -10,7 +10,8 @@ defines the relevant acceptance commands and rules.
 
 1. Resolve the actual repository root from the current task/tool request. Do not use the skill's
    directory, the Kritic source checkout or a scratch chat directory as the reviewed project.
-2. Call `status(start=false, base_dir=repo)` when supported. `project_setup.tools` gives each
+2. On initial setup or a setup failure, call `status(start=false, base_dir=repo)` when supported.
+   `project_setup.tools` gives each
    tool's capability, default project path, presence state and recovery action. Missing
    `config_errors` means an empty list in current binaries; it is separate from `spec_errors`.
    If an older binary omits `project_setup`, use this reference and its supported `status` and
