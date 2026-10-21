@@ -6,7 +6,7 @@ use serde::Serialize;
 
 use crate::config::{Config, TOOL_NAMES};
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct Recovery {
     pub code: String,
     pub steps: Vec<String>,
@@ -27,7 +27,7 @@ pub fn contract_recovery() -> Recovery {
     }
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ToolSetup {
     pub tool: String,
     pub enabled: bool,
@@ -39,7 +39,7 @@ pub struct ToolSetup {
     pub guide: String,
 }
 
-#[derive(Debug, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ProjectSetup {
     pub base_dir: String,
     pub scope: String,
