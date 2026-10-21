@@ -65,7 +65,7 @@ def test_ids_skips_and_fingerprint():
           {"label": "", "text": "", "role": "Button"}, {"label": "Delete all data", "text": "", "role": "Button"},
           {"label": "Close", "text": "", "role": "Button"}, {"label": "Beta", "text": "", "role": "Button"}]
     ux.assign_ids(cs)
-    assert [c["id"] for c in cs[:3]] == ["Button:Save#1", "Button:Save#2", "Button:  # 1"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [c["id"] for c in cs[:3]] == ["Button:Save#1", "Button:Save#2", "Button:#1"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     ux.mark_skips({"ignore": ["^Beta$"]}, cs)
     assert [c.get("skip") for c in cs[3:]] == ["destructive", "window chrome", "ignored"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     assert ux.fingerprint(["clock 10:41"]) == ux.fingerprint(["clock 10:42"])  # noqa: S101; test assertion, not runtime authorization  # nosec B101
