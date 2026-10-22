@@ -2,6 +2,11 @@
 
 Use matching binary/configuration versions: repository policies/hooks, expanded organization
 review, history and technical-debt tools require `v0.5.0-test.4` or later.
+Framing, staleness, invariants, compact discovery and project-aware setup recovery require
+`v0.5.0-test.5` or later. Published packages contain matching source, docs, skill, configuration
+examples, a source revision and a binary SHA-256 manifest. Verify release asset checksums and
+`kritic --version` before testing; CI development artifacts below are a separate distribution.
+
 For repository tests, record `broad`/`focused`/`atomic`, explicit overrides, staged-tree identity,
 inventory/exclusions and unresolved import coverage. Exercise stale plans, out-of-scope paths,
 oversized changes, malformed policy and hook failure/bypass cases. A green static gate cannot
@@ -19,7 +24,12 @@ lookups, newer installed versions, qualifiers and the online batch deadline. Upg
 an estimate: validate exact-version migration notes, environment-variable names and actual
 upgrade/test results before treating the estimate as demonstrated work. [Debt guide](technical-debt.md).
 
-## Unreleased Windows test binaries
+Test staleness/invariants with both consistent and changed authorities, unknown test coverage,
+malformed graphs, tampered evidence and dry-run/write fixture projection. Synchronizing a fixture
+must not clear a changed-authority review signal. Run the packaged CLI/MCP with models disabled
+from a fresh extracted directory, not just from a source checkout.
+
+## Development CI binaries
 
 A CI run stages `kritic-windows-test` after its Rust checks pass. It contains `kritic.exe` and
 `manifest.json`, with the PR head, tested checkout, run ID and executable SHA-256. Artifacts are

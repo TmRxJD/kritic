@@ -1,6 +1,6 @@
 # Kritic — TEST RELEASE
 
-Optional source-only `staleness_critic` / `invariant_critic` share one test-contract manifest.
+Optional test.5+ `staleness_critic` / `invariant_critic` share one test-contract manifest.
 Never auto-bless changed hashes/assertions. Sync only declared JSON fixtures after review; inspect
 key-boundary guards and run negative cases. Static consistency is not semantic correctness.
 

@@ -1,11 +1,11 @@
 ## Kritic TEST RELEASE
 
-Optional source-only staleness/invariant critics share `.kritic/test-contracts.toml`. Map actual
+Optional test.5+ staleness/invariant critics share `.kritic/test-contracts.toml`. Map actual
 test dependencies and canonical owners; review changed hashes instead of auto-blessing. Only
 explicit `kritic staleness sync --write` generates declared JSON fixtures. Review key-boundary
 guards and negative tests independently; static presence does not prove correctness/execution.
 
-Resolve the actual target repository before review. Current source supports read-only
+Resolve the actual target repository before review. Test.5 supports read-only
 `status(start=false, base_dir=repo)` and `doctor --base-dir <repo> --json` for per-critic setup.
 Follow the installed skill's `references/setup.md` (or matching `docs/agent-setup.md`); on older
 binaries use supported `status`, `doctor --json` and direct project inspection. Repair ordinary
@@ -13,7 +13,7 @@ missing project configuration from real repository rules rather than forwarding 
 Do not invent passing contracts, enable irrelevant critics, download models or restart external
 services merely to clear setup warnings. Preserve unrun/manual criteria as unverified.
 
-Optional source-only `framing_critic` is disabled by default. It alone may run mid-debugging
+Optional test.5+ `framing_critic` is disabled by default. It alone may run mid-debugging
 when evidence conflicts or repeated fixes fail: review a bounded, explicit causal case and
 independently inspect the full artifact packet before choosing the next experiment. Preserve
 contradictory evidence and stale-context warnings; no result proves root cause or bug resolution.

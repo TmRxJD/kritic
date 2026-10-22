@@ -1,5 +1,9 @@
 # Architecture — test release
 
+Kritic connects repository expectations to evidence, independent agent review, selected enforcement
+and fresh verification. Contracts and policies belong to the repository; the skill guides the
+agent, while opt-in hooks and CI enforce only their configured checks.
+
 The default Rust MCP server collects deterministic evidence. Its skill asks the calling agent
 to validate that evidence and test Kritic's viability. Optional local/cloud reviewers provide
 advisory judgments; cloud/off calls do not acquire GPU locks or unload local models.
@@ -11,6 +15,8 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
   this optimization. Short shared instructions avoid repetition in clients that prefix each tool.
 - checks.rs/tools.rs: parsing, requested validator execution, coverage gaps and artifact reports.
 - contract.rs: acceptance assertions, hashed/fresh evidence, final revalidation and static wiring.
+- staleness/: one canonical source/test/invariant manifest, bounded inventory and hash review,
+  with explicit fixture projection. Changed hashes require review; sync never grants approval.
 - provider.rs: explicit bounded HTTPS transports, native authentication, JSON-only compatibility.
 - kev.rs/spec.rs/critic.rs: typed answers, strict decoding, per-client calibration identity, advisory
   unknown/different models. Calibration is no longer process-global.

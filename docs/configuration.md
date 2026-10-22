@@ -38,7 +38,7 @@ dependencies can still be missing; status/doctor expose configuration and availa
 each result reports what actually ran. Capability toggles hide tools from MCP discovery and
 execution. Explicit `tools.disabled` exclusions take precedence. Restart the server/client.
 
-`capabilities.repository` (default true in current source) exposes `repository_critic` and enables
+`capabilities.repository` (built-in default true) exposes `repository_critic` and enables
 explicit repository CLI checks. The minimal profile sets it false. Set it true deliberately for
 [repository-owned policies and hooks](repository-policy.md); installing Kritic does not install a
 Git hook. These repository features require `v0.5.0-test.4` or later; the older
@@ -57,11 +57,19 @@ model and defaults to no HTTP. Registry lookups require explicit per-call `onlin
 `--online`; `refresh` additionally requires that online opt-in. Repository declarations live
 in `.kritic/debt.toml`. [Coverage, privacy, cache, ratings and upgrade workflow](technical-debt.md).
 
-`capabilities.framing=false` / `KRITIC_CAP_FRAMING=false` is the default for source-only
+`capabilities.framing=false` / `KRITIC_CAP_FRAMING=false` is the default in test.5+ for
 `framing_critic` / `kritic framing`. Enable deliberately and restart MCP. It needs no model
 or GPU and reads only the explicit debugging case/evidence; no commands, HTTP or workspace
 indexing run. The default case is `.kritic/debug-case.json`; `kritic framing --schema` prints
 the schema. [Case construction, privacy and mid-debugging exception](framing.md).
+
+`capabilities.staleness=false` and `capabilities.invariants=false` are the built-in/minimal
+profile defaults in test.5+. Enable either group deliberately and restart MCP. Both use
+`.kritic/test-contracts.toml` for declared ownership, source/test hashes, fixture projections
+and invariant evidence. Run `kritic staleness --schema` before creating the manifest; do not
+invent a passing contract. Checks are read-only. Fixture synchronization is a separate,
+explicit operation and never establishes test freshness or semantic correctness.
+[Setup and evidence limits](staleness.md).
 
 `review.backend`: off, local, cloud, or explicitly selected auto (discover local installation
 only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting values disable

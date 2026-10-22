@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-test.5 — test release (2026-10-22)
 
 - Optional model-free test-staleness and invariant review share one canonical ownership/test
   manifest, bounded inventory, reviewed hashes and explicit JSON fixture projection. Work-contract
@@ -18,11 +18,18 @@
 - Optional deterministic debugging-framing review and a local independent-review packet, with
   explicit artifact/context binding and linked causal evidence. Disabled by default; no root-cause
   attestation, automatic commands, network/indexing or model inference. The framing-only stalled-debugging
-  exception leaves ordinary critics at end of task. Published test.4 binaries predate this feature.
+  exception leaves ordinary critics at end of task. Included in this release with matching setup documentation.
 
 - Compact MCP discovery: short shared instructions and tool summaries; redundant schema
   titles/examples/empty defaults are omitted. All tools, input constraints, field descriptions,
   meaningful defaults and execution opt-ins remain available. No tools are disabled to save tokens.
+
+- Correct Windows inventory path normalization, Cargo audit CVSS scoring and nested OSV
+  manifest provenance. Hermes compression now bounds the whole request and enforces its
+  absolute output cap.
+- Present the governance workflow, hardware/capability boundaries and incremental setup in
+  the README. Release packaging includes only tracked harness files, rejects stale staging,
+  and records binary/source provenance with version/tag consistency checks.
 
 ## 0.5.0-test.4 — test release
 

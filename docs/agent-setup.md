@@ -5,7 +5,7 @@ The full [agent setup reference](../examples/claude/skills/kritic/references/set
 the skill and covers every critic, project contracts, dependencies, optional models and recovery.
 Use documentation from the same source/package version as the binary.
 
-Current source adds read-only project preflight:
+Test.5 adds read-only project preflight:
 
 ```json
 {"base_dir":"<actual repository root>","start":false}
@@ -31,7 +31,7 @@ When contract loading fails, its report preserves the original error, identifies
 contract from the project's existing rules and real validation commands, then reread it with
 `run_commands=false`. Never create a generic all-passing contract or fabricate execution evidence.
 
-These runtime additions require a matching new source build; older releases may omit preflight.
+Use test.5 or later for these runtime additions; older releases may omit preflight.
 The reference explains the manual fallback using supported `status`, `doctor --json` and project
 inspection. Binary/global configuration changes require reconnecting MCP; project files are
 reread per critic call. Setup guidance does not confer execution or publication permission.
