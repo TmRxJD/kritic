@@ -1,0 +1,116 @@
+version = 1
+test_roots = ["tests", "harness/py/tests"]
+test_pattern = "^(harness/py/tests/test_ux_adapter\\.py|tests/staleness\\.rs)$"
+
+[[authorities]]
+id = "control-id-contract"
+domain = "stable-control-ids"
+path = "harness/py/contracts/control-ids.json"
+owner = "Kritic desktop harness maintainers"
+purpose = "Independently authored input/output vectors for stable control IDs, including duplicates and empty-label text fallback."
+
+[[authorities]]
+id = "ux-adapter"
+domain = "ux-adapter-api"
+path = "harness/py/ux_adapter.py"
+owner = "Kritic desktop harness maintainers"
+purpose = "Python desktop adapter implementation API and identity normalization behavior."
+
+[[authorities]]
+id = "harness-runtime"
+domain = "python-harness-runtime"
+path = "harness/py/pyproject.toml"
+owner = "Kritic desktop harness maintainers"
+purpose = "Python harness runtime and test dependency configuration."
+
+[[authorities]]
+id = "harness-lock"
+domain = "python-harness-lock"
+path = "harness/py/uv.lock"
+owner = "Kritic desktop harness maintainers"
+purpose = "Locked Python harness dependency graph used by the declared validation command."
+
+[[authorities]]
+id = "staleness-files"
+domain = "repository-evidence-paths"
+path = "src/staleness/files.rs"
+owner = "Kritic core maintainers"
+purpose = "Path confinement and bounded reads for repository test evidence and generated fixtures."
+
+[[tests]]
+path = "harness/py/tests/test_ux_adapter.py"
+purpose = "Checks UX identity assignment, skip handling, fingerprinting, and desktop adapter behavior against independent vectors and the adapter/runtime inputs."
+validation_command = "uv run --locked --extra test pytest -q tests/test_ux_adapter.py"
+reviewed_test_sha256 = "d4aa66a38d562d25e0e9bf6967151e6234af102cb16daa7696dee76afebc9a9b"
+
+[tests.reviewed_inputs]
+control-id-contract = "f46a696ec7b01769658100f713be79f91cdb88ff75f8c5fbc9708fb9140accf6"
+ux-adapter = "ea7d46c5761f3301dd8e856e8a3271d06669e744994dfeca5e346233fd3ee9ac"
+harness-runtime = "75980da235079b932f1a82714a849a0e60c095b1de6f6ef38e7dbbc1e9959536"
+harness-lock = "2c7124f4997257afc9d2034c0787579c7aeb0725cf077eede42b69cb06b24b31"
+
+[[tests]]
+path = "tests/staleness.rs"
+purpose = "Checks test-currency, invariant declarations, fixture projection, and negative path/size regressions. This binding covers only src/staleness/files.rs; manifest parsing, other staleness modules, CLI/server wiring, and dependency behavior remain explicitly unverified by this binding."
+validation_command = "cargo test --test staleness"
+reviewed_test_sha256 = "8f9f77e252be78bcf09e9cb71b2616c0819b87c7b601b0279fca8c73f4497133"
+
+[tests.reviewed_inputs]
+staleness-files = "32b0e17ddd3a48dad20a5bcb45b28b9c0297dec83025c8f48dc8e9b6828d2bc4"
+
+[[generated]]
+path = "harness/py/tests/fixtures/control-ids.json"
+authority = "control-id-contract"
+pointer = "/id_cases"
+purpose = "Fixture projection of independently authored stable-control-ID vectors for UX adapter regression tests."
+consumers = ["harness/py/tests/test_ux_adapter.py"]
+
+[[boundaries]]
+id = "repository-evidence"
+authority = "staleness-files"
+risk = "Invalid external paths or oversized reads could escape the repository or exhaust memory."
+external_input = true
+required_in_release = true
+required_invariants = ["relative-paths", "canonical-confinement", "bounded-reads"]
+
+[[invariants]]
+id = "relative-paths"
+boundary = "repository-evidence"
+condition = "Every evidence path must be a nonempty repository-relative path without absolute prefixes or parent traversal."
+rationale = "Rejecting malformed paths at the boundary prevents reads or generated writes from escaping the selected repository."
+guard_kind = "runtime_guard"
+failure_policy = "reject_error"
+enforcement_pattern = "if path\\.is_empty\\(\\)"
+
+[[invariants.negative_tests]]
+path = "tests/staleness.rs"
+pattern = "fn sync_rejects_sources_tests_manifest_and_traversal_as_outputs"
+purpose = "Rejects traversal and absolute paths as generated outputs."
+
+[[invariants]]
+id = "canonical-confinement"
+boundary = "repository-evidence"
+condition = "Every existing path component must canonicalize under the selected repository root and must not traverse a symlink or reparse point."
+rationale = "Lexically relative paths can still escape through filesystem links; canonical component checks enforce the repository boundary."
+guard_kind = "runtime_guard"
+failure_policy = "reject_error"
+enforcement_pattern = "if !canonical\\.starts_with\\(base\\)"
+
+[[invariants.negative_tests]]
+path = "tests/staleness.rs"
+pattern = "fn symlink_sources_and_outputs_cannot_escape_the_repository"
+purpose = "Rejects symlinked source and output paths that resolve outside the repository."
+
+[[invariants]]
+id = "bounded-reads"
+boundary = "repository-evidence"
+condition = "Each file and the aggregate evidence read must remain within the declared byte budgets."
+rationale = "Untrusted repository files must not cause unbounded memory use or read volume."
+guard_kind = "runtime_guard"
+failure_policy = "reject_error"
+enforcement_pattern = "if bytes\\.len\\(\\) > MAX_FILE \\|\\| bytes\\.len\\(\\) > \\*budget"
+
+[[invariants.negative_tests]]
+path = "tests/staleness.rs"
+pattern = "fn oversized_inputs_and_unknown_fields_cannot_be_reported_current"
+purpose = "Rejects oversized authority files rather than treating them as current."

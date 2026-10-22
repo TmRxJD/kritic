@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optional model-free test-staleness and invariant review share one canonical ownership/test
+  manifest, bounded inventory, reviewed hashes and explicit JSON fixture projection. Work-contract
+  checks use the same graph. No automatic test blessing or semantic/execution attestation.
+
 - Refresh certificate-verification dependencies and the optional desktop harness's Pillow
   dependency for newly published security advisories; the CPU benchmark also explicitly pins
   a patched certifi release for reused environments. No model download is required.

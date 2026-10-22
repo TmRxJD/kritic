@@ -61,13 +61,16 @@ def test_desktop_observe_act_reset_close(tmp_path):
 
 
 def test_ids_skips_and_fingerprint():
-    cs = [{"label": "Save", "text": "Save", "role": "Button"}, {"label": "Save", "text": "Save", "role": "Button"},
-          {"label": "", "text": "", "role": "Button"}, {"label": "Delete all data", "text": "", "role": "Button"},
-          {"label": "Close", "text": "", "role": "Button"}, {"label": "Beta", "text": "", "role": "Button"}]
+    # Acceptance cases come from the reviewed contract, not the implementation's formatter.
+    cases = json.loads((HERE / "fixtures" / "control-ids.json").read_text(encoding="utf-8"))
+    assert cases, "Canonical control-ID acceptance cases must not be empty"  # noqa: S101; test assertion # nosec B101
+    cs = [{key: case[key] for key in ("role", "label", "text")} for case in cases]
+    cs += [{"label": "Delete all data", "text": "", "role": "Button"},
+           {"label": "Close", "text": "", "role": "Button"}, {"label": "Beta", "text": "", "role": "Button"}]
     ux.assign_ids(cs)
-    assert [c["id"] for c in cs[:3]] == ["Button:Save#1", "Button:Save#2", "Button:#1"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [c["id"] for c in cs[:len(cases)]] == [case["expected"] for case in cases]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     ux.mark_skips({"ignore": ["^Beta$"]}, cs)
-    assert [c.get("skip") for c in cs[3:]] == ["destructive", "window chrome", "ignored"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [c.get("skip") for c in cs[len(cases):]] == ["destructive", "window chrome", "ignored"]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     assert ux.fingerprint(["clock 10:41"]) == ux.fingerprint(["clock 10:42"])  # noqa: S101; test assertion, not runtime authorization  # nosec B101
     assert ux.fingerprint(["Editor"]) != ux.fingerprint(["Library"])  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 

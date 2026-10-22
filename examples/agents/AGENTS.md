@@ -1,5 +1,10 @@
 ## Kritic TEST RELEASE
 
+Optional source-only staleness/invariant critics share `.kritic/test-contracts.toml`. Map actual
+test dependencies and canonical owners; review changed hashes instead of auto-blessing. Only
+explicit `kritic staleness sync --write` generates declared JSON fixtures. Review key-boundary
+guards and negative tests independently; static presence does not prove correctness/execution.
+
 Resolve the actual target repository before review. Current source supports read-only
 `status(start=false, base_dir=repo)` and `doctor --base-dir <repo> --json` for per-critic setup.
 Follow the installed skill's `references/setup.md` (or matching `docs/agent-setup.md`); on older

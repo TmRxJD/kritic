@@ -56,6 +56,13 @@ pub struct Binding {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ContractCheck {
+    /// Shared canonical/test-currency graph. Static consistency only, not behavioral acceptance.
+    TestFreshness {
+        path: String,
+    },
+    Invariants {
+        path: String,
+    },
     FileExists {
         path: String,
     },
@@ -227,6 +234,55 @@ async fn evaluate(
     run_commands: bool,
 ) -> Evidence {
     match check {
+        ContractCheck::TestFreshness { path } | ContractCheck::Invariants { path } => {
+            let invariants = matches!(check, ContractCheck::Invariants { .. });
+            let kind = if invariants {
+                "invariants"
+            } else {
+                "test_freshness"
+            };
+            let checked = if invariants {
+                crate::staleness::check_invariants(base, Some(path))
+            } else {
+                crate::staleness::check(base, Some(path))
+            };
+            match checked {
+                Ok(report) => {
+                    let mut e = evidence(
+                        kind,
+                        if report.deterministic_ok {
+                            Outcome::Verified
+                        } else {
+                            Outcome::Violated
+                        },
+                        format!(
+                            "Declared test inventory/ownership/review hashes/fixtures only: {}; {} findings. Behavioral correctness and execution remain unverified.",
+                            report.status, report.finding_count
+                        ),
+                    );
+                    if let Some(hash) = report.manifest_sha256 {
+                        e.artifacts.insert(path.clone(), hash);
+                    }
+                    for observed in report.observed {
+                        e.artifacts.insert(observed.path, observed.sha256);
+                    }
+                    if !report.findings.is_empty() {
+                        e.detail.push_str(&format!(
+                            " {}",
+                            report
+                                .findings
+                                .iter()
+                                .take(10)
+                                .map(|f| format!("{}: {}", f.code, f.path))
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        ));
+                    }
+                    e
+                }
+                Err(error) => evidence(kind, Outcome::Unverified, error),
+            }
+        }
         ContractCheck::FileExists { path } => match read(base, path) {
             Ok(bytes) => {
                 let mut e = evidence(

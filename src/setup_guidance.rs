@@ -99,6 +99,20 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "technical-debt.md",
             "Use actual dependency manifests/locks; optionally declare unsupported dependencies and maintenance evidence. Keep online=false unless public registry disclosure is authorized. Missing cached versions are unknown, not current.",
         ),
+        "staleness_critic" => (
+            Some("staleness"),
+            Some(".kritic/test-contracts.toml"),
+            false,
+            "staleness.md",
+            "Use kritic staleness --schema. Derive explicit test roots/pattern, canonical owners, test/input review hashes and fixture consumers from actual repository contracts. CLI check is read-only; sync is dry-run unless --write. Never auto-refresh review hashes or rewrite assertions to match broken code.",
+        ),
+        "invariant_critic" => (
+            Some("invariants"),
+            Some(".kritic/test-contracts.toml"),
+            false,
+            "staleness.md",
+            "Declare key boundaries, authority ownership, required invariants, rationale, release guards, failure policies and actual negative-test bindings in the same manifest. Use kritic staleness invariants. Missing declarations or textual matches never prove sensible invariants or real execution.",
+        ),
         "framing_critic" => (
             Some("framing"),
             Some(".kritic/debug-case.json"),

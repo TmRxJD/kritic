@@ -27,6 +27,12 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "framing_critic" => {
             "Check a debugging case against pinned observations, pipeline and hypotheses. No commands or models run. Consistency is not proof of root cause; inspect full_result."
         }
+        "staleness_critic" => {
+            "Audit declared test inventory, canonical owners, review hashes and JSON fixtures. Read-only; changed inputs require review, never automatic test blessing. No execution or semantic approval."
+        }
+        "invariant_critic" => {
+            "Audit declared key-boundary invariants, release guards, failure policies and negative-test bindings using the canonical test manifest. Textual presence is not execution or semantic approval."
+        }
         "critic_score" => {
             "Optional model review of diffs or files. Prefer git_diff for uncommitted changes. Verify flagged locations; uncalibrated scores cannot approve work."
         }

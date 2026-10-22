@@ -69,6 +69,17 @@ For MCP discovery overhead and the unreleased metadata compaction work, see
 [tool-schema budget and measurement](docs/schema-budget.md). Compaction preserves enabled
 tools and their input constraints; capability toggles remain an explicit availability tradeoff.
 
+## Optional test-staleness and invariant review
+
+Current source adds model-free `staleness_critic` and `invariant_critic` (opt in with
+`capabilities.staleness=true` / `capabilities.invariants=true`). One `.kritic/test-contracts.toml`
+maps explicit test roots, canonical owners, reviewed source/test hashes, JSON fixtures and key
+invariant boundaries. The work-contract critic uses the same graph. `kritic staleness sync`
+previews fixture updates; `sync --write` can be wired into pre-test setup. It never rewrites
+assertions or auto-blesses changed behavior. Consistent hashes/text cannot prove semantic
+correctness or execution. No GPU, model or extra package is needed.
+[Setup, automatic fixture workflow, enforcement and limits](docs/staleness.md).
+
 ## Optional debugging-framing review
 
 Current source also adds optional [debugging-framing review](docs/framing.md). When a debug

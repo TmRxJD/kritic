@@ -904,6 +904,63 @@ impl Kritic {
         Ok(Json(report))
     }
 
+    /// Read-only canonical ownership and test-currency audit. Fixtures sync only via explicit CLI.
+    #[tool(name = "staleness_critic")]
+    pub async fn staleness_critic(
+        &self,
+        Parameters(p): Parameters<crate::staleness::Request>,
+    ) -> Result<Json<crate::staleness::Report>, String> {
+        if !self.kev.cfg.tool_enabled("staleness_critic") {
+            return Err("staleness disabled; enable capabilities.staleness=true and reconnect, or use the standalone staleness CLI".into());
+        }
+        let t0 = started("staleness_critic");
+        let mut report = tokio::task::spawn_blocking(move || crate::staleness::execute(&p))
+            .await
+            .map_err(|e| format!("staleness worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "staleness_critic", &report);
+        if report.full_result.is_none() {
+            return Err("Staleness report could not be saved; fix runs_dir and retry".into());
+        }
+        report.findings.truncate(10);
+        report.observed.truncate(10);
+        report.review_notes.truncate(10);
+        report.invariant_evidence.truncate(10);
+        finished("staleness_critic", t0, &report);
+        audit(&self.kev.cfg, "staleness_critic", &report);
+        Ok(Json(report))
+    }
+
+    /// Audit declared key-boundary guards and negative tests; no model or commands run.
+    #[tool(name = "invariant_critic")]
+    pub async fn invariant_critic(
+        &self,
+        Parameters(p): Parameters<crate::staleness::Request>,
+    ) -> Result<Json<crate::staleness::Report>, String> {
+        if !self.kev.cfg.tool_enabled("invariant_critic") {
+            return Err("invariants disabled; enable capabilities.invariants=true and reconnect, or use kritic staleness invariants".into());
+        }
+        let t0 = started("invariant_critic");
+        let mut report = tokio::task::spawn_blocking(move || {
+            crate::staleness::check_invariants(
+                std::path::Path::new(&p.base_dir),
+                p.manifest_path.as_deref(),
+            )
+        })
+        .await
+        .map_err(|e| format!("invariant worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "invariant_critic", &report);
+        if report.full_result.is_none() {
+            return Err("Invariant report could not be saved; fix runs_dir and retry".into());
+        }
+        report.findings.truncate(10);
+        report.observed.truncate(10);
+        report.review_notes.truncate(10);
+        report.invariant_evidence.truncate(10);
+        finished("invariant_critic", t0, &report);
+        audit(&self.kev.cfg, "invariant_critic", &report);
+        Ok(Json(report))
+    }
+
     /// Deterministic staged commit size/scope and repository-owned organization policy.
     /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
     #[tool(name = "repository_critic")]

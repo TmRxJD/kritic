@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "purpose": "Independent acceptance vectors for stable role:label#ordinal control identities; an empty label uses text, and duplicate keys increment their own ordinal.",
+  "id_cases": [
+    {"role": "Button", "label": "Save", "text": "Save", "expected": "Button:Save#1"},
+    {"role": "Button", "label": "Save", "text": "Save", "expected": "Button:Save#2"},
+    {"role": "Button", "label": "", "text": "", "expected": "Button:#1"},
+    {"role": "Button", "label": "", "text": "Fallback", "expected": "Button:Fallback#1"}
+  ]
+}

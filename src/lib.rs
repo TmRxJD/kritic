@@ -34,6 +34,7 @@ pub mod scout;
 pub mod server;
 pub mod setup_guidance;
 pub mod spec;
+pub mod staleness;
 mod tool_metadata;
 pub mod tools;
 pub mod ui;

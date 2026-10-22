@@ -57,6 +57,38 @@ then choose a discriminating experiment within the user's scope. Never simply re
 interventions or scatter configuration to hide an unexplained mechanism. Final validators and
 acceptance checks still run after the actual change. Published test.4 binaries predate framing.
 
+### Optional test-currency and canonical-source review
+
+Current source also exposes opt-in `invariant_critic` (`capabilities.invariants=true`) and
+`kritic staleness invariants`. The same manifest defines key boundaries, risks, required release
+invariants, rationale, failure policies, actual guard bindings and mapped negative tests. Inspect
+the full invariant evidence and actual source: debug-only guards cannot protect required release
+paths, and invalid external input should be rejected rather than trigger an internal panic.
+Textual presence cannot prove sensible constraints, reachability, state ownership or execution;
+independently verify valid/invalid edge cases and ensure the guard protects the actual boundary.
+Missing key boundaries remain a coverage gap even if all declared ones look consistent.
+
+Current source adds `staleness_critic` (`capabilities.staleness=true`, default false) and the
+standalone `kritic staleness` CLI. Use `.kritic/test-contracts.toml` as the single graph of
+canonical domains/owners, test dependencies, reviewed input/test hashes and generated fixtures.
+`kritic staleness --schema` prints its schema. Read `docs/staleness.md` and
+[setup](references/setup.md) before configuring it. Missing setup is the agent's responsibility.
+
+Inventory all actual runner inputs within an explicit corpus, including embedded tests when
+relevant; unmatched/out-of-corpus tests remain unverified. Hash drift means review is required,
+not proof the test or implementation is wrong. Reproduce the failure, trace the intended contract,
+and distinguish obsolete expectations from regressions before changing either. Never auto-bless
+hashes, copy implementation output as the oracle, delete/skip failing tests, or weaken assertions
+to clear findings. Even a consistent report has approval null and does not attest execution.
+
+`kritic staleness sync` is a dry run; `sync --write` projects only declared JSON fixtures from
+independent canonical contract data. It never updates tests, sources or review pins. Wire this
+explicit operation into an authorized existing pre-test command if automatic projection is wanted;
+run read-only `check` in CI and real behavioral validators separately. No hooks are installed by
+the critic. Work contracts use `kind="test_freshness"` against this same graph for structural
+enforcement; that check cannot establish semantic currency. Do not claim all repo tests are
+current from partial mappings, same hashes, or a manifest's existence.
+
 ### Optional technical-debt review
 
 Test.4 and later expose `technical_debt_critic` only when `capabilities.debt=true` (default false).

@@ -155,6 +155,8 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.history", "KRITIC_CAP_HISTORY"),
     ("capabilities.debt", "KRITIC_CAP_DEBT"),
     ("capabilities.framing", "KRITIC_CAP_FRAMING"),
+    ("capabilities.staleness", "KRITIC_CAP_STALENESS"),
+    ("capabilities.invariants", "KRITIC_CAP_INVARIANTS"),
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
@@ -171,6 +173,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "review_history",
     "technical_debt_critic",
     "framing_critic",
+    "staleness_critic",
+    "invariant_critic",
     "critic_score",
     "decide",
     "visual_critic",
@@ -455,6 +459,8 @@ fn capability_settings(
         "history",
         "debt",
         "framing",
+        "staleness",
+        "invariants",
         "plugins",
         "context",
         "domain_maps",
@@ -462,7 +468,13 @@ fn capability_settings(
         let enabled = match s.get(&format!("capabilities.{name}")) {
             None => !matches!(
                 name,
-                "context" | "domain_maps" | "history" | "debt" | "framing"
+                "context"
+                    | "domain_maps"
+                    | "history"
+                    | "debt"
+                    | "framing"
+                    | "staleness"
+                    | "invariants"
             ),
             Some(v) => v.parse::<bool>().unwrap_or_else(|_| {
                 config_errors.push(format!(
@@ -753,6 +765,8 @@ impl Config {
             "review_history" => self.capability("history"),
             "technical_debt_critic" => self.capability("debt"),
             "framing_critic" => self.capability("framing"),
+            "staleness_critic" => self.capability("staleness"),
+            "invariant_critic" => self.capability("invariants"),
             "plugin_list" | "plugin_run" => self.capability("plugins"),
             "route" | "context_trim" | "locate" => {
                 self.capability("context") && self.backend != "off"
