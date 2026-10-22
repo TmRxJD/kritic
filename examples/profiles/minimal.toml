@@ -6,6 +6,8 @@ backend = "off"
 backend = "off"
 [capabilities]
 framing = false
+staleness = false
+invariants = false
 web = false
 ux = false
 security = false
@@ -13,7 +15,7 @@ quality = false
 desktop = false
 resources = true
 contracts = true
-# Source builds: opt in to repository policy tools; no extra runtime/model needed.
+# Opt in to repository policy tools; no extra runtime/model needed.
 repository = false
 history = false
 debt = false

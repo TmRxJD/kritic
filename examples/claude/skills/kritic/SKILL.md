@@ -46,7 +46,7 @@ need no base_dir. Do not fetch every critic's setup matrix before each tool call
 
 ### Narrow mid-debugging framing exception
 
-Current source can expose optional `framing_critic` with `capabilities.framing=true` (default
+Test.5 can expose optional `framing_critic` with `capabilities.framing=true` (default
 false). When debugging stalls, observations conflict or repeated fixes fail, review an explicit
 causal case before the next attempt. This framing-only exception does not change end-of-task
 timing for ordinary critics or authorize per-edit loops, hooks, commands, network calls or
@@ -55,11 +55,11 @@ failed attempts, exact artifact hashes/context and linked hypotheses. A valid ca
 recommendation does not prove root cause. Inspect the full artifact review packet independently,
 then choose a discriminating experiment within the user's scope. Never simply repeat failed
 interventions or scatter configuration to hide an unexplained mechanism. Final validators and
-acceptance checks still run after the actual change. Published test.4 binaries predate framing.
+acceptance checks still run after the actual change. Use a matching test.5 or later binary, configuration and skill.
 
 ### Optional test-currency and canonical-source review
 
-Current source also exposes opt-in `invariant_critic` (`capabilities.invariants=true`) and
+Test.5 also exposes opt-in `invariant_critic` (`capabilities.invariants=true`) and
 `kritic staleness invariants`. The same manifest defines key boundaries, risks, required release
 invariants, rationale, failure policies, actual guard bindings and mapped negative tests. Inspect
 the full invariant evidence and actual source: debug-only guards cannot protect required release
@@ -68,7 +68,7 @@ Textual presence cannot prove sensible constraints, reachability, state ownershi
 independently verify valid/invalid edge cases and ensure the guard protects the actual boundary.
 Missing key boundaries remain a coverage gap even if all declared ones look consistent.
 
-Current source adds `staleness_critic` (`capabilities.staleness=true`, default false) and the
+Test.5 adds `staleness_critic` (`capabilities.staleness=true`, default false) and the
 standalone `kritic staleness` CLI. Use `.kritic/test-contracts.toml` as the single graph of
 canonical domains/owners, test dependencies, reviewed input/test hashes and generated fixtures.
 `kritic staleness --schema` prints its schema. Read `docs/staleness.md` and

@@ -1,4 +1,4 @@
-# MCP discovery budget — unreleased optimization
+# MCP discovery budget — test.5 optimization
 
 Kritic exposes the same enabled tools with concise summaries and shorter shared instructions.
 Some clients repeat server instructions beside every tool, multiplying their cost. Detailed

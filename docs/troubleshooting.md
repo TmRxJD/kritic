@@ -26,7 +26,7 @@ exists), the config file read, any `config_errors`, and the ready states.
 | frame timing `unavailable` | PresentMon needs an elevated process, or membership in **Performance Log Users** followed by a sign-out and sign-in. |
 | `resource_critic` rejects a process you believe is fine | A garbage-collected runtime can grow its heap for a while before collecting. Run longer (`duration_s`), or raise `max_rss_slope_mb_per_min` for that workload, and say why. |
 | Kev flags clean code | See [benchmarks](benchmarks.md): Kev's gates also reject some correct changes. Read the flagged spot; if you can't name a problem, report the flag as a false positive. Code whose strings or comments *describe* bugs, vulnerabilities or reviewer instructions draws flags too. |
-| The session compacts right after it starts | Not kritic: Claude Code's `autoCompactWindow` is below the startup context. See [Claude Code](claude-code.md#context-use). |
+| The session compacts right after it starts | Inspect the host startup/context budget and enabled MCP schemas. Compaction alone does not identify its cause. See [discovery budget](schema-budget.md) and [Claude Code](claude-code.md). |
 
 ## Test-release/cloud/contract failures
 
@@ -84,3 +84,14 @@ exists), the config file read, any `config_errors`, and the ready states.
   certify the changed artifact. Review every declared command before opting into execution.
 
 Reproduce a Kritic defect, add a regression, fix it directly and contribute a sanitized PR.
+
+## Test.5 tools missing or missing project evidence
+
+Use a matching test.5 or later binary, configuration and skill. Check `kritic --version`,
+then `status(start=false, base_dir=<actual repository>)` and the returned setup actions.
+Enable `capabilities.framing`, `capabilities.staleness` or `capabilities.invariants` explicitly
+and reconnect MCP. A toggle exposes a tool; it does not create valid evidence.
+For framing, use `kritic framing --schema` and [the case guide](framing.md).
+For staleness/invariants, use `kritic staleness --schema` and [the manifest guide](staleness.md).
+Missing declarations must be derived from actual project rules and tests, never replaced
+with a generic passing template. Unverified coverage remains unverified.

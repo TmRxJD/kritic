@@ -15,6 +15,11 @@ The optional `review_history` tool is separately gated by `capabilities.history=
 by default. Enabling it exposes explicit record/list/compare/export actions; it does not capture
 your session, index the workspace or install a jcode harness. [Usage and privacy](memory-adapter.md).
 
+Test.5 and later add optional `framing_critic`, `staleness_critic` and `invariant_critic`.
+Enable their separate capability toggles, reconnect MCP, then define the real project evidence.
+Client registration does not create those manifests. Use
+`status(start=false, base_dir=<actual repository>)` for [setup and recovery](agent-setup.md).
+
 ## Codex desktop, CLI, IDE and local Work
 
 Merge [examples/codex/config.toml](../examples/codex/config.toml) into your user

@@ -1,7 +1,6 @@
 # Test staleness and canonical ownership
 
-Current source adds the model-free `staleness_critic` and `kritic staleness` CLI. Published
-test.4 releases predate it. This is a review aid, not a proof that every test is correct/current.
+Test.5 adds the model-free `staleness_critic` and `kritic staleness` CLI. This is a review aid, not a proof that every test is correct/current.
 No GPU, model, network, test runner or arbitrary generator is used. MCP is opt-in:
 
 ```toml

@@ -1,4 +1,4 @@
-# Debugging-framing review — experimental source feature
+# Debugging-framing review — experimental review
 
 `framing_critic` checks whether a debugging case preserves the evidence and causal
 relationships needed to choose the next investigation. It needs no model or GPU. It does
@@ -7,7 +7,7 @@ task acceptance. Independently inspect both the findings and the underlying arti
 
 ## Enable and run
 
-Use a source build containing this feature; the published test.4 binary predates it.
+Use v0.5.0-test.5 or later with matching configuration and skill documentation.
 The built-in and minimal-profile default is `capabilities.framing=false`. To opt in:
 
 ```toml
