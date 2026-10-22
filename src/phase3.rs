@@ -128,7 +128,7 @@ pub async fn security<D: Decider>(
             "osv-scanner",
             scan::tool_path(bin, "osv-scanner"),
             &["scan", "source", "-r", "--format", "json", "."],
-            scan::parse_osv,
+            |o| scan::parse_osv(base, o),
         )
         .await;
     } else {
@@ -172,34 +172,12 @@ pub async fn security<D: Decider>(
                 "not installed (osv-scanner covers Cargo.lock)",
             );
         } else {
-            run.run("cargo-audit", exe, &["audit", "--json"], |o| {
-                // cargo-audit is also covered by osv-scanner via Cargo.lock; keep it as a cross-check
-                let v: Value =
-                    serde_json::from_str(o).map_err(|e| format!("cargo-audit JSON: {e}"))?;
-                Ok(v["vulnerabilities"]["list"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .map(|x| Finding {
-                        tool: "cargo-audit".into(),
-                        rule: x["advisory"]["id"].as_str().unwrap_or("").into(),
-                        severity: x["advisory"]["cvss"]
-                            .as_str()
-                            .map(|_| "high")
-                            .unwrap_or("medium")
-                            .into(),
-                        file: "Cargo.lock".into(),
-                        line: 0,
-                        message: format!(
-                            "{} {}: {}",
-                            x["package"]["name"].as_str().unwrap_or(""),
-                            x["package"]["version"].as_str().unwrap_or(""),
-                            x["advisory"]["title"].as_str().unwrap_or("")
-                        ),
-                        confidence: None,
-                    })
-                    .collect())
-            })
+            run.run(
+                "cargo-audit",
+                exe,
+                &["audit", "--json"],
+                scan::parse_cargo_audit,
+            )
             .await;
         }
     }

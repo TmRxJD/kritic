@@ -20,6 +20,47 @@ fn options() -> QualityOptions {
 }
 
 #[tokio::test]
+async fn server_quality_normalizes_loaded_inventory_paths_before_organization_review() {
+    use kritic::server::{Kritic, QualityParams};
+    use rmcp::handler::server::wrapper::Parameters;
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("src")).unwrap();
+    let source = dir.path().join("src/data.ts");
+    std::fs::write(
+        &source,
+        "// Public data contract.\nexport type Item = { id: string };\n",
+    )
+    .unwrap();
+    let mut config = Config::from_env();
+    config.runs_dir = dir.path().join("reports");
+    let server = Kritic::new(config);
+    for (base, path) in [
+        (dir.path().to_path_buf(), "src/data.ts".to_string()),
+        (dir.path().to_path_buf(), source.display().to_string()),
+        (dir.path().join("."), "src/./data.ts".to_string()),
+    ] {
+        let report = server
+            .code_quality_critic(Parameters(QualityParams {
+                base_dir: base.display().to_string(),
+                paths: vec![path],
+                max_complexity: 20,
+                max_function_lines: 150,
+                run_linters: false,
+                use_kev: false,
+            }))
+            .await
+            .unwrap()
+            .0;
+        let organization = report.organization.unwrap();
+        assert!(organization.approval, "{:?}", organization.violations);
+        assert_eq!(organization.files.len(), 1);
+        assert_eq!(organization.files[0].path, "src/data.ts");
+        assert_eq!(report.approval, Some(true));
+    }
+}
+
+#[tokio::test]
 async fn ordinary_quality_critic_blocks_oversized_files_without_functions() {
     let dir = tempfile::tempdir().unwrap();
     let files = vec![(
