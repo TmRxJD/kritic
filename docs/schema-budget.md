@@ -1,4 +1,4 @@
-# CCP discovery budget — unreleased optimization
+# MCP discovery budget — test.5 optimization
 
 Kritic exposes the same enabled tools with concise summaries and shorter shared instructions.
 Some clients repeat server instructions beside every tool, multiplying their cost. Detailed
@@ -10,15 +10,15 @@ examples and null/empty defaults are removed. A user property or literal named `
 `examples` or `default` is preserved. Output schemas were already omitted before this change.
 No capabilities, opt-ins, handlers or tools are removed by compaction.
 
-## Ceasuring it
+## Measuring it
 
-Capture real CCP `initialize` and `tools/list` responses from the old and new binaries using
+Capture real MCP `initialize` and `tools/list` responses from the old and new binaries using
 the same configuration. Compare tool names and schemas, then count compact serialized JSON
-bytes and optional reference-tokenizer tokens. Ceasure these separately:
+bytes and optional reference-tokenizer tokens. Measure these separately:
 
 - Raw `tools/list.result`: what the server actually sends.
 - A client-style projection that prefixes server instructions to each tool description.
-  This is an explicit simulation, not a universal description of CCP clients.
+  This is an explicit simulation, not a universal description of MCP clients.
 
 The measured test.4 baseline on one configured machine has 20 tools: 27,598 UTF-8 bytes /
 6,524 `o200k_base` reference tokens in the raw list, or 38,358 bytes / 9,164 reference tokens
@@ -33,8 +33,8 @@ tool names, input constraints, parameter descriptions and meaningful defaults:
 | --- | ---: | ---: | ---: | ---: |
 | Configured, raw list | 20 | 6,524 | 5,352 | 18.0% |
 | Configured, repeated-prefix projection | 20 | 9,164 | 6,192 | 32.4% |
-| Cinimal, raw list | 7 | 1,791 | 1,391 | 22.3% |
-| Cinimal, repeated-prefix projection | 7 | 2,715 | 1,685 | 37.9% |
+| Minimal, raw list | 7 | 1,791 | 1,391 | 22.3% |
+| Minimal, repeated-prefix projection | 7 | 2,715 | 1,685 | 37.9% |
 
 These are `o200k_base` reference counts from the released test.4 baseline and the Windows
 CI optimization candidate (`87c6fe2`). The projection simulates a client wrapper; it is not
@@ -71,7 +71,7 @@ user-selected executable launch (B603); scanners remain enabled and unsuppressed
 
 ## Client limits
 
-Reconnect the CCP client after updating: an existing connection can retain old definitions.
+Reconnect the MCP client after updating: an existing connection can retain old definitions.
 This optimization reduces Kritic's advertised metadata. It cannot shrink another server's
 schemas, the client's wrapper, an already-loaded conversation or unrelated skill catalogs.
 Fewer advertised tools can additionally reduce overhead through existing capability/tool
