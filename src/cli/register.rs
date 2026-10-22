@@ -17,6 +17,8 @@ use serde_json::{Value, json};
 use super::ui;
 
 pub const SKILL_MD: &str = include_str!("../../examples/claude/skills/kritic/SKILL.md");
+pub const SETUP_REFERENCE: &str =
+    include_str!("../../examples/claude/skills/kritic/references/setup.md");
 pub const AGENT_MD: &str = include_str!("../../examples/claude/agents/ux-critic.md");
 pub const CLAUDE_RULE: &str = include_str!("../../examples/claude/CLAUDE.md");
 pub const CONCISE_RULE: &str = include_str!("../../examples/claude/CONCISE.md");
@@ -156,6 +158,10 @@ pub fn register_claude(home: &Path, exe: &Path, opts: &ClaudeOptions) -> Result<
     }
     let skill = claude_dir().join("skills").join("kritic").join("SKILL.md");
     write_file(&skill, SKILL_MD)?;
+    write_file(
+        &claude_dir().join("skills/kritic/references/setup.md"),
+        SETUP_REFERENCE,
+    )?;
     ui::ok(&format!("skill installed: {}", skill.display()));
     let agent = claude_dir().join("agents").join("ux-critic.md");
     if agent.is_file() && std::fs::read_to_string(&agent).is_ok_and(|t| !t.contains("kritic")) {

@@ -1,5 +1,10 @@
 # Work contracts and enforcement
 
+For a missing or invalid project manifest, agents should follow the report's structured setup
+steps (matching current source) and [agent setup/recovery](agent-setup.md). Identify the exact
+repository, derive checks from its real rules, and rerun; do not pass the OS error to the user
+as though the model-free critic itself were offline. No default passing contract is invented.
+
 The model-free `contract_critic` reads `.kritic/contract.toml` (version 1). It separates declared
 acceptance checks from enforcement wiring. `approval` refers only to the required declared
 assertions. It never means all user instructions are fulfilled or deployment is authorized.

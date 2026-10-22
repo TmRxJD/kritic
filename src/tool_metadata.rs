@@ -2,18 +2,18 @@
 use serde_json::{Map, Value};
 
 // Some clients repeat these instructions beside every tool. Keep workflow detail in the skill.
-pub(crate) const INSTRUCTIONS: &str = "TEST RELEASE: independently validate findings; reproduce and fix Kritic defects with regressions and PRs. Advisory only. Run scoped deterministic checks first; models are optional. Never fabricate scores or execution evidence.";
+pub(crate) const INSTRUCTIONS: &str = "TEST RELEASE: independently validate findings; fix reproducible Kritic defects with regressions and PRs. Advisory only. Setup failures: status(base_dir). Deterministic first; models optional. Never fabricate scores or execution evidence.";
 
 pub(crate) fn description(name: &str) -> Option<&'static str> {
     Some(match name {
         "status" => {
-            "Check capabilities, configuration and reviewer health. start=true may start an owned local reviewer; external services are never started."
+            "Check configuration and health; base_dir adds read-only per-tool setup actions. start=true may start an owned reviewer; external services are never started."
         }
         "artifact_validate" => {
             "Validate files and run explicit project commands verbatim. Failures block approval; skipped checks remain gaps. Models optional."
         }
         "contract_critic" => {
-            "Audit work contracts against scoped checks and evidence. Shell commands require run_commands=true; prose-only promises remain unverified."
+            "Audit scoped contracts; missing/invalid files include setup steps. Never invent passing checks. Commands require run_commands=true; prose stays unverified."
         }
         "repository_critic" => {
             "Check staged commit scope/size and repository organization policy. Static approval cannot establish semantic cohesion or comment quality."

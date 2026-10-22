@@ -540,6 +540,9 @@ pub struct StatusResult {
     /// Problems in that file (bad TOML, unknown keys); their settings fell back to defaults.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub config_errors: Vec<String>,
+    /// Opt-in project setup guidance; no extra payload on ordinary status calls.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_setup: Option<crate::setup_guidance::ProjectSetup>,
     /// Live event stream (ready states, tool lifecycle, harness progress). Subscribe with
     /// Claude Code's Monitor tool: ws source.
     pub ws_url: Option<String>,
@@ -620,6 +623,7 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
         log: cfg.log_path.display().to_string(),
         config_file: cfg.config_file.as_ref().map(|p| p.display().to_string()),
         config_errors: cfg.config_errors.clone(),
+        project_setup: None,
         ws_url: crate::events::url(),
         ready: crate::events::snapshot()["ready"].clone(),
         start_error,

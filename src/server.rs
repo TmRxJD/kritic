@@ -609,6 +609,9 @@ pub struct StatusParams {
     /// Start laya if it is down (can take ~60s after a reboot).
     #[serde(default)]
     pub start: bool,
+    /// Include read-only setup actions for this target repository; no commands run.
+    #[serde(default)]
+    pub base_dir: Option<String>,
 }
 
 /// Holds the GPU lock for one tool call and reports ownership on the event bus.
@@ -792,7 +795,22 @@ impl Kritic {
         &self,
         Parameters(p): Parameters<StatusParams>,
     ) -> Result<Json<StatusResult>, String> {
-        Ok(Json(status(&self.kev, p.start).await))
+        let project_setup = match p.base_dir {
+            Some(base) => {
+                let cfg = self.kev.cfg.clone();
+                Some(
+                    tokio::task::spawn_blocking(move || {
+                        crate::setup_guidance::inspect(&cfg, &base)
+                    })
+                    .await
+                    .map_err(|e| format!("project setup worker: {e}"))??,
+                )
+            }
+            None => None,
+        };
+        let mut result = status(&self.kev, p.start).await;
+        result.project_setup = project_setup;
+        Ok(Json(result))
     }
 
     /// Audit a work contract against fresh checks, hashed evidence and declared CI/hook wiring.

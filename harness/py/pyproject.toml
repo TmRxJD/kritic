@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pywinauto>=0.6.9; sys_platform == 'win32'",
     "psutil>=6.0",
-    "pillow>=11.0",
+    "pillow>=13.0",
     "websockets>=13.0",
 ]
 
