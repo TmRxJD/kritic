@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "revision": "synthetic-fixture-v1",
+  "run_id": "timeout-reproduction-1",
+  "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "scope": "Investigate canonical timeout propagation from normalization to client construction; unrelated retry and transport settings are outside this case.",
+  "problem": {
+    "expected": "The client uses the canonical normalized timeout of 1500 milliseconds.",
+    "observed": "The synthetic failure artifact records normalization at 1500 milliseconds and client construction at 1000 milliseconds.",
+    "reproduction": "Synthetic fixture only: compare the supplied normalization and client source with the recorded input of 1500 milliseconds; the critic does not execute this reproduction.",
+    "failure_observations": [
+      "failure"
+    ]
+  },
+  "entry_stage": "normalize",
+  "symptom_stage": "client",
+  "stages": [
+    {
+      "id": "normalize",
+      "purpose": "Own the canonical in-process timeout in milliseconds; no serialized schema boundary applies.",
+      "owner": "canonical settings normalization",
+      "sources": [
+        "normalize-source"
+      ],
+      "schemas": [],
+      "enforcement_observations": [],
+      "schema_not_applicable": "In-process integer setting; no serialized schema boundary applies to this stage."
+    },
+    {
+      "id": "client",
+      "purpose": "Consume the canonical in-process timeout during client construction; no serialized schema boundary applies.",
+      "owner": "client construction",
+      "sources": [
+        "client-source"
+      ],
+      "schemas": [],
+      "enforcement_observations": [],
+      "schema_not_applicable": "In-process integer setting; no serialized schema boundary applies to this stage."
+    }
+  ],
+  "links": [
+    {
+      "from": "normalize",
+      "to": "client",
+      "observations": [
+        "failure",
+        "trial"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "normalize-source",
+      "kind": "source",
+      "path": "examples/framing-case/normalize.rs",
+      "sha256": "e0b9b8de7da9f3336f6b0373ff6087a1e941c30f4fd49a09bde254d78b47ecf2",
+      "assertions": []
+    },
+    {
+      "id": "client-source",
+      "kind": "source",
+      "path": "examples/framing-case/client.rs",
+      "sha256": "333d6efda3590d15de303e5fb1ae3edf3f7529f4190c2e7bec3e5d80ae682d07",
+      "assertions": []
+    },
+    {
+      "id": "failure",
+      "kind": "observation",
+      "path": "examples/framing-case/failure.json",
+      "sha256": "4065f9b30d6aa0d56a90f32267bad4003853dd85f1068406fe906d7b3a5337c0",
+      "assertions": [
+        {
+          "pointer": "/data/configured_timeout_ms",
+          "expected": 1500
+        },
+        {
+          "pointer": "/data/normalized_timeout_ms",
+          "expected": 1500
+        },
+        {
+          "pointer": "/data/client_timeout_ms",
+          "expected": 1000
+        },
+        {
+          "pointer": "/data/timeout_mismatch",
+          "expected": true
+        },
+        {
+          "expected": "normalize",
+          "pointer": "/data/from"
+        },
+        {
+          "expected": "client",
+          "pointer": "/data/to"
+        },
+        {
+          "expected": "client",
+          "pointer": "/data/stage"
+        },
+        {
+          "pointer": "/data/symptom_persists",
+          "expected": true
+        }
+      ]
+    },
+    {
+      "id": "trial",
+      "kind": "observation",
+      "path": "examples/framing-case/trial.json",
+      "sha256": "ffade31adc3a6e9e322791aa9007becb3a070192825df2b1f0c622bda595ac92",
+      "assertions": [
+        {
+          "pointer": "/data/normalized_timeout_ms",
+          "expected": 1500
+        },
+        {
+          "pointer": "/data/client_timeout_ms",
+          "expected": 1500
+        },
+        {
+          "pointer": "/data/timeout_mismatch",
+          "expected": false
+        },
+        {
+          "expected": "normalize",
+          "pointer": "/data/from"
+        },
+        {
+          "expected": "client",
+          "pointer": "/data/to"
+        },
+        {
+          "expected": "client",
+          "pointer": "/data/stage"
+        },
+        {
+          "pointer": "/data/symptom_persists",
+          "expected": false
+        }
+      ]
+    }
+  ],
+  "configuration": [
+    {
+      "key": "timeout_ms",
+      "sources": [
+        {
+          "name": "canonical settings",
+          "evidence": "failure",
+          "pointer": "/data/configured_timeout_ms"
+        }
+      ],
+      "effective": 1500,
+      "owner_stage": "normalize",
+      "consumers": [
+        "client"
+      ]
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "discarded-canonical-setting",
+      "claim": "Client construction discards the canonical timeout and substitutes its own constant, accounting for the normalization/client mismatch.",
+      "stages": [
+        "normalize",
+        "client"
+      ],
+      "support": [
+        "failure",
+        "trial"
+      ],
+      "counterevidence": [],
+      "experiments": [
+        {
+          "id": "canonical-pass-through",
+          "prediction": "Passing the canonical timeout directly into client construction makes both observed timeout values 1500 milliseconds.",
+          "alternative_prediction": "If normalization itself changed the timeout, client pass-through would preserve that incorrect normalized value rather than restore agreement with the configured input.",
+          "observations": [
+            "trial"
+          ],
+          "outcome": "supports"
+        }
+      ]
+    }
+  ],
+  "attempts": [],
+  "proposed_patch": {
+    "hypothesis": "discarded-canonical-setting",
+    "paths": [
+      "examples/framing-case/client.rs"
+    ],
+    "max_changed_lines": 12,
+    "rationale": "Replace the client's independent timeout constant with the supplied canonical value; validate the real project separately before accepting that causal explanation."
+  },
+  "unknowns": []
+}

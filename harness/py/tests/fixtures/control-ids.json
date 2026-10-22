@@ -1,0 +1,26 @@
+[
+  {
+    "role": "Button",
+    "label": "Save",
+    "text": "Save",
+    "expected": "Button:Save#1"
+  },
+  {
+    "role": "Button",
+    "label": "Save",
+    "text": "Save",
+    "expected": "Button:Save#2"
+  },
+  {
+    "role": "Button",
+    "label": "",
+    "text": "",
+    "expected": "Button:#1"
+  },
+  {
+    "role": "Button",
+    "label": "",
+    "text": "Fallback",
+    "expected": "Button:Fallback#1"
+  }
+]

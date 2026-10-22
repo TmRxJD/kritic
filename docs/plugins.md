@@ -37,13 +37,13 @@ JSON manifests (`<name>.json`) with the same keys work too.
    "metrics": {}, "kev_state": {"<field>": "<value>"}}
   ```
 
-  Only `ok` is required. `kev_state` is required when the manifest has a `[kev]` block (below).
+  A passing result requires `ok: true`, explicit `approval: true`, and a `findings` array. Omitted verdicts are unverified. `kev_state` is required when the manifest has a `[kev]` block (below).
 - **stderr:** optional progress, one JSON object per line with an `"event"` key. These stream live
   to kritic's WebSocket. Anything else on stderr is kept as error context.
 
 ## How kritic judges a plugin
 
-approval = the plugin's `approval` (if given) AND no high/critical findings (unless
+approval = the plugin's explicit `approval` AND no high/critical findings (unless
 `findings_advisory`) AND every calibrated Kev gate passes. Advisory Kev questions are only reported.
 
 `ok: false`, bad JSON, a timeout or a missing required argument gives `approval: null` with the

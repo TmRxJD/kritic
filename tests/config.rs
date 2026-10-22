@@ -27,7 +27,7 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     let file = dir.path().join("kritic.toml");
     std::fs::write(
         &file,
-        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\nbogus = 1\n\n[tools]\ndisabled = []\n",
+        "[kev]\nchunk_chars = 999\nmodel = \"kev-test\"\ncpu_only = true\nexternally_managed = true\nbogus = 1\n\n[vision]\nexternally_managed = true\n\n[cloud]\nkey_env = \"TYPESAFE_API_KEY\"\n\n[tools]\ndisabled = []\n",
     )
     .unwrap();
     // SAFETY: no other test in this binary reads the environment.
@@ -42,11 +42,46 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     let c = Config::load();
     assert_eq!(c.config_file.as_deref(), Some(file.as_path()));
     assert_eq!(c.chunk_chars, 999, "file value");
+    assert!(c.kev_cpu_only, "CPU-only TOML boolean is accepted");
+    assert!(c.kev_externally_managed && c.vision_externally_managed);
+    assert_eq!(c.cloud_key_env, "TYPESAFE_API_KEY");
     assert_eq!(c.model, "from-env", "env beats file");
     assert_eq!(c.token_budget, 2900, "default");
     assert!(c.disabled_tools.is_empty(), "file list");
     assert_eq!(c.config_errors.len(), 1, "{:?}", c.config_errors);
     assert!(c.config_errors[0].contains("kev.bogus"));
+    unsafe { std::env::set_var("KRITIC_KEV_CPU_ONLY", "false") };
+    assert!(!Config::load().kev_cpu_only, "environment overrides file");
+    unsafe { std::env::set_var("KRITIC_KEV_CPU_ONLY", "invalid") };
+    let invalid = Config::load();
+    assert!(!invalid.kev_cpu_only);
+    assert!(
+        invalid
+            .config_errors
+            .iter()
+            .any(|e| e.contains("kev.cpu_only: expected true or false"))
+    );
+    unsafe { std::env::remove_var("KRITIC_KEV_CPU_ONLY") };
+    for key in [
+        "KRITIC_KEV_EXTERNALLY_MANAGED",
+        "KRITIC_VISION_EXTERNALLY_MANAGED",
+    ] {
+        unsafe { std::env::set_var(key, "false") };
+        let value = Config::load();
+        assert!(!if key == "KRITIC_KEV_EXTERNALLY_MANAGED" {
+            value.kev_externally_managed
+        } else {
+            value.vision_externally_managed
+        });
+        unsafe { std::env::set_var(key, "invalid") };
+        assert!(
+            Config::load()
+                .config_errors
+                .iter()
+                .any(|error| error.contains("externally_managed: expected true or false"))
+        );
+        unsafe { std::env::remove_var(key) };
+    }
     assert_eq!(
         c.runs_dir,
         dir.path().join("runs"),
@@ -60,6 +95,22 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     }
     let c = Config::load();
     assert!(c.config_file.is_none() && c.config_errors.is_empty());
+    assert!(!c.capability("history") && !c.tool_enabled("review_history"));
+    assert!(!c.capability("debt") && !c.tool_enabled("technical_debt_critic"));
+    assert!(!c.capability("framing") && !c.tool_enabled("framing_critic"));
+    assert!(!c.capability("staleness") && !c.tool_enabled("staleness_critic"));
+    assert!(!c.capability("invariants") && !c.tool_enabled("invariant_critic"));
+    unsafe { std::env::set_var("KRITIC_CAP_STALENESS", "true") };
+    assert!(Config::load().tool_enabled("staleness_critic"));
+    unsafe { std::env::remove_var("KRITIC_CAP_STALENESS") };
+    unsafe { std::env::set_var("KRITIC_CAP_INVARIANTS", "true") };
+    assert!(Config::load().tool_enabled("invariant_critic"));
+    unsafe { std::env::remove_var("KRITIC_CAP_INVARIANTS") };
+    unsafe { std::env::set_var("KRITIC_CAP_HISTORY", "true") };
+    assert!(Config::load().tool_enabled("review_history"));
+    unsafe { std::env::remove_var("KRITIC_CAP_HISTORY") };
+    assert!(!c.kev_cpu_only, "GPU behavior is the default");
+    assert!(!c.kev_externally_managed && !c.vision_externally_managed);
     assert_eq!(c.disabled_tools, ["route", "context_trim"]);
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };
     assert_eq!(Config::load().disabled_tools, DEFAULT_DISABLED);
@@ -74,9 +125,57 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     assert!(kritic::config::kritic_home().is_absolute());
     unsafe { std::env::set_var("KRITIC_HOME", dir.path().join("empty")) };
 
+    assert_eq!(Config::load().visual_quality_target, "professional");
+    unsafe { std::env::set_var("KRITIC_VISUAL_QUALITY_TARGET", "aaa") };
+    assert_eq!(Config::load().visual_quality_target, "showcase");
+    unsafe { std::env::set_var("KRITIC_VISUAL_QUALITY_TARGET", "unknown") };
+    let invalid_target = Config::load();
+    assert!(
+        invalid_target
+            .config_errors
+            .iter()
+            .any(|e| e.contains("vision.quality_target"))
+    );
+    unsafe { std::env::remove_var("KRITIC_VISUAL_QUALITY_TARGET") };
+
+    for value in ["NaN", "-1", "11"] {
+        unsafe { std::env::set_var("KRITIC_VISUAL_MIN", value) };
+        let invalid = Config::load();
+        assert_eq!(invalid.visual_min, 6.0);
+        assert!(
+            invalid
+                .config_errors
+                .iter()
+                .any(|e| e.contains("vision.visual_min"))
+        );
+    }
+    unsafe { std::env::remove_var("KRITIC_VISUAL_MIN") };
+
     // An explicit KRITIC_CONFIG that doesn't exist is an error, not silently ignored.
     unsafe { std::env::set_var("KRITIC_CONFIG", dir.path().join("missing.toml")) };
     assert_eq!(Config::load().config_errors.len(), 1);
+    let unsupported = dir.path().join("unsupported.toml");
+    std::fs::write(
+        &unsupported,
+        "[kev]\ndevice='cuda'\ngpu_uuid='test'\nmax_batch=4\nvulkan_visible_devices='0'\n",
+    )
+    .unwrap();
+    unsafe { std::env::set_var("KRITIC_CONFIG", unsupported) };
+    let unsupported = Config::load();
+    for key in [
+        "kev.device",
+        "kev.gpu_uuid",
+        "kev.max_batch",
+        "kev.vulkan_visible_devices",
+    ] {
+        assert!(
+            unsupported
+                .config_errors
+                .iter()
+                .any(|error| error.contains(key)),
+            "{key} must not be accepted as a no-op"
+        );
+    }
 }
 
 #[test]

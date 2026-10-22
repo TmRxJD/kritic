@@ -138,7 +138,10 @@ fn register_then_uninstall_round_trip() {
     kritic::cli::register::register_claude(
         &khome,
         &exe,
-        &kritic::cli::register::ClaudeOptions { rule: true, concise: false },
+        &kritic::cli::register::ClaudeOptions {
+            rule: true,
+            concise: false,
+        },
     )
     .unwrap();
     kritic::cli::register::register_hermes(
@@ -164,6 +167,10 @@ fn register_then_uninstall_round_trip() {
     let keys: Vec<&String> = cj.as_object().unwrap().keys().collect();
     assert_eq!(keys, ["theme", "mcpServers"], "key order preserved");
     assert!(home.join(".claude/skills/kritic/SKILL.md").is_file());
+    assert_eq!(
+        std::fs::read_to_string(home.join(".claude/skills/kritic/references/setup.md")).unwrap(),
+        kritic::cli::register::SETUP_REFERENCE
+    );
     assert!(home.join(".claude/agents/ux-critic.md").is_file());
     assert!(
         std::fs::read_to_string(home.join(".claude/CLAUDE.md"))

@@ -1,88 +1,124 @@
-# Getting started
+# Getting started — test release
 
-## What you need
+Kritic runs deterministic checks by default. Your calling agent interprets the evidence using
+its existing session; no local model, dedicated GPU or separate cloud API key is required.
+Do not trust results without checking the underlying assertions and coverage.
 
-kritic is one Rust binary plus optional pieces. Each tool needs only its own pieces; anything
-missing makes that tool report `approval: null` with the reason. It never reports a pass it
-didn't check.
+## Requirements
 
-| Feature | Tools | Needs |
+- Windows x86-64 test binary: no Rust installation needed; it imports `VCRUNTIME140.dll` and
+  needs the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170). Source build: Rust 1.89+ and platform linker/build tools.
+- Browser checks: installed Chrome, Edge or Chromium, driven through native CDP. Node and
+  Playwright are not needed for the default native path; the legacy harness is retained for tests.
+- Windows desktop automation: Python 3.11+ and uv for the included pywinauto harness.
+- Resource/hygiene checks: native Rust implementation. The legacy Python harness is optional.
+- Security: installed gitleaks, osv-scanner, semgrep, bandit and optional cargo-audit.
+  Applicability/missing dependencies are reported; scanners may need network access.
+- Quality: the project's own linter/typechecker toolchain. Unity tests need the matching Unity editor.
+- Practical RAM recommendation: 16 GB for an IDE/browser and ordinary projects. There is no
+  benchmarked universal RAM minimum; the application's build/tests may need more.
+
+Windows is the development platform. Desktop UI Automation is Windows-only. Native browser
+and core Rust functionality are intended to work on Linux/macOS; do not infer tested coverage
+for those environments from the Windows measurements.
+
+## Prebuilt Windows package
+
+Use the configuration and examples from the same ZIP as the binary. Keys such as `capabilities.repository`, `capabilities.history` and `capabilities.debt` require
+test.4 or later; copying them into an older package does not add those features.
+
+Extract the test ZIP into your chosen persistent directory, open that `kritic` folder, and on
+a fresh install select the included minimal profile before running setup:
+
+```powershell
+$env:KRITIC_HOME = (Resolve-Path .).Path
+Copy-Item .\examples\profiles\minimal.toml .\kritic.toml
+.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-scanners --no-register
+.\bin\kritic.exe doctor
+```
+
+Do not copy over an existing config: merge the selected settings instead. This first-run path
+installs no optional harnesses/scanners/models and registers no unrelated agent. It exposes
+artifact, contract and native process/resource checks. Your project's validators still need
+their own normal toolchains. Connect [Codex/local Work, Cursor or another client](clients.md)
+and install the skill; verify its TEST RELEASE header.
+
+## Optional installs, in order
+
+In KRITIC_HOME/kritic.toml enable only the groups you need. All commands below preserve
+deterministic review and avoid automatic Claude/Hermes registration; restart MCP afterward.
+
+| Goal | First edit `[capabilities]` | Then run from the extracted package |
 |---|---|---|
-| Core critic | `critic_score`, `artifact_validate`, `status`, `spec_lint`, `route`, `context_trim`, `token_metrics`, `plugin_list`, `plugin_run` | the kritic binary; **laya** + the **Kev-4B GGUF** for the model parts (`artifact_validate` with `use_model=false` and the plugins need neither) |
-| Web UI testing | `ui_test`, `ux_critic` (web) | Node 18+, the harness's npm packages, Playwright Chromium |
-| Visual review | `visual_critic`, the `ux_critic` novice | [Ollama](https://ollama.com) with `qwen2.5vl:7b` (about 6 GB) |
-| Security | `security_critic` | any of gitleaks, osv-scanner, semgrep, bandit, cargo-audit (on PATH or in `scan.tools_bin`); network access for osv-scanner and semgrep's rule download |
-| Code quality | `code_quality_critic` | the project's own linters: ruff, clippy, eslint, tsc |
-| Desktop and processes | `desktop_test`, `resource_critic`, `hygiene_critic`, `ux_critic` (desktop, Unity) | Python 3.11+ through [uv](https://docs.astral.sh/uv/); `desktop_test` is Windows-only (UI Automation) |
-| Unity | `unity_tests`, `desktop_test` Unity mode | a Unity Hub editor install matching the project |
-| Beat Saber maps | `map_eval` | nothing extra; disabled by default (`[tools] disabled`) |
+| Web UI / deterministic UX | `web=true`, `ux=true`; leave `desktop=false` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
+| Security scanners | `security=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-harness --no-register` |
+| Windows desktop UI | `desktop=true`; optionally `ux=true` | `.\bin\kritic.exe setup --yes --backend off --no-vision --no-scanners --no-register` |
+| Project code quality | `quality=true` | Install your project's lint/typecheck dependencies, then run doctor; no model/setup needed |
+| Scoped commits / organization (test.4+) | `repository=true`; minimal profile defaults false | Use test.4 or later, configure `.kritic/repository.toml`, then follow [explicit hook setup](repository-policy.md); Git required, no model/download |
+| Review history (test.4+) | `history=true`; built-in/minimal default false | Git plus private storage; [record selected reports/inputs explicitly](memory-adapter.md); no model, embedding or extra runtime |
+| Technical-debt review (test.4+) | `debt=true`; built-in/minimal default false | No additional install, model or package-manager execution; run `kritic debt --base-dir .` offline. Public metadata needs a separate `--online` opt-in; [guide](technical-debt.md) |
+| Repository plugins / map domain | `plugins=true` / `domain_maps=true` | Install the relevant project plugin/evaluator dependencies; no model required for map_eval |
 
-**Platform.** kritic is developed and measured on Windows 11 with an RTX 5070 (12 GB). The Rust
-server, the web harness and the model runtimes are cross-platform; the desktop tester is
-Windows-only. Linux and macOS builds are not yet tested: reports welcome.
+Browser provisioning uses installed Chrome/Edge/Chromium or downloads Chrome for Testing.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before desktop provisioning
+or scanner setup when Semgrep/Bandit/Ruff are absent: Kritic uses uv to prepare those Python tools.
+Desktop also needs Python and the Windows harness; matching Unity is a separate application
+install. Scanners can access networks. Partial install failures remain visible in
+doctor and critic coverage; a successful setup command does not prove every optional dependency
+or project validator works. Do not install local models to fix missing deterministic dependencies.
 
-**GPU.** Kev-4B Q8_0 needs about 5 GB of VRAM; the vision model about 6 GB. kritic keeps only one
-of them on the GPU at a time (see [architecture](architecture.md#gpu-arbitration)), so an 8 GB card
-works. laya also has Vulkan and Metal builds. `ud_q4_k_m` is a smaller Kev quantization; the shipped
-gates were calibrated on Q8_0.
+## Install from source and configure
 
-## Install
+Repository policy tools and commit hooks described in [repository policy](repository-policy.md)
+require test.4 or later.
+Installing or registering the server never installs a Git hook automatically.
 
 ```bash
-git clone https://github.com/TmRxJD/kritic
+git clone https://github.com/TmRxJD/kritic.git
 cd kritic
-scripts/install.sh --with-models
+export KRITIC_HOME='E:/AI/kritic' # optional; choose your own persistent data directory
+scripts/install.sh
+cp examples/profiles/minimal.toml "$KRITIC_HOME/kritic.toml" # fresh install only
+"$KRITIC_HOME/bin/kritic" setup --yes --backend off --no-vision --no-harness --no-scanners --no-register
 ```
 
-`install.sh` builds the release binary and installs it into `~/.kritic` (or `$KRITIC_HOME`):
+On Windows the binary is `kritic.exe`. Without KRITIC_HOME it lives in `~/.kritic/bin`.
+The installer builds the binary, copies the optional Python harness, and writes a commented
+config if absent. It does not pull models by default. Setup discovers/installs missing tools;
+use `--no-harness --no-scanners --no-register` to skip dependency installation/registration.
+Existing config selections are preserved unless you explicitly override them.
 
-- `bin/kritic[.exe]`: the MCP server;
-- `bin/harness/`: the Playwright and desktop harnesses, with their npm and uv dependencies;
-- `kritic.toml`: your config, copied from [`examples/kritic.toml`](../examples/kritic.toml).
+The source installer requires Rust 1.89+ and native linker/build tools; prebuilt Windows does not.
+Clone the repo and run these commands from its root. On Windows use `bin/kritic.exe`.
+Use [client-specific setup](clients.md) for Codex/local Work, Cursor, Claude Code and Hermes.
+`kritic doctor` reports configured/missing features;
+`--online` explicitly tests the configured reviewer and may incur API cost.
 
-`--with-models` also runs `scripts/fetch-models.sh`, which downloads:
+## Optional technical-debt review
 
-- **laya**, the Kev inference server, from [monatis/ggmlc releases](https://github.com/monatis/ggmlc/releases).
-  It picks `cuda-sm89` when `nvidia-smi` exists (it JIT-compiles for newer GPUs), else `vulkan`, or
-  `metal` on macOS. Override with `--backend`. On Windows CUDA it also fetches the CUDA 12 runtime
-  and cuBLAS DLLs from NVIDIA's wheels.
-- **Kev-4B** from [mys/kev-4b-GGUF](https://huggingface.co/mys/kev-4b-GGUF) (4.5 GB for Q8_0).
+Technical-debt review does not need a local model. After building a matching source binary,
+enable `[capabilities] debt=true`, restart the client and check discovery for
+`technical_debt_critic`. Start offline. `kritic debt --online` authorizes public package
+metadata lookup; `kritic doctor --online` probes the configured reviewer and is a different
+action. No source content or environment-variable values are needed for dependency lookup.
 
-The vision model is separate:
+## Optional local models
 
 ```bash
-ollama pull qwen2.5vl:7b
+kritic setup --yes --backend local --no-vision --no-harness --no-scanners --no-register
+# Separate opt-in: installs/starts Ollama and pulls the vision model where supported.
+kritic setup --yes --vision --no-harness --no-scanners --no-register
 ```
 
-Scanners are optional. For example:
-[gitleaks](https://github.com/gitleaks/gitleaks/releases),
-[osv-scanner](https://github.com/google/osv-scanner/releases),
-`uv tool install semgrep bandit ruff`, and `cargo install cargo-audit`.
+Kev Q8's recorded footprint is about 5 GB: recommend an 8 GB GPU after allowing roughly
+1.5–2 GB for desktop/display/browser use plus slack. A 6 GB GPU is borderline. Vision has a
+6 GB download plus runtime buffers: 8 GB is tight, 12 GB recommended. Kritic coordinates
+one selected local model at a time; other applications still consume VRAM.
 
-## Register with Claude Code
+The available mixed Q4 Kev file is about 4.21 GB versus Q8's 4.50 GB; it is not a 2 GB model.
+Changed or unverified quantization is advisory. Local gates require runtime health metadata
+matching the configured model, Q8 quantization and GGUF path; older health endpoints stay unscored
+for approval while still returning advisory model assessments. CPU-only Kev is an optional, slower path
+(`kev.cpu_only=true`); no CPU latency promise is made. No local inference is launched by default.
 
-```bash
-claude mcp add --scope user kritic -- ~/.kritic/bin/kritic
-```
-
-Use the absolute path on Windows (`C:/Users/<you>/.kritic/bin/kritic.exe`). Then copy the skill, the
-UX agent and the CLAUDE.md rule so Claude uses kritic at the end of each task:
-
-```bash
-cp -r examples/claude/skills/kritic ~/.claude/skills/
-cp examples/claude/agents/ux-critic.md ~/.claude/agents/
-cat examples/claude/CLAUDE.md >> ~/.claude/CLAUDE.md
-```
-
-Any MCP client works: kritic speaks MCP over stdio. [`examples/mcp.json`](../examples/mcp.json)
-is a project-scoped `.mcp.json`.
-
-## Check it
-
-Start a new Claude Code session and ask it to call kritic's `status` tool with `start=true`. It
-reports whether laya is up, which paths it resolved, the config file it read and any errors in it,
-every calibrated gate, and the live event stream URL. The first Kev call after laya starts takes
-about 40 s while CUDA JIT-compiles its kernels; the compiled kernels are cached in
-`kev.cuda_cache`, so later starts take about 13 s.
-
-Next: [configuration](configuration.md), [tools](tools.md), [Claude Code integration](claude-code.md).
+Cloud and existing-agent alternatives: [cloud reviewers](cloud.md).

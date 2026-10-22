@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
         // An MCP client pipes stdin; a person at a terminal gets pointed somewhere useful.
         None if std::io::stdin().is_terminal() => {
             eprintln!(
-                "kritic {}: local, advisory end-of-task review for coding agents.\n\n  kritic setup     install the model and tools, connect Claude Code / Hermes\n  kritic doctor    check what works and what to fix\n  kritic --help    everything else\n\nWith no command and a piped stdin, kritic runs as an MCP server.",
+                "kritic {}: local, advisory end-of-task review for coding agents.\n\n  kritic setup     install deterministic tools, connect your agent (models optional)\n  kritic doctor    check what works and what to fix\n  kritic --help    everything else\n\nWith no command and a piped stdin, kritic runs as an MCP server.",
                 env!("CARGO_PKG_VERSION")
             );
             Ok(())
@@ -51,5 +51,34 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Uninstall(a)) => exit_on(kritic::cli::uninstall(a)),
         Some(Cmd::Context(a)) => exit_on(kritic::cli::context::run(a).await),
         Some(Cmd::Key(a)) => exit_on(kritic::cli::key(a)),
+        Some(Cmd::History(a)) => exit_on(kritic::cli::history::run(a)),
+        Some(Cmd::Debt(a)) => exit_on(kritic::cli::debt::run(a).await),
+        Some(Cmd::Framing(a)) => exit_on(kritic::cli::framing::run(a).await),
+        Some(Cmd::Staleness(a)) => exit_on(kritic::cli::staleness::run(a)),
+        Some(Cmd::Repository(a)) => match kritic::cli::repository::run(a) {
+            Ok(true) => std::process::exit(0),
+            Ok(false) => std::process::exit(1),
+            Err(e) => exit_on(Err(e)),
+        },
+        Some(Cmd::Contract(a)) => {
+            let cfg = Config::load();
+            if !cfg.capability("contracts") || !cfg.tool_enabled("contract_critic") {
+                exit_on(Err("contract capability is disabled".into()));
+            }
+            let result = kritic::contract::critique(
+                &cfg,
+                &a.base_dir,
+                a.path.as_deref(),
+                &a.task,
+                a.run_commands,
+            )
+            .await;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            std::process::exit(match result.approval {
+                Some(true) => 0,
+                Some(false) => 1,
+                None => 2,
+            });
+        }
     }
 }

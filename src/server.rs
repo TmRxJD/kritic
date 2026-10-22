@@ -18,7 +18,7 @@ use crate::phase3::{
 };
 use crate::tools::{
     RouteResult, StatusResult, TrimResult, ValidateInput, ValidateResult, artifact_validate, audit,
-    context_trim, git_diff, load_files, route, status,
+    context_trim, git_diff, load_files, route, route_codex, status,
 };
 use crate::ui::{UiOptions, UiResult};
 use crate::vision::VisualResult;
@@ -87,6 +87,27 @@ pub struct ValidateParams {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct ContractParams {
+    pub base_dir: String,
+    /// Default: .kritic/contract.toml. Files must stay inside base_dir.
+    #[serde(default)]
+    pub contract_path: Option<String>,
+    #[serde(default)]
+    pub task: String,
+    /// Explicit execution opt-in. Review the contract's shell commands first.
+    #[serde(default)]
+    pub run_commands: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RepositoryParams {
+    pub base_dir: String,
+    /// Check the Git index and current scope plan; false audits tracked working-tree source.
+    #[serde(default)]
+    pub staged: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct MapParams {
     /// Path to a map file (Beat Saber difficulty .dat / JSON).
     #[serde(default)]
@@ -110,6 +131,9 @@ pub struct RouteParams {
     pub hints: String,
     #[serde(default)]
     pub artifact_type: String,
+    /// Codex is the default; true preserves legacy local_worker/Haiku/Sonnet/Opus advice.
+    #[serde(default)]
+    pub legacy_routing: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -132,6 +156,46 @@ fn default_min_rel() -> f64 {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+pub struct LocateParams {
+    /// What you have to build or fix, as you would say it to a colleague.
+    pub task: String,
+    /// Repo root.
+    pub base_dir: String,
+    #[serde(default = "default_top_k")]
+    pub top_k: usize,
+    /// Skip the requirements checklist.
+    #[serde(default)]
+    pub no_checklist: bool,
+}
+fn default_top_k() -> usize {
+    6
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DecideOption {
+    pub id: String,
+    /// What choosing it means.
+    pub meaning: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DecideParams {
+    pub question: String,
+    /// The facts the decision rests on (at most ~1,400 characters).
+    #[serde(default)]
+    pub context: String,
+    /// 2-12 options; leave empty for a yes/no question.
+    #[serde(default)]
+    pub options: Vec<DecideOption>,
+    /// Below this probability the result says `escalate`.
+    #[serde(default = "default_threshold")]
+    pub threshold: f64,
+}
+fn default_threshold() -> f64 {
+    0.75
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct VisualParams {
     /// Screenshot file to review (png/jpg).
     #[serde(default)]
@@ -142,6 +206,15 @@ pub struct VisualParams {
     /// Optional context: what the screen is for, target users, design system.
     #[serde(default)]
     pub metadata: String,
+    /// Craft target; defaults to vision.quality_target (professional). AAA is a showcase alias.
+    #[serde(default)]
+    pub quality_target: Option<crate::visual_quality::QualityTarget>,
+    /// Optional extra floor from 0 to 10; cannot weaken the selected target's minimum.
+    #[serde(default)]
+    pub quality_min: Option<f64>,
+    /// Up to two local comparison screenshots, supplied with permission; subject remains image 1.
+    #[serde(default)]
+    pub reference_images: Vec<String>,
     #[serde(default = "yes")]
     pub full_page: bool,
     #[serde(default)]
@@ -536,6 +609,9 @@ pub struct StatusParams {
     /// Start laya if it is down (can take ~60s after a reboot).
     #[serde(default)]
     pub start: bool,
+    /// Include read-only setup actions for this target repository; no commands run.
+    #[serde(default)]
+    pub base_dir: Option<String>,
 }
 
 /// Holds the GPU lock for one tool call and reports ownership on the event bus.
@@ -611,7 +687,36 @@ pub struct TokenMetrics {
 
 #[tool_router(router = tool_router)]
 impl Kritic {
-    async fn gpu(&self, tool: &'static str) -> GpuGuard<'_> {
+    async fn gpu(&self, tool: &'static str) -> Option<GpuGuard<'_>> {
+        let workload = if matches!(tool, "visual_critic" | "ux_critic") {
+            crate::gpu::Workload::Vision
+        } else {
+            crate::gpu::Workload::Kev
+        };
+        self.gpu_for(tool, workload).await
+    }
+
+    async fn gpu_for(
+        &self,
+        tool: &'static str,
+        workload: crate::gpu::Workload,
+    ) -> Option<GpuGuard<'_>> {
+        match workload {
+            crate::gpu::Workload::Deterministic => return None,
+            crate::gpu::Workload::Kev
+                if !matches!(
+                    self.kev.resolve_backend().await,
+                    Ok(crate::kev::Backend::Local)
+                ) =>
+            {
+                return None;
+            }
+            crate::gpu::Workload::Vision if self.kev.cfg.vision_backend != "local" => return None,
+            _ => {}
+        }
+        if !crate::gpu::requires_gpu(self.kev.cfg.kev_cpu_only, workload) {
+            return None;
+        }
         let g = self.gpu.lock().await;
         // in-process first, then across sessions; if the cross-process wait times out the tool
         // still runs (slower if another session's model is resident) rather than failing
@@ -623,13 +728,28 @@ impl Kritic {
             }
         };
         crate::events::ready("gpu", "held", tool);
-        GpuGuard { _g: g, _x: x, tool }
+        Some(GpuGuard { _g: g, _x: x, tool })
     }
 
     pub fn new(cfg: Config) -> Self {
         let mut tool_router = Self::tool_router();
-        for name in &cfg.disabled_tools {
-            tool_router.disable_route(name.clone());
+        // Every tool result is also returned as text, so an output schema only adds tokens to the
+        // tool list the agent carries in every turn (about three quarters of it, measured).
+        for route in tool_router.map.values_mut() {
+            route.attr.output_schema = None;
+            if let Some(description) = crate::tool_metadata::description(route.attr.name.as_ref()) {
+                route.attr.description = Some(description.into());
+            }
+            crate::tool_metadata::compact_schema(Arc::make_mut(&mut route.attr.input_schema));
+        }
+        let disabled: Vec<_> = tool_router
+            .map
+            .keys()
+            .filter(|name| !cfg.tool_enabled(name))
+            .cloned()
+            .collect();
+        for name in disabled {
+            tool_router.disable_route(name);
         }
         Kritic {
             kev: Arc::new(KevClient::new(Arc::new(cfg))),
@@ -643,14 +763,22 @@ impl Kritic {
         let kev = self.kev.clone();
         let gpu = self.gpu.clone();
         tokio::spawn(async move {
-            let _g = gpu.lock().await;
-            let _x = crate::gpu::lock_across_processes(&kev.cfg, "warm-up")
-                .await
-                .ok();
             // Only a local backend has anything to warm; cloud and off resolve without a GPU.
             if !matches!(kev.resolve_backend().await, Ok(crate::kev::Backend::Local)) {
                 return;
             }
+            let _g = if kev.cfg.kev_cpu_only {
+                None
+            } else {
+                Some(gpu.lock().await)
+            };
+            let _x = if kev.cfg.kev_cpu_only {
+                None
+            } else {
+                crate::gpu::lock_across_processes(&kev.cfg, "warm-up")
+                    .await
+                    .ok()
+            };
             if let Err(e) = kev.ensure_up().await {
                 eprintln!("kritic: laya not started: {e}");
             }
@@ -667,7 +795,201 @@ impl Kritic {
         &self,
         Parameters(p): Parameters<StatusParams>,
     ) -> Result<Json<StatusResult>, String> {
-        Ok(Json(status(&self.kev, p.start).await))
+        let project_setup = match p.base_dir {
+            Some(base) => {
+                let cfg = self.kev.cfg.clone();
+                Some(
+                    tokio::task::spawn_blocking(move || {
+                        crate::setup_guidance::inspect(&cfg, &base)
+                    })
+                    .await
+                    .map_err(|e| format!("project setup worker: {e}"))??,
+                )
+            }
+            None => None,
+        };
+        let mut result = status(&self.kev, p.start).await;
+        result.project_setup = project_setup;
+        Ok(Json(result))
+    }
+
+    /// Audit a work contract against fresh checks, hashed evidence and declared CI/hook wiring.
+    /// Prose-only requirements remain unverified. No model or GPU required; commands run only
+    /// with explicit run_commands=true. Checks cannot prove more than their assertions cover.
+    #[tool(name = "contract_critic")]
+    pub async fn contract_critic(
+        &self,
+        Parameters(p): Parameters<ContractParams>,
+    ) -> Result<Json<crate::contract::ContractResult>, String> {
+        let t0 = started("contract_critic");
+        let r = crate::contract::critique(
+            &self.kev.cfg,
+            std::path::Path::new(&p.base_dir),
+            p.contract_path.as_deref(),
+            &p.task,
+            p.run_commands,
+        )
+        .await;
+        finished("contract_critic", t0, &r);
+        audit(&self.kev.cfg, "contract_critic", &r);
+        Ok(Json(r))
+    }
+
+    /// Explicit, opt-in historical review snapshots. Records are unverified evidence, never a
+    /// fresh check or cached approval. Export writes a sanitized jcode-format artifact only.
+    #[tool(name = "review_history")]
+    pub async fn review_history(
+        &self,
+        Parameters(p): Parameters<crate::history_api::Request>,
+    ) -> Result<Json<serde_json::Value>, String> {
+        let cfg = self.kev.cfg.clone();
+        tokio::task::spawn_blocking(move || crate::history_api::execute(&cfg, p))
+            .await
+            .map_err(|e| format!("history worker: {e}"))?
+            .map(Json)
+    }
+
+    /// Rank dependency and maintenance debt without changing the project. Registry requests
+    /// require explicit online=true; migration difficulty is estimated, never a successful update.
+    #[tool(name = "technical_debt_critic")]
+    pub async fn technical_debt_critic(
+        &self,
+        Parameters(p): Parameters<crate::debt::Request>,
+    ) -> Result<Json<crate::debt::DebtReport>, String> {
+        let t0 = started("technical_debt_critic");
+        let mut report = crate::debt::execute(&self.kev.cfg, p).await?;
+        report.full_result =
+            crate::tools::save_full(&self.kev.cfg, "technical_debt_critic", &report);
+        report.items.truncate(crate::tools::MAX_ITEMS);
+        report.coverage_gaps.truncate(crate::tools::MAX_ITEMS);
+        finished("technical_debt_critic", t0, &report);
+        audit(&self.kev.cfg, "technical_debt_critic", &report);
+        Ok(Json(report))
+    }
+
+    /// Check supplied debugging evidence without executing commands or trusting a model verdict.
+    #[tool(name = "framing_critic")]
+    pub async fn framing_critic(
+        &self,
+        Parameters(p): Parameters<crate::framing::Request>,
+    ) -> Result<Json<crate::framing::Report>, String> {
+        if !self.kev.cfg.tool_enabled("framing_critic") {
+            return Err(
+                "framing capability is disabled; enable capabilities.framing explicitly".into(),
+            );
+        }
+        let t0 = started("framing_critic");
+        let mut report = tokio::task::spawn_blocking(move || crate::framing::execute(&p))
+            .await
+            .map_err(|e| format!("framing worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "framing_critic", &report);
+        if report.full_result.is_none() {
+            return Err("framing report could not be saved; review packet retained only in memory; fix runs_dir and retry".into());
+        }
+        // Full detail is already on disk; discovery and normal responses stay small.
+        report.findings.truncate(10);
+        report.evidence.truncate(10);
+        for finding in &mut report.findings {
+            finding.detail = finding.detail.chars().take(512).collect();
+        }
+        for evidence in &mut report.evidence {
+            evidence.path = evidence.path.chars().take(256).collect();
+            evidence.detail = evidence.detail.chars().take(512).collect();
+        }
+        report.review_packet = serde_json::json!({
+            "note": "Response limited to 10 findings/evidence entries and shortened details. Read full_result for all entries and independent-review packet. Supplied artifacts are not execution attestation."
+        });
+        finished("framing_critic", t0, &report);
+        audit(&self.kev.cfg, "framing_critic", &report);
+        Ok(Json(report))
+    }
+
+    /// Read-only canonical ownership and test-currency audit. Fixtures sync only via explicit CLI.
+    #[tool(name = "staleness_critic")]
+    pub async fn staleness_critic(
+        &self,
+        Parameters(p): Parameters<crate::staleness::Request>,
+    ) -> Result<Json<crate::staleness::Report>, String> {
+        if !self.kev.cfg.tool_enabled("staleness_critic") {
+            return Err("staleness disabled; enable capabilities.staleness=true and reconnect, or use the standalone staleness CLI".into());
+        }
+        let t0 = started("staleness_critic");
+        let mut report = tokio::task::spawn_blocking(move || crate::staleness::execute(&p))
+            .await
+            .map_err(|e| format!("staleness worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "staleness_critic", &report);
+        if report.full_result.is_none() {
+            return Err("Staleness report could not be saved; fix runs_dir and retry".into());
+        }
+        report.findings.truncate(10);
+        report.observed.truncate(10);
+        report.review_notes.truncate(10);
+        report.invariant_evidence.truncate(10);
+        finished("staleness_critic", t0, &report);
+        audit(&self.kev.cfg, "staleness_critic", &report);
+        Ok(Json(report))
+    }
+
+    /// Audit declared key-boundary guards and negative tests; no model or commands run.
+    #[tool(name = "invariant_critic")]
+    pub async fn invariant_critic(
+        &self,
+        Parameters(p): Parameters<crate::staleness::Request>,
+    ) -> Result<Json<crate::staleness::Report>, String> {
+        if !self.kev.cfg.tool_enabled("invariant_critic") {
+            return Err("invariants disabled; enable capabilities.invariants=true and reconnect, or use kritic staleness invariants".into());
+        }
+        let t0 = started("invariant_critic");
+        let mut report = tokio::task::spawn_blocking(move || {
+            crate::staleness::check_invariants(
+                std::path::Path::new(&p.base_dir),
+                p.manifest_path.as_deref(),
+            )
+        })
+        .await
+        .map_err(|e| format!("invariant worker: {e}"))??;
+        report.full_result = crate::tools::save_full(&self.kev.cfg, "invariant_critic", &report);
+        if report.full_result.is_none() {
+            return Err("Invariant report could not be saved; fix runs_dir and retry".into());
+        }
+        report.findings.truncate(10);
+        report.observed.truncate(10);
+        report.review_notes.truncate(10);
+        report.invariant_evidence.truncate(10);
+        finished("invariant_critic", t0, &report);
+        audit(&self.kev.cfg, "invariant_critic", &report);
+        Ok(Json(report))
+    }
+
+    /// Deterministic staged commit size/scope and repository-owned organization policy.
+    /// No model required. Approval covers declared rules, not semantic cohesion or comment quality.
+    #[tool(name = "repository_critic")]
+    pub async fn repository_critic(
+        &self,
+        Parameters(p): Parameters<RepositoryParams>,
+    ) -> Result<Json<crate::repository::RepositoryReport>, String> {
+        let t0 = started("repository_critic");
+        let base = std::path::PathBuf::from(p.base_dir);
+        let mut r = tokio::task::spawn_blocking(move || crate::repository::check(&base, p.staged))
+            .await
+            .map_err(|e| format!("repository audit worker: {e}"))??;
+        r.full_result = crate::tools::save_full(&self.kev.cfg, "repository_critic", &r);
+        r.organization.files.truncate(crate::tools::MAX_ITEMS);
+        r.organization.violations.truncate(crate::tools::MAX_ITEMS);
+        r.organization
+            .recommendations
+            .truncate(crate::tools::MAX_ITEMS);
+        r.excluded_paths.truncate(crate::tools::MAX_ITEMS);
+        r.source_coverage_errors.truncate(crate::tools::MAX_ITEMS);
+        r.source_warnings.truncate(crate::tools::MAX_ITEMS);
+        if let Some(commit) = &mut r.commit {
+            commit.staged_paths.truncate(crate::tools::MAX_ITEMS);
+            commit.binary_paths.truncate(crate::tools::MAX_ITEMS);
+            commit.findings.truncate(crate::tools::MAX_ITEMS);
+        }
+        finished("repository_critic", t0, &r);
+        audit(&self.kev.cfg, "repository_critic", &r);
+        Ok(Json(r))
     }
 
     /// End-of-task critic (Kev-4B). Prefer git_diff=true in a git repo: scores changed hunks
@@ -681,6 +1003,14 @@ impl Kritic {
         &self,
         Parameters(p): Parameters<CriticParams>,
     ) -> Result<Json<CriticResult>, String> {
+        // The parent deadline starts BEFORE GPU queueing, file loading and
+        // completeness. Inner per-pass/request limits cannot extend it.
+        crate::critic::Deadline::new(&self.kev.cfg)
+            .bound(self.critic_score_inner(p), 0, 0)
+            .await
+    }
+
+    async fn critic_score_inner(&self, p: CriticParams) -> Result<Json<CriticResult>, String> {
         let t0 = started("critic_score");
         let cfg = &self.kev.cfg;
         let _gpu = self.gpu("critic_score").await;
@@ -691,7 +1021,6 @@ impl Kritic {
                 None => git_diff(p.base_dir.as_deref(), &p.paths).await?,
             };
             let mut r = critic_diff(self.kev.as_ref(), cfg, &p.task, &diff, p.revision).await;
-            r.flagged_chunks.truncate(15);
             r.flagged_chunks.truncate(15);
             finished("critic_score", t0, &r);
             audit(cfg, "critic_score", &r);
@@ -727,8 +1056,15 @@ impl Kritic {
     ) -> Result<Json<ValidateResult>, String> {
         let t0 = started("artifact_validate");
         let cfg = &self.kev.cfg;
-        let _gpu = self.gpu("artifact_validate").await;
-        crate::gpu::unload_vision(cfg).await;
+        let workload = if p.use_model {
+            crate::gpu::Workload::Kev
+        } else {
+            crate::gpu::Workload::Deterministic
+        };
+        let _gpu = self.gpu_for("artifact_validate", workload).await;
+        if p.use_model {
+            crate::gpu::unload_vision(cfg).await;
+        }
         let r = artifact_validate(
             self.kev.as_ref(),
             cfg,
@@ -778,8 +1114,8 @@ impl Kritic {
         Ok(Json(r))
     }
 
-    /// Second-opinion worker suggestion (local_worker | haiku | sonnet | opus) with calibrated
-    /// probabilities. Never overrides the user's model-routing rules.
+    /// Typed Codex routing: Sol standard, Astra hard, Luna basic. Kev/JEV classifies only.
+    /// Conservative recommendations are advisory; low confidence or errors stay on Sol.
     #[tool(name = "route")]
     pub async fn route_tool(
         &self,
@@ -788,9 +1124,69 @@ impl Kritic {
         let t0 = started("route");
         let _gpu = self.gpu("route").await;
         crate::gpu::unload_vision(&self.kev.cfg).await;
-        let r = route(self.kev.as_ref(), &p.task, &p.hints, &p.artifact_type).await;
+        let r = if p.legacy_routing {
+            route(self.kev.as_ref(), &p.task, &p.hints, &p.artifact_type).await
+        } else {
+            route_codex(self.kev.as_ref(), &p.task, &p.hints, &p.artifact_type).await
+        };
         finished("route", t0, &r);
         audit(&self.kev.cfg, "route", &r);
+        Ok(Json(r))
+    }
+
+    /// Which files does this task need? Kev ranks the repo's files (keyword prefilter, then a
+    /// typed yes/no per candidate) so you read the top few instead of searching. Also returns a
+    /// checklist of requirements the task implies (e.g. an entry point for a new mode).
+    #[tool(name = "locate")]
+    pub async fn locate_tool(
+        &self,
+        Parameters(p): Parameters<LocateParams>,
+    ) -> Result<Json<crate::scout::LocateResult>, String> {
+        let t0 = started("locate");
+        let cfg = &self.kev.cfg;
+        let _gpu = self.gpu("locate").await;
+        crate::gpu::unload_vision(cfg).await;
+        let o = crate::scout::LocateOptions {
+            top_k: p.top_k.clamp(1, 40),
+            prefilter: 40,
+            deadline: std::time::Duration::from_secs(90),
+            checklist: !p.no_checklist,
+        };
+        let r = crate::scout::locate(
+            self.kev.as_ref(),
+            std::path::Path::new(&p.base_dir),
+            &p.task,
+            &o,
+        )
+        .await;
+        finished("locate", t0, &r);
+        audit(cfg, "locate", &r);
+        Ok(Json(r))
+    }
+
+    /// A typed decision from Kev: pick one of the options, or answer yes/no, with a probability.
+    /// `escalate: true` means Kev is unsure: decide it yourself.
+    #[tool(name = "decide")]
+    pub async fn decide_tool(
+        &self,
+        Parameters(p): Parameters<DecideParams>,
+    ) -> Result<Json<crate::scout::DecideResult>, String> {
+        let t0 = started("decide");
+        let cfg = &self.kev.cfg;
+        let _gpu = self.gpu("decide").await;
+        crate::gpu::unload_vision(cfg).await;
+        let opts: Vec<(String, String)> =
+            p.options.into_iter().map(|o| (o.id, o.meaning)).collect();
+        let r = crate::scout::decide(
+            self.kev.as_ref(),
+            &p.question,
+            &p.context,
+            &opts,
+            p.threshold.clamp(0.5, 0.99),
+        )
+        .await;
+        finished("decide", t0, &r);
+        audit(cfg, "decide", &r);
         Ok(Json(r))
     }
 
@@ -820,11 +1216,10 @@ impl Kritic {
         Ok(Json(r))
     }
 
-    /// Visual critic (Qwen2.5-VL via Ollama): scores a screenshot 0-10 on layout clarity,
-    /// spacing/alignment, visual hierarchy, color contrast, accessibility. Approval = every score
-    /// >= 6. Issue phrases are `unverified_observations` (the model sometimes invents them); use
-    /// ui_test's axe results for verified contrast/a11y problems. Pass image_path or url.
-    /// Stops laya to free the GPU (Kev restarts on its next call, ~13s).
+    /// Visual critic: provisional, evidence-linked craft assessment against functional,
+    /// professional or showcase targets. Typography, composition, identity, assets and detail
+    /// are separate from functional/a11y checks. Approval is always null: the revised rubric is
+    /// uncalibrated and screenshots cannot certify product-wide AAA quality. Verify observations.
     #[tool(name = "visual_critic")]
     pub async fn visual_critic(
         &self,
@@ -832,6 +1227,18 @@ impl Kritic {
     ) -> Result<Json<VisualResult>, String> {
         let t0 = started("visual_critic");
         let cfg = &self.kev.cfg;
+        let target = match p.quality_target {
+            Some(target) => target,
+            None => crate::visual_quality::QualityTarget::parse(&cfg.visual_quality_target)?,
+        };
+        let minimum = p.quality_min.unwrap_or(cfg.visual_min);
+        if !minimum.is_finite() || !(0.0..=10.0).contains(&minimum) {
+            return Err("quality_min must be finite and between 0 and 10".into());
+        }
+        let minimum = minimum.max(cfg.visual_min);
+        if p.reference_images.len() > 2 {
+            return Err("at most two reference_images are supported".into());
+        }
         let image = match (&p.image_path, &p.url) {
             (Some(path), _) => std::path::PathBuf::from(path),
             (None, Some(url)) => {
@@ -843,7 +1250,20 @@ impl Kritic {
             (None, None) => return Err("give image_path or url".into()),
         };
         let _gpu = self.gpu("visual_critic").await;
-        let r = crate::vision::critique(cfg, &image, &p.metadata).await;
+        let references = p
+            .reference_images
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<_>>();
+        let r = crate::vision::critique_with_references(
+            cfg,
+            &image,
+            &p.metadata,
+            target,
+            minimum,
+            &references,
+        )
+        .await;
         finished("visual_critic", t0, &r);
         audit(cfg, "visual_critic", &r);
         Ok(Json(r))
@@ -908,8 +1328,15 @@ impl Kritic {
     ) -> Result<Json<SecurityResult>, String> {
         let t0 = started("security_critic");
         let cfg = &self.kev.cfg;
-        let _gpu = self.gpu("security_critic").await;
-        crate::gpu::unload_vision(cfg).await;
+        let workload = if p.triage {
+            crate::gpu::Workload::Kev
+        } else {
+            crate::gpu::Workload::Deterministic
+        };
+        let _gpu = self.gpu_for("security_critic", workload).await;
+        if p.triage {
+            crate::gpu::unload_vision(cfg).await;
+        }
         let base = std::path::PathBuf::from(&p.base_dir);
         if !base.is_dir() {
             return Err(format!("base_dir is not a directory: {}", p.base_dir));
@@ -936,8 +1363,14 @@ impl Kritic {
     ) -> Result<Json<QualityResult>, String> {
         let t0 = started("code_quality_critic");
         let cfg = &self.kev.cfg;
-        let _gpu = self.gpu("code_quality_critic").await;
-        crate::gpu::unload_vision(cfg).await;
+        let _gpu = if p.use_kev {
+            self.gpu("code_quality_critic").await
+        } else {
+            None
+        };
+        if p.use_kev {
+            crate::gpu::unload_vision(cfg).await;
+        }
         let base = std::path::PathBuf::from(&p.base_dir);
         if !base.is_dir() {
             return Err(format!("base_dir is not a directory: {}", p.base_dir));
@@ -974,8 +1407,26 @@ impl Kritic {
             },
         )
         .await;
+        if !lf.skipped.is_empty() {
+            if r.approval == Some(true) {
+                r.approval = None;
+            }
+            r.quality_score = None;
+            r.reasons.extend(
+                lf.skipped
+                    .iter()
+                    .map(|f| format!("requested file not analyzed: {} ({})", f.path, f.reason)),
+            );
+        }
         r.full_result = crate::tools::save_full(cfg, "code_quality_critic", &r);
         r.lint_findings.truncate(crate::tools::MAX_ITEMS);
+        if let Some(organization) = &mut r.organization {
+            organization.files.truncate(crate::tools::MAX_ITEMS);
+            organization.violations.truncate(crate::tools::MAX_ITEMS);
+            organization
+                .recommendations
+                .truncate(crate::tools::MAX_ITEMS);
+        }
         finished("code_quality_critic", t0, &r);
         audit(cfg, "code_quality_critic", &r);
         Ok(Json(r))
@@ -1174,30 +1625,42 @@ impl Kritic {
             p.stall_s,
             &out_dir,
         );
-        let novice_requested = p.novice != "off";
+        let novice_mode =
+            if p.novice == "auto" && cfg.vision_backend == "off" && cfg.backend == "off" {
+                "off"
+            } else {
+                p.novice.as_str()
+            };
+        let novice_requested = novice_mode != "off";
         match crate::ux::AppAdapter::launch(cfg, &spec, start, p.stall_s).await {
             Err(e) => run.fail(e),
             Ok(mut a) => {
                 run.explore(&mut a).await;
                 if novice_requested && run.wants_novice() {
-                    // only the novice needs a model: hold the GPU for that part alone
-                    let _gpu = self.gpu("ux_critic").await;
-                    let vision_up = match p.novice.as_str() {
+                    let vision_up = match novice_mode {
                         "kev" => Err("kev requested".to_string()),
                         _ => {
                             let http = reqwest::Client::new();
                             crate::vision::ensure_ollama(&http, cfg).await
                         }
                     };
-                    match (p.novice.as_str(), vision_up) {
+                    let workload = if vision_up.is_ok() {
+                        crate::gpu::Workload::Vision
+                    } else {
+                        crate::gpu::Workload::Kev
+                    };
+                    let _gpu = self.gpu_for("ux_critic", workload).await;
+                    match (novice_mode, vision_up) {
                         ("vision", Err(e)) => run.set_novice_error(&cfg.vision_model, e),
                         ("vision" | "auto", Ok(())) => {
-                            crate::gpu::stop_laya(cfg).await;
+                            if cfg.vision_backend == "local" {
+                                crate::gpu::stop_laya(cfg).await;
+                            }
                             run.novice(
                                 &mut a,
                                 &crate::ux::VisionNav { cfg },
                                 &cfg.vision_model,
-                                true,
+                                cfg.vision_backend == "local" && cfg.vision_model == "qwen2.5vl:7b",
                             )
                             .await;
                         }
@@ -1465,12 +1928,60 @@ impl ServerHandler for Kritic {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("kritic", env!("CARGO_PKG_VERSION")))
-            .with_instructions(
-            "kritic: advisory end-of-task review. After finishing a task that changed code/config/map files: \
-             critic_score(git_diff or paths, task) then artifact_validate(paths, commands, use_model=false); map_eval for maps; \
-             for web UIs also ui_test(url) and visual_critic(url); for any UI change ux_critic(base_dir) with the repo's \
-             .kritic/ux.toml, then hand its critic_brief to the ux-critic agent (hard fails mean restructure, not patch). \
-             Revise at most twice (revision=1,2). Never fabricate scores; if kev_ok=false report the critic as offline.",
-        )
+            .with_instructions(crate::tool_metadata::INSTRUCTIONS)
+    }
+}
+
+#[cfg(test)]
+mod gpu_tests {
+    use super::Kritic;
+    use crate::gpu::{Workload, requires_gpu};
+
+    #[test]
+    fn cpu_kev_and_deterministic_work_leave_vision_protected() {
+        for cpu_only in [false, true] {
+            assert!(!requires_gpu(cpu_only, Workload::Deterministic));
+            assert!(requires_gpu(cpu_only, Workload::Vision));
+            assert_eq!(requires_gpu(cpu_only, Workload::Kev), !cpu_only);
+        }
+    }
+
+    #[tokio::test]
+    async fn cpu_and_deterministic_calls_bypass_a_held_gpu_mutex() {
+        for cpu_only in [false, true] {
+            let mut cfg = crate::config::Config::load();
+            cfg.kev_cpu_only = cpu_only;
+            cfg.backend = "local".into();
+            cfg.vision_backend = "local".into();
+            let server = Kritic::new(cfg);
+            let _held = server.gpu.lock().await;
+            for tool in ["artifact_validate", "security_critic"] {
+                let guard = tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    server.gpu_for(tool, Workload::Deterministic),
+                )
+                .await
+                .expect("deterministic checks must not queue for GPU");
+                assert!(guard.is_none());
+            }
+            if cpu_only {
+                let guard = tokio::time::timeout(
+                    std::time::Duration::from_millis(100),
+                    server.gpu("critic_score"),
+                )
+                .await
+                .expect("CPU Kev must not queue for GPU");
+                assert!(guard.is_none());
+            }
+            assert!(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(10),
+                    server.gpu("visual_critic")
+                )
+                .await
+                .is_err(),
+                "vision must still wait for GPU"
+            );
+        }
     }
 }

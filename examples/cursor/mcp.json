@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kritic": {
+      "command": "E:/AI/kritic/bin/kritic.exe",
+      "args": ["serve"],
+      "env": {
+        "KRITIC_HOME": "E:/AI/kritic"
+      }
+    }
+  }
+}

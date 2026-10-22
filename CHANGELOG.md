@@ -1,5 +1,70 @@
 # Changelog
 
+## Unreleased
+
+- Optional model-free test-staleness and invariant review share one canonical ownership/test
+  manifest, bounded inventory, reviewed hashes and explicit JSON fixture projection. Work-contract
+  checks use the same graph. No automatic test blessing or semantic/execution attestation.
+
+- Refresh certificate-verification dependencies and the optional desktop harness's Pillow
+  dependency for newly published security advisories; the CPU benchmark also explicitly pins
+  a patched certifi release for reused environments. No model download is required.
+
+- Project-aware, read-only setup guidance for every tool through optional `status(base_dir)`
+  and `doctor --base-dir`; scoped contract loading errors now include recovery steps. The
+  packaged skill includes an offline setup reference rather than passing raw missing-file errors
+  to users. Presence checks never establish readiness, execution or acceptance.
+
+- Optional deterministic debugging-framing review and a local independent-review packet, with
+  explicit artifact/context binding and linked causal evidence. Disabled by default; no root-cause
+  attestation, automatic commands, network/indexing or model inference. The framing-only stalled-debugging
+  exception leaves ordinary critics at end of task. Published test.4 binaries predate this feature.
+
+- Compact MCP discovery: short shared instructions and tool summaries; redundant schema
+  titles/examples/empty defaults are omitted. All tools, input constraints, field descriptions,
+  meaningful defaults and execution opt-ins remain available. No tools are disabled to save tokens.
+
+## 0.5.0-test.4 — test release
+
+- Optional, disabled-by-default technical-debt review: offline dependency inventory, pnpm v9
+  workspace resolutions, explicit maintenance/migration notes and bounded comment-marker leads.
+  Online public-registry evidence is separately authorized; urgency/effort remain advisory,
+  with no automatic upgrades or compatibility guarantee.
+- Corrected the MCP review-history output schema to declare object-shaped results; regression
+  coverage guards client schema validation. The packaged MCP server uses the corrected schema.
+
+- Optional, disabled-by-default review history: explicit reports and input/context hashes,
+  bounded historical comparison and sanitized low-trust jcode-format export. No cached approval,
+  automatic indexing, live jcode modification or demonstrated memory-savings claim.
+
+- Model-free repository policy review and explicit staged-index hooks, with broad/focused/atomic
+  commit budgets, tree-bound scope plans and declared naming/layer/import rules.
+- Ordinary code-quality review includes physical/nonblank file sizes, oversized-file baselines
+  and explanatory-comment review signals. Static compliance is not semantic architecture approval.
+- Stricter provisional visual-quality rubric and an optional CPU semantic-map benchmark;
+  no embedding candidate met the declared retrieval gate.
+- Explicit external ownership of Kev/vision services prevents Kritic from starting, stopping
+  or unloading services managed by the user or an external router. GPU routing stays with that owner.
+
+## 0.5.0-test.3 — published test release
+
+[Published release and packaged binaries](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.3).
+Deterministic checks are the default; local/cloud reviewers remain optional. The release includes
+the test-release skill, work contracts, capability configuration and client setup documentation.
+New repository enforcement and expanded organization review are included in test.4 above.
+
+## 0.5.0-test.1 — historical preparation (not published)
+
+- Test-release skill: independently verify critic claims, evaluate workflow viability, reproduce
+  and fix Kritic defects with regressions and upstream PRs.
+- Deterministic-by-default setup/config; local models and cloud reviewers explicitly optional.
+- OpenAI/OpenAI-compatible, Anthropic, Gemini and JEV transports; optional cloud vision,
+  strict bounded responses, redacted errors, provider-origin-bound saved credentials.
+- Work contracts: declared acceptance checks, coverage gaps, current input hashes, stale evidence,
+  final revalidation, separately reported static enforcement wiring and prose sources.
+- Capability/tool toggles, no GPU side effects for cloud/off, scoped calibration provenance,
+  rejection of empty/skipped/vacuous approvals, synchronized docs and offline CI.
+
 ## 0.4.0 — 2026-09-29: kritic
 
 First public release, under the name **kritic** ("k" for Kev). Earlier versions (0.1–0.3) were a

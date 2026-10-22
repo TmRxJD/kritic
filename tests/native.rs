@@ -9,15 +9,14 @@ use kritic::native::resource::{resource, slope};
 use serde_json::json;
 
 fn python() -> Option<String> {
-    ["python", "python3"]
-        .into_iter()
-        .find(|p| {
-            std::process::Command::new(p)
-                .arg("--version")
-                .output()
-                .is_ok_and(|o| o.status.success())
-        })
-        .map(String::from)
+    ["python", "python3"].into_iter().find_map(|p| {
+        let output = std::process::Command::new(p)
+            .args(["-c", "import sys; print(sys.executable)"])
+            .output()
+            .ok()?;
+        let resolved = String::from_utf8(output.stdout).ok()?.trim().to_owned();
+        (output.status.success() && !resolved.is_empty()).then_some(resolved)
+    })
 }
 
 // The parent opens an inheritable listening socket, starts a child that inherits it, and exits:
@@ -183,7 +182,12 @@ fn leftover_globs_match_files() {
     assert!(found[0].ends_with("run.lock"));
     assert_eq!(glob(&format!("{base}/a/*.txt")).len(), 1);
     assert!(glob(&format!("{base}/none/*.x")).is_empty());
-    let a = audit(&[base.clone()], &[], &[format!("{base}/**/*.lock")], false);
+    let a = audit(
+        std::slice::from_ref(&base),
+        &[],
+        &[format!("{base}/**/*.lock")],
+        false,
+    );
     assert_eq!(a["leftovers"].as_array().unwrap().len(), 1);
 }
 
@@ -220,6 +224,9 @@ async fn resource_sampler_separates_a_leak_from_an_idle_process() {
     let quick = json!([python().unwrap(), "-c", "import time; time.sleep(1.5)"]);
     let r = resource(Some(quick), None, false, None, 6.0, 250, 0.2).await;
     assert_eq!(r["stats"]["exited_early"], true, "{r}");
+    assert_eq!(r["stats"]["exit_code"], 0, "{r}");
+    assert_eq!(r["stats"]["tree_completed"], true, "{r}");
+    assert_eq!(r["stats"]["procs_peak"], 1, "{r}");
     let r = resource(None, Some(std::process::id()), false, None, 1.0, 250, 0.0).await;
     assert!(r["error"].as_str().unwrap().contains("allow_attach"));
 }

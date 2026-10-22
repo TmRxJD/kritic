@@ -60,7 +60,7 @@ pub struct SecurityResult {
     pub findings: Vec<TriagedFinding>,
     pub counts: BTreeMap<String, usize>,
     /// 0-10, deterministic from counts: 10 - 3*critical - 2*high - 0.5*medium (floor 0).
-    pub security_score: f64,
+    pub security_score: Option<f64>,
     pub worst_severity: String,
     pub kev_ok: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -210,7 +210,7 @@ pub async fn security<D: Decider>(
     for f in &findings {
         *r.counts.entry(f.severity.clone()).or_default() += 1;
     }
-    r.security_score = security_score(&r.counts);
+    r.security_score = Some(security_score(&r.counts));
     r.worst_severity = findings
         .first()
         .map(|f| f.severity.clone())
@@ -304,9 +304,15 @@ pub async fn security<D: Decider>(
         ));
     }
     let failed = r.tools.iter().any(|t| t.status == "failed");
+    let covered = r.tools.iter().any(|t| t.status == "ran");
+    if failed || !covered {
+        r.security_score = None;
+        r.reasons
+            .push("security scan coverage is incomplete".into());
+    }
     r.approval = if !blocking.is_empty() {
         Some(false)
-    } else if failed {
+    } else if failed || !covered {
         None
     } else {
         Some(true)
@@ -333,6 +339,8 @@ pub struct QualityResult {
     pub lint_findings: Vec<Finding>,
     pub lint_counts: BTreeMap<String, usize>,
     pub functions_analyzed: usize,
+    /// Deterministic organization policy applied only to the explicitly supplied files.
+    pub organization: Option<crate::organization::OrganizationReport>,
     /// Worst functions by complexity, with Kev's maintainability judgment.
     pub hotspots: Vec<ScoredFunction>,
     pub duplicates: Vec<Duplicate>,
@@ -341,7 +349,7 @@ pub struct QualityResult {
     /// 0-10: 10 * (1 - line-weighted mean p_hard_to_maintain over hotspots). Null without Kev.
     pub maintainability: Option<f64>,
     /// 0-10, deterministic: starts at 10, minus lint/complexity/length/duplication penalties.
-    pub quality_score: f64,
+    pub quality_score: Option<f64>,
     /// low | medium | high, deterministic from the same signals.
     pub risk_level: String,
     pub kev_ok: Option<bool>,
@@ -372,6 +380,31 @@ pub async fn quality<D: Decider>(
         tool: "code_quality_critic".into(),
         advisory: true,
         ..Default::default()
+    };
+    let organization_policy = match std::fs::symlink_metadata(base.join(".kritic/repository.toml"))
+    {
+        Ok(_) => crate::repository::load(base, false).map(|policy| policy.organization),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Default::default()),
+        Err(error) => Err(format!("read repository organization policy: {error}")),
+    };
+    let organization_failed = match organization_policy {
+        Ok(policy) => {
+            let report = crate::organization::audit(files, &policy);
+            for violation in &report.violations {
+                r.reasons.push(format!(
+                    "organization {} at {}: {}",
+                    violation.code, violation.path, violation.message
+                ));
+            }
+            let failed = !report.approval;
+            r.organization = Some(report);
+            failed
+        }
+        Err(error) => {
+            r.reasons
+                .push(format!("organization policy failed: {error}"));
+            true
+        }
     };
     // 1. linters the project is set up for
     if opts.run_linters {
@@ -467,6 +500,15 @@ pub async fn quality<D: Decider>(
     r.max_complexity = fns.iter().map(|f| f.complexity).max().unwrap_or(0);
     r.max_function_lines = fns.iter().map(|f| f.lines).max().unwrap_or(0);
     r.duplicates = duplicates(files, 8);
+    let too_complex = fns
+        .iter()
+        .filter(|f| f.complexity > opts.max_complexity)
+        .count();
+    let too_long = fns
+        .iter()
+        .filter(|f| f.lines > opts.max_function_lines)
+        .count();
+
     fns.sort_by(|a, b| b.complexity.cmp(&a.complexity).then(b.lines.cmp(&a.lines)));
     let mut hotspots: Vec<ScoredFunction> = fns
         .into_iter()
@@ -517,22 +559,12 @@ pub async fn quality<D: Decider>(
     // 4. deterministic score, risk, approval
     let lint_high = *r.lint_counts.get("high").unwrap_or(&0);
     let lint_med = *r.lint_counts.get("medium").unwrap_or(&0);
-    let too_complex = r
-        .hotspots
-        .iter()
-        .filter(|h| h.metric.complexity > opts.max_complexity)
-        .count();
-    let too_long = r
-        .hotspots
-        .iter()
-        .filter(|h| h.metric.lines > opts.max_function_lines)
-        .count();
     let penalty = 1.5 * lint_high as f64
         + 0.3 * lint_med as f64
         + 1.0 * too_complex as f64
         + 0.5 * too_long as f64
         + 0.3 * r.duplicates.len() as f64;
-    r.quality_score = round2((10.0 - penalty).max(0.0));
+    r.quality_score = Some(round2((10.0 - penalty).max(0.0)));
     r.risk_level = if lint_high > 0 || too_complex > 2 {
         "high"
     } else if lint_med > 3 || too_complex > 0 || too_long > 0 || r.duplicates.len() > 2 {
@@ -585,10 +617,25 @@ pub async fn quality<D: Decider>(
             .push(format!("{} failed to run: {}", t.tool, t.detail));
     }
     let failed = r.tools.iter().any(|t| t.status == "failed");
-    let blocking = lint_high > 0 || too_complex > 0 || too_long > 0;
+    let blocking = lint_high > 0 || too_complex > 0 || too_long > 0 || organization_failed;
+    let covered = r.functions_analyzed > 0
+        || r.tools.iter().any(|t| t.status == "ran")
+        || r.organization
+            .as_ref()
+            .is_some_and(|report| report.policy_valid && !report.files.is_empty());
+    if organization_failed {
+        r.quality_score = None;
+        r.risk_level = "high".into();
+    }
+    if failed || !covered {
+        r.quality_score = None;
+        r.risk_level = "unknown".into();
+        r.reasons.push("code-quality coverage is incomplete".into());
+    }
+
     r.approval = if blocking {
         Some(false)
-    } else if failed {
+    } else if failed || !covered {
         None
     } else {
         Some(true)
@@ -681,9 +728,9 @@ pub fn judge_desktop_with(
         let name = i["element"]["name"].as_str().unwrap_or("");
         let ct = i["element"]["control_type"].as_str().unwrap_or("");
         match res {
-            "no_effect" if !ignored(name) => b.push(format!(
-                "control has no observable effect (missing handler?): {ct} \"{name}\""
-            )),
+            "no_effect" if !ignored(name) => {
+                *s.entry("unverified_effects".into()).or_default() += 1;
+            }
             "error_dialog" | "crash" | "hang" if !ignored(name) => {
                 let errs: Vec<&str> = i["errors"]
                     .as_array()
@@ -773,7 +820,22 @@ pub fn judge_desktop_with(
             l.chars().take(200).collect::<String>()
         ));
     }
-    (s, b.clone(), Some(b.is_empty()))
+    let has_evidence = report["interactions"]
+        .as_array()
+        .is_some_and(|a| !a.is_empty())
+        || report["flows"].as_array().is_some_and(|a| !a.is_empty())
+        || report["windows"].as_array().is_some_and(|a| !a.is_empty())
+        || report["unity"].is_object();
+    let approval = if !b.is_empty() {
+        Some(false)
+    } else if s.get("unverified_effects").is_some_and(|count| *count > 0) {
+        None
+    } else if has_evidence {
+        Some(true)
+    } else {
+        None
+    };
+    (s, b, approval)
 }
 
 fn regex_err() -> &'static regex::Regex {
@@ -930,6 +992,34 @@ pub fn check_budgets(stats: &Value, b: &Budgets) -> Vec<String> {
     v
 }
 
+/// Missing measurements prevent approval; violations stay definite regardless of gaps.
+pub fn resource_budget_gaps(stats: &Value, b: &Budgets) -> Vec<String> {
+    let mut gaps = Vec::new();
+    for (requested, key) in [
+        (b.max_cpu_avg_pct.is_some(), "cpu_avg_pct"),
+        (b.max_rss_mb.is_some(), "rss_peak_mb"),
+        (b.max_gpu_util_avg_pct.is_some(), "gpu_util_avg_pct"),
+    ] {
+        if requested && !stats[key].as_f64().is_some_and(f64::is_finite) {
+            gaps.push(format!("requested budget measurement unavailable: {key}"));
+        }
+    }
+    if !stats["rss_slope_mb_per_min"]
+        .as_f64()
+        .is_some_and(f64::is_finite)
+        || !stats["duration_s"].as_f64().is_some_and(|d| d >= 15.0)
+    {
+        gaps.push("RSS growth budget needs at least 15 seconds of measured observation".into());
+    }
+    if stats["handles_start"].as_i64().is_none() || stats["handles_end"].as_i64().is_none() {
+        gaps.push("handle growth measurement unavailable".into());
+    }
+    if !stats["samples"].as_u64().is_some_and(|n| n >= 2) {
+        gaps.push("fewer than two process samples; no meaningful resource coverage".into());
+    }
+    gaps
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resource<D: Decider>(
     d: &D,
@@ -1009,7 +1099,15 @@ pub async fn resource<D: Decider>(
             },
         }
     }
-    r.approval = Some(r.reasons.is_empty());
+    let gaps = resource_budget_gaps(&r.stats, &budgets);
+    r.approval = if !r.reasons.is_empty() {
+        Some(false)
+    } else if !gaps.is_empty() {
+        None
+    } else {
+        Some(true)
+    };
+    r.reasons.extend(gaps);
     r.duration_ms = t0.elapsed().as_millis() as u64;
     r
 }

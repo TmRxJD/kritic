@@ -123,6 +123,26 @@ async function settle(page, ms) {
   await page.waitForLoadState("networkidle", { timeout: 2000 }).catch(() => {});
 }
 
+// Snapshot after the tester scrolls the target into view. Focusing the clicked control is
+// native click behavior, not evidence its action worked; focus moved elsewhere is observable.
+export function interactionState(key) {
+  const target = document.querySelector(`[data-kritic-id="${key}"]`);
+  const elements = [...document.querySelectorAll("*")];
+  const active = document.activeElement;
+  return {
+    focus: elements.indexOf(active),
+    redirected: !!active && active !== document.body && active !== document.documentElement && active !== target,
+    scroll: [[-1, window.scrollX, window.scrollY], ...elements.flatMap((el, i) =>
+      el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth
+        ? [[i, el.scrollLeft, el.scrollTop]] : [])],
+  };
+}
+
+export function interactionChanged(before, after) {
+  return !!before && !!after && (JSON.stringify(before.scroll) !== JSON.stringify(after.scroll) ||
+    after.redirected && before.focus !== after.focus);
+}
+
 async function screenshot(input) {
   const u = new URL(input.url);
   if (!input.allow_remote && !isLocal(u)) throw new Error(`refusing non-local URL ${u.origin} (set allow_remote)`);
@@ -279,6 +299,9 @@ async function uiTest(input) {
       const consoleBefore = r.console_errors.length;
       const pageErrBefore = r.page_errors.length;
       const crashesBefore = r.crashes.length;
+      // Exclude Playwright's preparatory viewport movement from the action's effects.
+      await loc.scrollIntoViewIfNeeded();
+      const effectBefore = await page.evaluate(interactionState, c.kritic).catch(() => null);
       const before = await page.evaluate(pageSignature).catch(() => null);
       const reqBefore = requests;
       const urlBefore = page.url();
@@ -303,6 +326,7 @@ async function uiTest(input) {
         }
         await settle(page, waitMs);
         const after = await page.evaluate(pageSignature).catch(() => null);
+        const effectAfter = await page.evaluate(interactionState, c.kritic).catch(() => null);
         const navigated = page.url() !== urlBefore;
         const newErrors = [...r.page_errors.slice(pageErrBefore), ...r.console_errors.slice(consoleBefore)];
         if (r.crashes.length > crashesBefore) {
@@ -316,7 +340,8 @@ async function uiTest(input) {
           rec.result = "navigated";
           rec.detail = page.url();
         } else if (rec.action === "click" && before && after && before.dom === after.dom &&
-                   before.store === after.store && requests === reqBefore) {
+                   before.store === after.store && requests === reqBefore &&
+                   !interactionChanged(effectBefore, effectAfter)) {
           rec.result = "no_effect";
         } else {
           rec.result = "ok";

@@ -1,10 +1,9 @@
 // Calibrate every gate candidate in specs/*.json against labelled cases, asking laya directly
 // with exactly the state and questions the spec defines (no kritic code in between).
 //
-// A question may gate only if one threshold keeps false rejections of good cases at or below
-// MAX_FALSE_REJECT while catching at least MIN_CATCH of bad cases. The result, with the numbers,
-// is written to logs/calibration-specs.json; scripts/write-specs.py copies the evidence into the
-// gates it promotes.
+// This sampler fits and reports on the same rows. Results are exploratory and never promote
+// a gate, even if their fitted operating point meets the numerical targets. Independent grouped
+// held-out evaluation is required. Existing deployed specs are not modified by this script.
 //
 //   node scripts/calibrate-specs.mjs [--per 30] [--laya http://127.0.0.1:8089]
 //       [--corpus <dir>]...   extra source directories to sample real code from (.ts/.mjs/.py/.rs)
@@ -334,7 +333,9 @@ function judge(rows) {
   for (const r of rows) (byNote[`${r.label ? "bad" : "good"}: ${r.note}`] ??= []).push(r.p);
   return {
     good: neg.length, bad: pos.length, meanGood: mean(neg), meanBad: mean(pos), auc: Math.round(auc * 1000) / 1000,
-    operatingPoint: best, promote: Boolean(best && best.caught >= MIN_CATCH && auc >= MIN_AUC), goodTail: tail,
+    operatingPoint: best, promote: false,
+    promotionBlocked: "Exploratory fitting reuses its evaluation rows; independent held-out evaluation is required.",
+    candidateQualifies: Boolean(best && best.caught >= MIN_CATCH && auc >= MIN_AUC), goodTail: tail,
     byNote: Object.fromEntries(Object.entries(byNote).map(([k, v]) => [k, mean(v)])),
   };
 }
@@ -350,6 +351,7 @@ for (const c of all) {
   if (++done % 20 === 0) process.stderr.write(`${done}/${all.length}\n`);
 }
 const report = {
+  evaluationProtocol: "exploratory_same_rows", releaseApproved: false,
   date: new Date().toISOString().slice(0, 10), laya: LAYA, maxFalseReject: MAX_FALSE_REJECT, minCatch: MIN_CATCH, minAuc: MIN_AUC,
   results: Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, judge(v)])),
 };

@@ -139,7 +139,7 @@ pub async fn critic_diff<D: Decider>(
         tool: "critic_score".into(),
         mode: "diff".into(),
         advisory: true,
-        model: cfg.model.clone(),
+        model: d.model_identity().unwrap_or_else(|| cfg.model.clone()),
         revision,
         max_revisions: cfg.max_revisions,
         revise_allowed: revision < cfg.max_revisions,
@@ -194,7 +194,10 @@ pub async fn critic_diff<D: Decider>(
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {label})"));
                 return r;
@@ -251,7 +254,14 @@ pub async fn critic_diff<D: Decider>(
             return r;
         }
     };
-    let p_complete = match d.decide(&state, &completeness_spec(basis).wire()).await {
+    let p_complete = match deadline
+        .bound(
+            d.decide(&state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            hunks.len(),
+        )
+        .await
+    {
         Err(e) => {
             r.error = Some(e);
             return r;
@@ -344,7 +354,7 @@ pub async fn critic<D: Decider>(
         tool: "critic_score".into(),
         mode: "files".into(),
         advisory: true,
-        model: cfg.model.clone(),
+        model: d.model_identity().unwrap_or_else(|| cfg.model.clone()),
         revision,
         max_revisions: cfg.max_revisions,
         revise_allowed: revision < cfg.max_revisions,
@@ -402,7 +412,10 @@ pub async fn critic<D: Decider>(
                 return r;
             }
         };
-        match d.decide(&state, &qs).await {
+        match deadline
+            .bound(d.decide(&state, &qs), verdicts.len(), total)
+            .await
+        {
             Err(e) => {
                 r.error = Some(format!("{e} (at {})", c.label()));
                 return r;
@@ -452,8 +465,12 @@ pub async fn critic<D: Decider>(
             return r;
         }
     };
-    let p_complete = match d
-        .decide(&complete_state, &completeness_spec(basis).wire())
+    let p_complete = match deadline
+        .bound(
+            d.decide(&complete_state, &completeness_spec(basis).wire()),
+            verdicts.len(),
+            chunks.len(),
+        )
         .await
     {
         Err(e) => {
@@ -492,6 +509,23 @@ impl Deadline {
                 self.limit_s
             )
         })
+    }
+
+    /// Cancel this request future at the shared pass deadline, including an
+    /// in-flight grouped decision. Dropping HTTP work does not prove a remote
+    /// inference stopped; no shared service is killed here.
+    pub async fn bound<T>(
+        &self,
+        future: impl std::future::Future<Output = Result<T, String>>,
+        done: usize,
+        total: usize,
+    ) -> Result<T, String> {
+        tokio::time::timeout_at(self.at.into(), future)
+            .await
+            .map_err(|_| format!(
+                "critic deadline exceeded: {}s; {done}/{total} units complete; request future cancelled; remote cancellation unconfirmed",
+                self.limit_s
+            ))?
     }
 }
 
@@ -598,7 +632,7 @@ pub fn aggregate(
     // (defect, severity, quality, completeness on a digest) are reported, never decide.
     // The change fails if its worst unit crosses a gate, so the per-unit threshold is corrected
     // for the number of units (see spec::Gate::Rule::good_tail).
-    let unit = unit_spec(&r.mode);
+    let unit = unit_spec(&r.mode).for_model(&r.model);
     let n = verdicts.len().max(1);
     let per_chunk = |v: &ChunkVerdict| -> Vec<String> {
         [
@@ -625,7 +659,7 @@ pub fn aggregate(
     .into_iter()
     .filter_map(|(id, value)| unit.check_units(id, value, n))
     .collect();
-    let completeness = completeness_spec(basis);
+    let completeness = completeness_spec(basis).for_model(&r.model);
     reasons.extend(completeness.check_value("complete", p_complete));
     r.gates = unit
         .questions

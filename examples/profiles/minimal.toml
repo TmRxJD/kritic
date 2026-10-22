@@ -1,0 +1,22 @@
+# First-run profile: no model, downloads, browser, scanners or desktop harness.
+# Copy to KRITIC_HOME/kritic.toml before setup. Enable optional groups deliberately.
+[review]
+backend = "off"
+[vision]
+backend = "off"
+[capabilities]
+framing = false
+web = false
+ux = false
+security = false
+quality = false
+desktop = false
+resources = true
+contracts = true
+# Source builds: opt in to repository policy tools; no extra runtime/model needed.
+repository = false
+history = false
+debt = false
+plugins = false
+context = false
+domain_maps = false

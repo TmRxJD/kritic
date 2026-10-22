@@ -20,11 +20,11 @@ const LAYA_REPO: &str = "monatis/ggmlc";
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BackendChoice {
-    /// Local Kev when the machine can run it, else cloud Jev when a key is available
+    /// Discover an already-installed local Kev only; never fall back to cloud
     Auto,
     /// Local Kev: downloads laya and the 4.5 GB model; nothing leaves the machine
     Local,
-    /// Cloud Jev through the AI Gateway: no download, needs a key, sends code excerpts
+    /// Configured cloud provider: no model download, needs API access, sends code excerpts
     Cloud,
     /// No model: deterministic tools only
     Off,
@@ -36,8 +36,8 @@ pub struct SetupArgs {
     #[arg(short, long)]
     pub yes: bool,
     /// Who answers Kev's questions
-    #[arg(long, value_enum, default_value_t = BackendChoice::Auto)]
-    pub backend: BackendChoice,
+    #[arg(long, value_enum)]
+    pub backend: Option<BackendChoice>,
     /// laya build (default: detected from the GPU)
     #[arg(long, value_parser = ["cuda-sm89", "cuda-sm86", "cuda-sm80", "vulkan", "metal"])]
     pub laya: Option<String>,
@@ -105,34 +105,25 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
     let gpu = detect::gpu();
     ui::info(&format!("GPU: {}", gpu.describe()));
     let key_available = cfg0.cloud_key().is_some();
-    let backend = match args.backend {
-        BackendChoice::Auto if gpu.fits_local_kev() => BackendChoice::Local,
-        BackendChoice::Auto if key_available => BackendChoice::Cloud,
-        BackendChoice::Auto => {
-            let picked = ui::choose(
-                "This machine has no GPU that fits local Kev (needs ~6 GB VRAM). How should Kev run?",
-                &[
-                    (
-                        "local",
-                        "download it anyway (Vulkan/CPU: slow, but private)",
-                    ),
-                    (
-                        "cloud",
-                        "use cloud Jev (needs an AI Gateway key; sends code excerpts to Vercel)",
-                    ),
-                    ("off", "no model: deterministic checks only"),
-                ],
-                "off",
-                plan.yes,
-            );
-            match picked {
-                "local" => BackendChoice::Local,
-                "cloud" => BackendChoice::Cloud,
-                _ => BackendChoice::Off,
-            }
+    let selected = args.backend.unwrap_or(match cfg0.backend.as_str() {
+        "local" => BackendChoice::Local,
+        "cloud" => BackendChoice::Cloud,
+        "auto" => BackendChoice::Auto,
+        _ => BackendChoice::Off,
+    });
+    let backend = match selected {
+        BackendChoice::Auto
+            if gpu.fits_local_kev() && cfg0.laya_exe.is_file() && cfg0.kev_gguf.is_file() =>
+        {
+            BackendChoice::Local
         }
+        BackendChoice::Auto => BackendChoice::Off,
         b => b,
     };
+    if let Some(table) = doc.get_mut("kev").and_then(toml_edit::Item::as_table_mut) {
+        table.remove("backend");
+    }
+
     match backend {
         BackendChoice::Local => match install_local_kev(
             &http,
@@ -144,7 +135,7 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
         )
         .await
         {
-            Ok(()) => set(&mut doc, "kev", "backend", "local"),
+            Ok(()) => set(&mut doc, "review", "backend", "local"),
             Err(e) => {
                 ui::fail(&e);
                 problems.push(format!("local Kev: {e}"));
@@ -152,24 +143,24 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
         },
         BackendChoice::Cloud => {
             if key_available {
-                ui::ok("gateway key found (AI_GATEWAY_API_KEY or key file)");
+                ui::ok("configured cloud API key found");
             } else if let Some(k) = ui::secret(
-                "AI Gateway API key (input hidden; stored in the kritic folder, never in kritic.toml)",
+                "Cloud API key (input hidden; stored in the kritic folder, never in kritic.toml)",
             ) {
-                write_key(&cfg0.cloud_key_file, &k)?;
+                cfg0.save_cloud_key(&k)?;
                 ui::ok(&format!("key saved to {}", cfg0.cloud_key_file.display()));
             } else {
-                ui::warn("no key yet: run `kritic key` (or set AI_GATEWAY_API_KEY)");
-                problems.push("cloud Jev has no key yet".into());
+                ui::warn("no key yet: run `kritic key` or set cloud.key_env");
+                problems.push("cloud reviewer has no key yet".into());
             }
             ui::info(
-                "Code excerpts under review will be sent to the AI Gateway. Kev's calibrated gates are advisory under Jev.",
+                "Code excerpts under review will be sent to your configured endpoint. Cloud judgments are advisory.",
             );
-            set(&mut doc, "kev", "backend", "cloud");
+            set(&mut doc, "review", "backend", "cloud");
         }
         BackendChoice::Off => {
-            ui::skip("no model: critic_score and the Kev parts of other tools report null");
-            set(&mut doc, "kev", "backend", "off");
+            ui::skip("no model: model-only tools are hidden; deterministic tools remain available");
+            set(&mut doc, "review", "backend", "off");
         }
         BackendChoice::Auto => unreachable!("auto is resolved above"),
     }
@@ -178,10 +169,17 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
 
     // 3. vision
     ui::heading(3, total, "Vision model (visual_critic, ux_critic novice)");
-    if args.no_vision {
+    if args.no_vision || (!args.vision && cfg0.vision_backend != "local") {
         ui::skip("skipped (--no-vision)");
-    } else if let Err(e) = install_vision(&cfg0, &plan, args.vision).await {
-        ui::warn(&e);
+    } else {
+        let mut vision_cfg = cfg0.clone();
+        vision_cfg.vision_backend = "local".into();
+        if let Err(e) = install_vision(&vision_cfg, &plan, args.vision).await {
+            ui::warn(&e);
+        } else {
+            set(&mut doc, "vision", "backend", "local");
+            write_config(&cfg_path, &doc)?;
+        }
     }
 
     // 4. harnesses
@@ -189,10 +187,14 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
     if args.no_harness {
         ui::skip("skipped (--no-harness)");
     } else {
-        if let Err(e) = install_browser(&http, &cfg0).await {
+        if (cfg0.capabilities.get("web") == Some(&true)
+            || cfg0.capabilities.get("ux") == Some(&true))
+            && let Err(e) = install_browser(&http, &cfg0).await
+        {
             ui::warn(&e);
         }
         if cfg!(windows)
+            && cfg0.capabilities.get("desktop") == Some(&true)
             && let Err(e) = install_desktop_harness(&cfg0, &plan)
         {
             ui::warn(&e);
@@ -201,8 +203,8 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
 
     // 5. scanners
     ui::heading(5, total, "Security scanners");
-    if args.no_scanners {
-        ui::skip("skipped (--no-scanners)");
+    if args.no_scanners || cfg0.capabilities.get("security") != Some(&true) {
+        ui::skip("skipped (--no-scanners or security capability disabled)");
     } else {
         install_scanners(&http, &cfg0, &plan).await;
     }
@@ -270,7 +272,7 @@ pub async fn run(args: SetupArgs) -> Result<(), String> {
         if asked == 1 { "" } else { "s" }
     );
     eprintln!(
-        "Next: start a new Claude Code or Hermes session; kritic is available as the `kritic` MCP server."
+        "Next: review doctor findings; register the intended binary if needed, then restart your agent session."
     );
     if !problems.is_empty() {
         return Err(format!(
@@ -319,6 +321,15 @@ async fn install_local_kev(
     quant: &str,
     doc: &mut toml_edit::DocumentMut,
 ) -> Result<(), String> {
+    if !cfg.config_errors.is_empty() {
+        return Err("Fix config_errors before local model setup".into());
+    }
+    if cfg.kev_externally_managed {
+        ui::skip(
+            "Kev is externally managed; no service/model provisioning (probe with doctor --online)",
+        );
+        return Ok(());
+    }
     if !gpu.fits_local_kev() {
         ui::warn(
             "this GPU is below the ~6 GB local Kev needs; expect slow answers (consider --backend cloud)",
@@ -439,6 +450,15 @@ fn run_visible(cmd: &mut Command, what: &str) -> Result<(), String> {
 }
 
 async fn install_vision(cfg: &Config, plan: &Plan, forced: bool) -> Result<(), String> {
+    if !cfg.config_errors.is_empty() {
+        return Err("Fix config_errors before vision setup".into());
+    }
+    if cfg.vision_externally_managed {
+        ui::skip(
+            "Vision is externally managed; no service/model provisioning (probe with doctor --online)",
+        );
+        return Ok(());
+    }
     let ollama = detect::tool("ollama", &[])
         .or_else(|| cfg.ollama_exe.is_file().then(|| cfg.ollama_exe.clone()));
     let Some(ollama) = ollama else {

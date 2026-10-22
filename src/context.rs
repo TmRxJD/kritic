@@ -62,17 +62,16 @@ fn is_stub(m: &Value) -> bool {
 const STUB_PREFIX: &str = "[kritic archived ";
 
 pub fn archive_id(role: &str, content: &str) -> String {
+    archive_content_id(role, &Value::String(content.to_owned()))
+}
+
+fn archive_content_id(role: &str, content: &Value) -> String {
     let mut h = Sha256::new();
-    h.update(role.as_bytes());
-    h.update([0]);
-    h.update(content.as_bytes());
+    h.update(json!([role, content]).to_string().as_bytes());
     let d = h.finalize();
     format!(
         "kr-{}",
-        d.iter()
-            .take(6)
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
+        d.iter().map(|b| format!("{b:02x}")).collect::<String>()
     )
 }
 
@@ -106,6 +105,9 @@ pub struct Archived {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     pub content: String,
+    /// Exact JSON content, including text-part boundaries. Absent in legacy records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_content: Option<Value>,
     pub tokens: usize,
     pub why: String,
     pub at: String,
@@ -114,6 +116,7 @@ pub struct Archived {
 /// One session's archive: `<home>/context/<session>/archive.jsonl`, append-only.
 pub struct Archive {
     pub path: PathBuf,
+    legacy_path: Option<PathBuf>,
 }
 
 impl Archive {
@@ -134,27 +137,97 @@ impl Archive {
         } else {
             safe
         };
+        let legacy_path =
+            (safe == session).then(|| home.join("context").join(&safe).join("archive.jsonl"));
+        let digest = Sha256::digest(session.as_bytes());
+        let digest: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
         Archive {
-            path: home.join("context").join(safe).join("archive.jsonl"),
+            path: home
+                .join("context")
+                .join("v2")
+                .join(format!("session-{digest}"))
+                .join("archive.jsonl"),
+            legacy_path,
         }
     }
 
-    pub fn load(&self) -> Vec<Archived> {
-        std::fs::read_to_string(&self.path)
-            .map(|t| {
-                t.lines()
-                    .filter_map(|l| serde_json::from_str(l).ok())
-                    .collect()
+    pub fn load(&self) -> Result<Vec<Archived>, String> {
+        let mut records = Self::read_path(&self.path)?;
+        records.extend(self.read_legacy()?);
+        Ok(records)
+    }
+
+    fn read_legacy(&self) -> Result<Vec<Archived>, String> {
+        let Some(path) = &self.legacy_path else {
+            return Ok(Vec::new());
+        };
+        let session_dir = path.parent().ok_or("invalid legacy archive path")?;
+        let root = session_dir.parent().ok_or("invalid legacy archive root")?;
+        let entries = match std::fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(format!("cannot read {}: {e}", root.display())),
+        };
+        // Windows path lookup ignores case; legacy identity must match the stored name exactly.
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("cannot read {}: {e}", root.display()))?;
+            if Some(entry.file_name().as_os_str()) == session_dir.file_name() {
+                return Self::read_path(path);
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    fn parse(text: &str) -> Result<Vec<Archived>, String> {
+        text.lines()
+            .enumerate()
+            .map(|(i, line)| {
+                serde_json::from_str(line)
+                    .map_err(|e| format!("invalid archive record at line {}: {e}", i + 1))
             })
-            .unwrap_or_default()
+            .collect()
+    }
+
+    fn read_path(path: &Path) -> Result<Vec<Archived>, String> {
+        use std::io::Read;
+        let mut file = match std::fs::File::open(path) {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(format!("cannot open {}: {e}", path.display())),
+        };
+        file.lock_shared()
+            .map_err(|e| format!("cannot lock {}: {e}", path.display()))?;
+        let mut text = String::new();
+        file.read_to_string(&mut text)
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        Self::parse(&text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
     fn append(&self, items: &[Archived]) -> Result<(), String> {
         if items.is_empty() {
             return Ok(());
         }
-        // Ids are content hashes: one entry per id, across calls and within this batch.
-        let mut known: HashSet<String> = self.load().into_iter().map(|a| a.id).collect();
+        // A successful write must not hide an unreadable legacy archive from recall.
+        self.read_legacy()?;
+        if let Some(d) = self.path.parent() {
+            std::fs::create_dir_all(d)
+                .map_err(|e| format!("cannot create {}: {e}", d.display()))?;
+        }
+        use std::io::{Read, Seek, SeekFrom, Write};
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&self.path)
+            .map_err(|e| format!("cannot open {}: {e}", self.path.display()))?;
+        f.lock()
+            .map_err(|e| format!("cannot lock {}: {e}", self.path.display()))?;
+        let mut existing = String::new();
+        f.read_to_string(&mut existing)
+            .map_err(|e| format!("cannot read {}: {e}", self.path.display()))?;
+        let mut known: HashSet<String> =
+            Self::parse(&existing)?.into_iter().map(|a| a.id).collect();
         let fresh: Vec<&Archived> = items
             .iter()
             .filter(|a| known.insert(a.id.clone()))
@@ -162,23 +235,22 @@ impl Archive {
         if fresh.is_empty() {
             return Ok(());
         }
-        if let Some(d) = self.path.parent() {
-            std::fs::create_dir_all(d)
-                .map_err(|e| format!("cannot create {}: {e}", d.display()))?;
+        let before = f.seek(SeekFrom::End(0)).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        if !existing.is_empty() && !existing.ends_with('\n') {
+            bytes.push(b'\n');
         }
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|e| format!("cannot open {}: {e}", self.path.display()))?;
         for a in fresh {
             writeln!(
-                f,
+                bytes,
                 "{}",
                 serde_json::to_string(a).map_err(|e| e.to_string())?
             )
             .map_err(|e| e.to_string())?;
+        }
+        if let Err(e) = f.write_all(&bytes).and_then(|()| f.sync_all()) {
+            let rollback = f.set_len(before).and_then(|()| f.sync_all());
+            return Err(format!("archive write failed: {e}; rollback: {rollback:?}"));
         }
         Ok(())
     }
@@ -332,7 +404,11 @@ pub async fn compress<D: Decider>(
         let m = &messages[i];
         let role = m["role"].as_str().unwrap_or("message").to_string();
         let content = text_of(m);
-        let id = archive_id(&role, &content);
+        let original_content = m.get("content").cloned();
+        let id = match &original_content {
+            Some(value @ Value::Array(_)) => archive_content_id(&role, value),
+            _ => archive_id(&role, &content),
+        };
         archived.push(Archived {
             id: id.clone(),
             role: role.clone(),
@@ -346,6 +422,7 @@ pub async fn compress<D: Decider>(
                 .map(String::from),
             tokens: content.len() / 4,
             content: content.clone(),
+            original_content,
             why: why.to_string(),
             at: now.clone(),
         });
@@ -528,8 +605,67 @@ pub struct RecallOutput {
     pub found: Vec<Archived>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    /// Characters of content cut to fit `max_chars`.
+    /// UTF-8 content bytes omitted from text recall.
     pub truncated_chars: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecallFormat {
+    #[default]
+    Text,
+    Original,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(default)]
+pub struct RecallOptions {
+    pub format: RecallFormat,
+    /// Content bytes; original format counts serialized JSON bytes.
+    pub max_chars: usize,
+    /// Entire compact JSON response, including record metadata.
+    pub max_output_bytes: usize,
+}
+
+impl Default for RecallOptions {
+    fn default() -> Self {
+        Self {
+            format: RecallFormat::Text,
+            max_chars: 20_000,
+            max_output_bytes: 12_000,
+        }
+    }
+}
+
+fn truncate_utf8(text: &mut String, max_bytes: usize) {
+    let mut end = max_bytes.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text.truncate(end);
+}
+
+fn recall_bytes(out: &RecallOutput) -> usize {
+    serde_json::to_vec(out).map_or(usize::MAX, |bytes| bytes.len())
+}
+
+fn recall_error(message: String, max_bytes: usize) -> RecallOutput {
+    let mut out = RecallOutput {
+        error: Some(message),
+        ..Default::default()
+    };
+    while recall_bytes(&out) > max_bytes {
+        if let Some(error) = out.error.as_mut() {
+            if error.is_empty() {
+                out.error = None;
+            } else {
+                truncate_utf8(error, error.len() / 2);
+            }
+        } else {
+            break;
+        }
+    }
+    out
 }
 
 /// Archived messages by id, or every archived message containing `query` (case-insensitive),
@@ -540,9 +676,35 @@ pub fn recall(
     query: Option<&str>,
     max_chars: usize,
 ) -> RecallOutput {
-    let all = archive.load();
+    recall_with_options(
+        archive,
+        id,
+        query,
+        RecallOptions {
+            max_chars,
+            ..Default::default()
+        },
+    )
+    .unwrap_or_else(|error| recall_error(error, 12_000))
+}
+
+pub fn recall_with_options(
+    archive: &Archive,
+    id: Option<&str>,
+    query: Option<&str>,
+    options: RecallOptions,
+) -> Result<RecallOutput, String> {
+    if !(256..=4_194_304).contains(&options.max_output_bytes) {
+        return Err("max_output_bytes must be between 256 and 4194304".into());
+    }
     let mut out = RecallOutput::default();
-    let mut found: Vec<Archived> = match (id, query) {
+    let all = match archive.load() {
+        Ok(all) => all,
+        Err(e) => {
+            return Ok(recall_error(e, options.max_output_bytes));
+        }
+    };
+    let found: Vec<Archived> = match (id, query) {
         (Some(id), _) => all.into_iter().filter(|a| a.id == id).collect(),
         (None, Some(q)) if !q.trim().is_empty() => {
             let q = q.to_lowercase();
@@ -552,35 +714,80 @@ pub fn recall(
                 .collect()
         }
         _ => {
-            out.error = Some("give an id (from an archive stub) or a query".into());
-            return out;
+            return Ok(recall_error(
+                "give an id (from an archive stub) or a query".into(),
+                options.max_output_bytes,
+            ));
         }
     };
     if found.is_empty() {
-        out.error = Some(match id {
-            Some(id) => format!("no archived message {id} in this session"),
-            None => "no archived message matches".into(),
-        });
-        return out;
+        return Ok(recall_error(
+            match id {
+                Some(id) => format!("no archived message {id} in this session"),
+                None => "no archived message matches".into(),
+            },
+            options.max_output_bytes,
+        ));
     }
-    let mut left = max_chars;
-    for a in &mut found {
-        if a.content.len() > left {
-            let keep = a
-                .content
-                .char_indices()
-                .take_while(|(i, _)| *i < left)
-                .map(|(i, c)| i + c.len_utf8())
-                .last()
-                .unwrap_or(0);
-            out.truncated_chars += a.content.len() - keep;
-            a.content.truncate(keep);
+    let mut left = options.max_chars;
+    for mut record in found {
+        match options.format {
+            RecallFormat::Original => {
+                let original = record
+                    .original_content
+                    .take()
+                    .unwrap_or_else(|| Value::String(record.content.clone()));
+                let size = original.to_string().len();
+                if size > left {
+                    return Ok(recall_error("original content exceeds max_chars; increase the budget or use text format".into(), options.max_output_bytes));
+                }
+                left -= size;
+                record.content.clear();
+                record.original_content = Some(original);
+                out.found.push(record);
+                if recall_bytes(&out) > options.max_output_bytes {
+                    return Ok(recall_error("original response exceeds max_output_bytes; increase the budget or request one archive id".into(), options.max_output_bytes));
+                }
+            }
+            RecallFormat::Text => {
+                record.original_content = None;
+                let original_len = record.content.len();
+                truncate_utf8(&mut record.content, left);
+                let previous_omitted = out.truncated_chars;
+                if record.content.is_empty() {
+                    out.truncated_chars = previous_omitted.saturating_add(original_len);
+                    continue;
+                }
+                out.found.push(record);
+                loop {
+                    let retained = out.found.last().map_or(0, |a| a.content.len());
+                    out.truncated_chars = previous_omitted.saturating_add(original_len - retained);
+                    if retained == 0 {
+                        out.found.pop();
+                        break;
+                    }
+                    let bytes = recall_bytes(&out);
+                    if bytes <= options.max_output_bytes {
+                        left -= retained;
+                        break;
+                    }
+                    let record = out.found.last_mut().expect("record just inserted");
+                    truncate_utf8(
+                        &mut record.content,
+                        retained.saturating_sub(bytes - options.max_output_bytes),
+                    );
+                }
+            }
         }
-        left = left.saturating_sub(a.content.len());
     }
-    found.retain(|a| !a.content.is_empty());
-    out.found = found;
-    out
+    // Counter digit growth from later omissions must also fit the serialized envelope.
+    while recall_bytes(&out) > options.max_output_bytes {
+        let Some(record) = out.found.pop() else {
+            break;
+        };
+        out.truncated_chars = out.truncated_chars.saturating_add(record.content.len());
+    }
+    Ok(out)
 }
 
 /// The tool schema the Hermes plugin exposes for `recall`.
@@ -595,7 +802,9 @@ pub fn recall_tool_schema() -> Value {
             "properties": {
                 "id": {"type": "string", "description": "An archive id such as kr-1a2b3c4d5e6f"},
                 "query": {"type": "string", "description": "Case-insensitive text to search archived content for"},
-                "max_chars": {"type": "integer", "description": "Most characters to return (default 20000)"}
+                "max_chars": {"type": "integer", "minimum": 0, "description": "Content UTF-8 byte budget (default 20000); original format counts serialized JSON"},
+                "format": {"type": "string", "enum": ["text", "original"], "description": "Text by default; original returns exact JSON without duplicate text and requires enough budget"},
+                "max_output_bytes": {"type": "integer", "minimum": 256, "maximum": 4194304, "description": "Whole compact JSON response budget including metadata (default 12000)"}
             }
         }
     })

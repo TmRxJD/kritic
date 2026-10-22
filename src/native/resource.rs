@@ -65,23 +65,23 @@ fn round(v: f64, places: i32) -> f64 {
 
 fn sample_tree(
     sys: &mut sysinfo::System,
-    root: u32,
-    cum_disk: &mut std::collections::HashMap<u32, (u64, u64)>,
-) -> (Sample, HashSet<u32>) {
+    tracked: &mut procs::TrackedTree,
+    cum_disk: &mut std::collections::HashMap<procs::Identity, (u64, u64)>,
+) -> (Sample, HashSet<procs::Identity>) {
     procs::refresh(sys);
-    let pids = procs::tree_pids(sys, root);
+    let pids = tracked.refresh(sys);
     let threads = procs::thread_counts();
     let mut s = Sample {
         procs: pids.len() as f64,
         ..Default::default()
     };
     for p in &pids {
-        let Some(proc_) = sys.process(pid(*p)) else {
+        let Some(proc_) = sys.process(pid(p.pid)) else {
             continue;
         };
         s.cpu += proc_.cpu_usage() as f64;
         s.rss += proc_.memory() as f64;
-        let x = procs::extra(*p, &threads);
+        let x = procs::extra(p.pid, &threads);
         s.private += if x.private_bytes > 0 {
             x.private_bytes as f64
         } else {
@@ -100,7 +100,12 @@ fn sample_tree(
     (s, pids)
 }
 
-fn summarize(samples: &[Sample], gpu: &[(f64, f64)], exit_code: Option<i32>) -> Value {
+fn summarize(
+    samples: &[Sample],
+    gpu: &[(f64, f64)],
+    exit_code: Option<i32>,
+    tree_completed: bool,
+) -> Value {
     let mb = 1024.0 * 1024.0;
     let ts: Vec<f64> = samples.iter().map(|s| s.t).collect();
     let mut cpus: Vec<f64> = samples.iter().map(|s| s.cpu).collect();
@@ -138,6 +143,7 @@ fn summarize(samples: &[Sample], gpu: &[(f64, f64)], exit_code: Option<i32>) -> 
         "gpu_mem_delta_mb": if gpu.len() > 1 { json!((gpu[gpu.len() - 1].1 - gpu[0].1).round()) } else { Value::Null },
         "exited_early": exit_code.is_some(),
         "exit_code": exit_code,
+        "tree_completed": tree_completed,
     })
 }
 
@@ -230,47 +236,89 @@ fn resource_blocking(
     interval_ms: u64,
     warmup_s: f64,
 ) -> Value {
+    if !duration_s.is_finite() || duration_s <= 0.0 || !warmup_s.is_finite() || warmup_s < 0.0 {
+        return json!({"ok": false, "error": "sampling duration must be positive and warmup nonnegative and finite"});
+    }
     let (root, mut child) = match start(command, attach, allow_attach, cwd) {
         Ok(x) => x,
         Err(e) => return json!({"ok": false, "error": e}),
     };
     let interval = Duration::from_millis(interval_ms.max(100));
+    let mut tracked = match procs::TrackedTree::new(root, child.is_some()) {
+        Ok(tree) => tree,
+        Err(e) => {
+            let exit_code = child
+                .as_mut()
+                .and_then(|c| c.try_wait().ok().flatten())
+                .map(|s| s.code().unwrap_or(-1));
+            let cleanup_error = child.as_mut().and_then(cleanup_child);
+            return json!({"ok": false, "error": format!("cannot verify process identity: {e}"), "exit_code": exit_code, "cleanup_error": cleanup_error});
+        }
+    };
     let mut sys = procs::system();
     let mut cum_disk = std::collections::HashMap::new();
     let mut samples: Vec<Sample> = Vec::new();
     let mut gpu = Vec::new();
     let mut exit_code = None;
+    let mut tree_completed = false;
+    let mut sampling_error = None;
     let t0 = Instant::now();
     let mut n = 0usize;
     while t0.elapsed().as_secs_f64() < duration_s + warmup_s {
-        let (mut s, tree) = sample_tree(&mut sys, root, &mut cum_disk);
+        let (mut s, tree) = sample_tree(&mut sys, &mut tracked, &mut cum_disk);
+        if attach.is_some() && !tracked.root_alive() {
+            return json!({"ok": false, "error": "attached process disappeared or PID was reused; sampling incomplete", "samples": samples.len()});
+        }
+        if let Some(c) = child.as_mut() {
+            match c.try_wait() {
+                Ok(status) => record_exit(&mut exit_code, status.map(|s| s.code().unwrap_or(-1))),
+                Err(e) => {
+                    sampling_error = Some(format!("cannot poll command exit: {e}"));
+                    break;
+                }
+            }
+        }
+        if exit_code.is_some() && tree.is_empty() {
+            tree_completed = true;
+            break;
+        }
         let t = t0.elapsed().as_secs_f64();
-        if t >= warmup_s {
+        if t >= warmup_s && !tree.is_empty() {
             s.t = round(t - warmup_s, 2);
             samples.push(s);
             n += 1;
-            if n % (1000 / interval.as_millis().max(1) as usize).max(1) == 0
+            if n.is_multiple_of((1000 / interval.as_millis().max(1) as usize).max(1))
                 && let Some(g) = gpu_sample()
             {
                 gpu.push(g);
             }
         }
-        if let Some(c) = child.as_mut()
-            && let Ok(Some(status)) = c.try_wait()
-            && tree.len() <= 1
-        {
-            exit_code = Some(status.code().unwrap_or(-1));
-            break;
-        }
         std::thread::sleep(interval);
     }
+    if attach.is_some() && !tracked.root_alive() {
+        return json!({"ok": false, "error": "attached process disappeared or PID was reused; sampling incomplete", "samples": samples.len()});
+    }
+    // Capture a natural exit on the final poll, before any timeout cleanup. Killing
+    // an owned process must never turn a timeout into a reported natural exit.
+    if let Some(c) = child.as_mut() {
+        match c.try_wait() {
+            Ok(status) => record_exit(&mut exit_code, status.map(|s| s.code().unwrap_or(-1))),
+            Err(e) => sampling_error = Some(format!("cannot poll command exit: {e}")),
+        }
+    }
+    procs::refresh(&mut sys);
+    let remaining = tracked.refresh(&sys);
+    tree_completed |= exit_code.is_some() && remaining.is_empty();
+    // Descendants remain owned after the root exits. Cleanup uses retained OS
+    // handles/pidfds, never a freshly inferred PPID tree.
+    let mut cleanup_errors = tracked.cleanup();
     if let Some(c) = child.as_mut()
-        && c.try_wait().ok().flatten().is_none()
+        && let Some(e) = cleanup_child(c)
     {
-        procs::refresh(&mut sys);
-        procs::kill_all(&sys, &procs::tree_pids(&sys, root));
-        let _ = c.kill();
-        let _ = c.wait();
+        cleanup_errors.push(e);
+    }
+    if sampling_error.is_some() || !cleanup_errors.is_empty() {
+        return json!({"ok": false, "error": sampling_error.unwrap_or_else(|| format!("process cleanup incomplete: {}", cleanup_errors.join("; "))), "cleanup_errors": cleanup_errors, "exit_code": exit_code, "samples": samples.len()});
     }
     if samples.is_empty() {
         return json!({"ok": false, "error": "no samples (process exited immediately?)", "exit_code": exit_code});
@@ -282,5 +330,48 @@ fn resource_blocking(
         .step_by(step)
         .map(|s| json!({"t": s.t, "cpu": round(s.cpu, 1), "rss_mb": round(s.rss / mb, 1)}))
         .collect();
-    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code), "timeline": timeline, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
+    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code, tree_completed), "timeline": timeline, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
+}
+
+fn cleanup_child(child: &mut std::process::Child) -> Option<String> {
+    if matches!(child.try_wait(), Ok(Some(_))) {
+        return None;
+    }
+    // Child owns the root handle. Never fall back to a numeric-PID kill. Only
+    // wait after a successful kill, so a permission failure cannot block forever.
+    match child.kill() {
+        Ok(()) => child.wait().err().map(|e| format!("command reap: {e}")),
+        Err(_) if matches!(child.try_wait(), Ok(Some(_))) => None,
+        Err(e) => Some(format!("command cleanup: {e}")),
+    }
+}
+
+fn record_exit(exit_code: &mut Option<i32>, observed: Option<i32>) {
+    if exit_code.is_none() {
+        *exit_code = observed;
+    }
+}
+
+#[cfg(test)]
+mod exit_tests {
+    use super::record_exit;
+
+    #[test]
+    fn exit_status_does_not_depend_on_surviving_descendants() {
+        let mut code = None;
+        record_exit(&mut code, None);
+        assert_eq!(code, None);
+        record_exit(&mut code, Some(0));
+        assert_eq!(code, Some(0));
+        record_exit(&mut code, None);
+        assert_eq!(code, Some(0));
+    }
+
+    #[test]
+    fn final_poll_records_a_previously_unobserved_exit() {
+        let mut code = None;
+        record_exit(&mut code, None);
+        record_exit(&mut code, Some(7));
+        assert_eq!(code, Some(7));
+    }
 }

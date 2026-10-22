@@ -1,0 +1,18 @@
+{
+  "description": "Explicit Kritic-only corpus for local evidence retrieval. No other workspace, conversation or generated output is indexed.",
+  "source_head": "42362069a77e458dddc70eb4e2c226f80bcbcae9",
+  "files": [
+    "README.md", "docs/architecture.md", "docs/contracts.md", "docs/configuration.md",
+    "docs/cloud.md", "docs/clients.md", "docs/getting-started.md", "docs/tools.md",
+    "docs/security-audit.md", "docs/security-exceptions.md", "docs/field-evidence.md",
+    "src/contract.rs", "src/context.rs", "src/provider.rs", "src/events.rs",
+    "src/gpu.rs", "src/files.rs", "src/tools.rs", "src/scan.rs", "src/scout.rs",
+    "src/native/procs.rs", "src/native/resource.rs", "src/native/web.rs",
+    "tests/contract.rs", "tests/context.rs", "tests/provider.rs", "tests/config.rs",
+    "tests/native.rs", "tests/vacuity.rs", "examples/profiles/minimal.toml"
+  ],
+  "metadata": {
+    "purpose": "Candidate discovery only; similarity is never acceptance or proof of enforcement.",
+    "limits": "Hand-labelled retrieval anchors on one repository; incomplete relevance labels, not universal model accuracy or proof of correctness."
+  }
+}

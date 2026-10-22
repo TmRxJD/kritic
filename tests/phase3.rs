@@ -57,7 +57,7 @@ fn parses_osv_one_finding_per_package_at_worst_cvss() {
         (f[0].severity.as_str(), f[0].file.as_str()),
         ("high", "requirements.txt")
     );
-    assert!(f[0].message.contains("2 known vulnerabilities"));
+    assert!(f[0].message.contains("2 security advisories"));
     assert_eq!(cvss_to_severity(9.8), "critical");
     assert_eq!(cvss_to_severity(0.0), "info");
 }
@@ -168,7 +168,8 @@ fn desktop_judging() {
         "stderr_tail": "info: started\nERROR: cache failed\n"});
     let (s, b, a) = judge_desktop(&rep, &["Tooltip".to_string()]);
     assert_eq!(a, Some(false));
-    assert_eq!(b.len(), 4, "{b:?}"); // error dialog, inert, persistence, stderr
+    assert_eq!(b.len(), 3, "{b:?}"); // error dialog, persistence, stderr; inert is unverified
+    assert_eq!(s["unverified_effects"], 1);
     assert_eq!(s["skipped"], 1);
     let (_, _, a) = judge_desktop(&json!({"ok": false, "error": "no window"}), &[]);
     assert_eq!(a, None);
@@ -299,7 +300,7 @@ async fn live_security_vulnerable_vs_clean() {
     vuln_project(bad.path());
     let r = phase3::security(&kev, &cfg, bad.path(), true, "p/python").await;
     eprintln!(
-        "vulnerable: approval={:?} score={} counts={:?} {}ms",
+        "vulnerable: approval={:?} score={:?} counts={:?} {}ms",
         r.approval, r.security_score, r.counts, r.duration_ms
     );
     for t in &r.tools {
@@ -339,7 +340,7 @@ async fn live_security_vulnerable_vs_clean() {
     .unwrap();
     let c = phase3::security(&kev, &cfg, clean.path(), true, "p/python").await;
     eprintln!(
-        "clean: approval={:?} score={} counts={:?} reasons={:?}",
+        "clean: approval={:?} score={:?} counts={:?} reasons={:?}",
         c.approval, c.security_score, c.counts, c.reasons
     );
     assert_eq!(c.approval, Some(true));
@@ -383,7 +384,7 @@ async fn live_quality_on_this_crate() {
     )
     .await;
     eprintln!(
-        "crate: approval={:?} score={} risk={} maint={:?} fns={} maxcx={} maxlen={} dups={} {}ms",
+        "crate: approval={:?} score={:?} risk={} maint={:?} fns={} maxcx={} maxlen={} dups={} {}ms",
         r.approval,
         r.quality_score,
         r.risk_level,
@@ -722,4 +723,13 @@ async fn unity_tests_reports_missing_editor_honestly() {
     let r = kritic::unity::run_tests(&cfg, d.path(), "EditMode", None, 60).await;
     assert!(r.error.unwrap().contains("1999.1.1f1 not installed"));
     assert_eq!(r.approval, None);
+}
+
+#[test]
+fn desktop_unobserved_effect_is_unknown_not_a_broken_handler() {
+    let rep = json!({"ok":true,"interactions":[{"element":{"name":"Paint"},"result":"no_effect"}]});
+    let (s, b, a) = judge_desktop(&rep, &[]);
+    assert_eq!(a, None);
+    assert!(b.is_empty());
+    assert_eq!(s["unverified_effects"], 1);
 }

@@ -37,6 +37,38 @@ use serde_json::{Value, json};
 const PAGE_JS: &str = include_str!("web_page.js");
 const AXE_JS: &str = include_str!("../../assets/axe.min.js");
 
+// Kept in parity with interactionState in harness/ui_test.mjs. Captured after point() scrolls
+// the target into view, so tester preparation and the clicked button's ordinary focus are
+// not confused with an effect produced by the application's action.
+const INTERACTION_STATE_JS: &str = r#"(key) => {
+  const target = document.querySelector(`[data-kritic-id="${key}"]`);
+  const elements = [...document.querySelectorAll("*")];
+  const active = document.activeElement;
+  return {
+    focus: elements.indexOf(active),
+    redirected: !!active && active !== document.body && active !== document.documentElement && active !== target,
+    scroll: [[-1, window.scrollX, window.scrollY], ...elements.flatMap((el, i) =>
+      el.scrollHeight > el.clientHeight || el.scrollWidth > el.clientWidth
+        ? [[i, el.scrollLeft, el.scrollTop]] : [])],
+  };
+}"#;
+
+async fn interaction_state(page: &Page, key: &str) -> Option<Value> {
+    eval(page, &format!("({INTERACTION_STATE_JS})({})", json!(key)))
+        .await
+        .ok()
+}
+
+fn interaction_changed(before: Option<&Value>, after: Option<&Value>) -> bool {
+    match (before, after) {
+        (Some(before), Some(after)) => {
+            before["scroll"] != after["scroll"]
+                || (after["redirected"] == true && before["focus"] != after["focus"])
+        }
+        _ => false,
+    }
+}
+
 pub fn destructive() -> &'static Regex {
     static R: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
     R.get_or_init(|| {
@@ -853,6 +885,7 @@ async fn run_ui_test(
                 (l.console_errors.len(), l.page_errors.len(), l.crashes.len())
             };
             let before = k(&page, "signature", &[]).await.ok();
+            let effect_before = interaction_state(&page, &id).await;
             let req_before = log.lock().unwrap().requests;
             let url_before = page.url().await.ok().flatten().unwrap_or_default();
             let action = if tag == "select" {
@@ -911,6 +944,7 @@ async fn run_ui_test(
                 }
                 Ok(()) => {
                     let after = k(&page, "signature", &[]).await.ok();
+                    let effect_after = interaction_state(&page, &id).await;
                     let now = page.url().await.ok().flatten().unwrap_or_default();
                     let (new_errors, crashed, requests) = {
                         let l = log.lock().unwrap();
@@ -940,6 +974,7 @@ async fn run_ui_test(
                         && before.is_some()
                         && before == after
                         && requests == req_before
+                        && !interaction_changed(effect_before.as_ref(), effect_after.as_ref())
                     {
                         rec["result"] = json!("no_effect");
                     } else {
@@ -995,7 +1030,7 @@ async fn run_ui_test(
                 k(
                     &page,
                     "select",
-                    &[json!("@target"), json!(if n > 1 { n - 1 } else { 0 })],
+                    &[json!("@target"), json!(n.saturating_sub(1))],
                 )
                 .await?
             } else {

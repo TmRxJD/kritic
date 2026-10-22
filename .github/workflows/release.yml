@@ -1,0 +1,30 @@
+name: package test release
+on:
+  push:
+    tags: ['v*-test.*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-targets
+      - run: cargo build --release --locked
+      - name: Package binary, skill, config and optional desktop harness
+        shell: pwsh
+        run: ./scripts/package-test-release.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kritic-windows-x86_64-test
+          path: kritic-windows-x86_64-test.zip
+# Packaging only: publishing a GitHub release/tag requires a separate maintainer action.

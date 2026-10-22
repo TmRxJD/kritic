@@ -1,3 +1,6 @@
+> Historical measurements on the recorded fixtures/configuration, not validation of the current
+> test release or a guarantee for other projects, providers, hardware or operating systems.
+
 # Benchmarks: with vs without kritic
 
 ## What is measured

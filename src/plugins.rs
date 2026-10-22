@@ -204,7 +204,34 @@ pub fn judge(
             reasons.extend(spec.check(id, a));
         }
     }
-    (Some(reasons.is_empty()), reasons)
+    if !reasons.is_empty() {
+        return (Some(false), reasons);
+    }
+    if out["approval"].as_bool() != Some(true) {
+        return (
+            None,
+            vec!["plugin supplied no explicit verified approval".into()],
+        );
+    }
+    if !out["findings"].is_array() {
+        return (None, vec!["plugin findings missing or invalid".into()]);
+    }
+    if let Some(spec) = &m.kev {
+        if let Some(note) = spec.uncalibrated_note() {
+            return (None, vec![note]);
+        }
+        if spec
+            .questions
+            .iter()
+            .any(|q| spec.gates(&q.id) && !kev.contains_key(&q.id))
+        {
+            return (
+                None,
+                vec!["plugin required model evidence is missing".into()],
+            );
+        }
+    }
+    (Some(true), reasons)
 }
 
 pub async fn run<D: Decider>(
@@ -327,7 +354,12 @@ pub async fn run<D: Decider>(
             },
         }
     }
-    let (approval, reasons) = judge(&m, &v, &answers);
+    let mut scoped_manifest = m.clone();
+    if let Some(spec) = &m.kev {
+        scoped_manifest.kev =
+            Some(spec.for_model(&d.model_identity().unwrap_or_else(|| cfg.model.clone())));
+    }
+    let (approval, reasons) = judge(&scoped_manifest, &v, &answers);
     r.approval =
         if r.reasons.iter().any(|x| x.starts_with("Kev unavailable")) && approval == Some(true) {
             None

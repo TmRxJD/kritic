@@ -116,7 +116,8 @@ async fn cloud_backend_end_to_end() {
         std::env::set_var("KRITIC_LAYA_EXE", home.path().join("no-laya"));
     }
 
-    // auto with nothing installed and no key: a clear error naming what to do.
+    unsafe { std::env::set_var("KRITIC_KEV_BACKEND", "auto") };
+    // explicit auto with nothing installed and no key: a clear error naming what to do.
     let k = KevClient::new(Arc::new(Config::load()));
     let err = k.resolve_backend().await.unwrap_err();
     assert!(err.contains("kritic setup"), "{err}");
@@ -132,6 +133,10 @@ async fn cloud_backend_end_to_end() {
     unsafe {
         std::env::set_var("KRITIC_KEV_BACKEND", "cloud");
         std::env::set_var("KRITIC_CLOUD_URL", &url);
+        std::env::set_var("KRITIC_CLOUD_PROVIDER", "jev");
+        std::env::set_var("KRITIC_CLOUD_MODEL", "typesafe-ai/jev");
+        std::env::set_var("KRITIC_CLOUD_KEY_ENV", "AI_GATEWAY_API_KEY");
+        std::env::set_var("KRITIC_CLOUD_KEY_FILE", home.path().join("ai-gateway.key"));
     }
     let k = KevClient::new(Arc::new(Config::load()));
     assert_eq!(
@@ -158,11 +163,12 @@ async fn cloud_backend_end_to_end() {
 
     // Built-in gates were calibrated on kev-4b: under Jev they no longer decide.
     let spec = &kritic::spec::builtin()["code_chunk"];
-    assert!(!spec.gates_apply());
+    assert!(!spec.gates_apply_for(&k.cfg.decision_identity()));
     assert!(
-        spec.uncalibrated_note()
+        spec.for_model(&k.cfg.decision_identity())
+            .uncalibrated_note()
             .unwrap()
-            .contains("typesafe-ai/jev")
+            .contains("advisory")
     );
 
     // A rejected key is reported as such, not as a generic failure.
