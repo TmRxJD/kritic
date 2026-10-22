@@ -11,6 +11,7 @@ pub mod history;
 pub mod register;
 pub mod repository;
 pub mod setup;
+pub mod staleness;
 pub mod ui;
 
 use clap::{Args, Parser, Subcommand};
@@ -56,6 +57,8 @@ pub enum Cmd {
     Debt(debt::DebtArgs),
     /// Check debugging evidence and problem framing; never approves a diagnosis.
     Framing(framing::FramingArgs),
+    /// Audit test currency/canonical ownership, or explicitly synchronize JSON fixtures.
+    Staleness(staleness::StalenessArgs),
 }
 
 #[derive(Args, Debug)]

@@ -1,5 +1,13 @@
 # Tools — test release
 
+Current source adds optional `staleness_critic` and `invariant_critic`: read-only test inventory,
+canonical ownership, review hashes/fixtures, and declared invariant enforcement/negative-test
+bindings. Configure `capabilities.staleness=true` / `capabilities.invariants=true` and
+`.kritic/test-contracts.toml`; [setup and limits](staleness.md). CLI `kritic staleness check`
+works without enabling MCP. No models or commands run. Findings mean false; consistency means
+approval null, never semantic correctness. Only explicit CLI `sync --write` writes fixtures;
+review hashes and tests are never automatically changed.
+
 The `repository_critic` and expanded organization checks below require test.4 or later. The minimal profile hides repository tools
 until `capabilities.repository=true`. [Policy/hook setup and limits](repository-policy.md).
 

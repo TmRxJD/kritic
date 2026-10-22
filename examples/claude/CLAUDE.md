@@ -1,5 +1,9 @@
 # Kritic — TEST RELEASE
 
+Optional source-only `staleness_critic` / `invariant_critic` share one test-contract manifest.
+Never auto-bless changed hashes/assertions. Sync only declared JSON fixtures after review; inspect
+key-boundary guards and run negative cases. Static consistency is not semantic correctness.
+
 For missing configuration/dependencies, follow the skill's `references/setup.md` and repair
 ordinary setup within task scope instead of relaying raw OS errors. Use project-scoped
 `status(start=false, base_dir=repo)` / `doctor --base-dir <repo> --json` on matching new builds;

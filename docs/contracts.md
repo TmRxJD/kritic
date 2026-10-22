@@ -1,5 +1,10 @@
 # Work contracts and enforcement
 
+Current source also accepts `kind="test_freshness"` and `kind="invariants"`, each with
+`path=".kritic/test-contracts.toml"`. They use the same canonical ownership/test graph as
+the staleness/invariant critics. Verification covers declared static hashes, fixture bytes and
+enforcement/test bindings only; pair with real behavioral validators. [Format and limits](staleness.md).
+
 For a missing or invalid project manifest, agents should follow the report's structured setup
 steps (matching current source) and [agent setup/recovery](agent-setup.md). Identify the exact
 repository, derive checks from its real rules, and rerun; do not pass the OS error to the user

@@ -43,6 +43,13 @@ gates apply only to their measured identity; cloud self-reported probabilities n
 Empty/all-skipped coverage cannot approve a task. Reports and issue comments must not expose private
 code, credentials, hidden prompts or machine-specific paths.
 
+For canonical test-source/invariant changes, use the same `.kritic/test-contracts.toml` graph.
+Run `kritic staleness check` and `kritic staleness invariants` plus real behavioral validators.
+Fixture sync may project independent contract data; never auto-bless review hashes or replace
+assertions with implementation output. Explain the intended behavior and review any changed pins.
+Kritic's initial graph deliberately covers only its UX adapter and staleness regression test files;
+unmapped runner/corpus/semantic coverage is unverified. Do not claim full-repository currency.
+
 Project-specific evaluators belong in `.kritic/plugins/`. Do not change verdict thresholds without
 recorded calibration and held-out evidence. Historical results are not current release validation.
 
