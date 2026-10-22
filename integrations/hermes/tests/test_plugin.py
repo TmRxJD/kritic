@@ -151,6 +151,95 @@ def test_invalid_explicit_kritic_exe_is_configuration_error(env, monkeypatch):
         e.compress(msgs)
 
 
+def test_absolute_budget_survives_model_switches_and_clone(env, monkeypatch):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text("compression:\n  threshold_tokens: 28000\nkritic_context:\n  use_kev: false\n", encoding="utf-8")
+    e = engine()
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    original = transcript()
+    snapshot = copy.deepcopy(original)
+    for window, trigger, target in [(1_000_000, 28000, 19600), (65536, 28000, 19600), (32000, 16000, 11200)]:
+        e.update_model("test-model", window)
+        assert e.context_length == window  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+        assert not e.should_compress(trigger - 1)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+        assert e.should_compress(trigger)  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+        assert e.compress(original) == snapshot  # failed backend never destroys history  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+        assert payloads[-1]["target_tokens"] == target < trigger  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    clone = e.clone_for_agent()
+    clone.update_model("large-model", 1_000_000)
+    assert clone.threshold_tokens == 28000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.threshold_tokens == 16000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert original == snapshot  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+
+
+@pytest.mark.parametrize("cap", [True, False, 0, 1, -1, 28000.0, "28000"])
+def test_invalid_absolute_budget_fails_closed(env, cap):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text(json.dumps({"compression": {"threshold_tokens": cap}}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        engine()
+
+
+def test_null_absolute_budget_preserves_window_policy(env):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text('compression: {threshold_tokens: null}\n', encoding="utf-8")
+    e = engine()
+    e.update_model("test-model", 1_000_000)
+    assert e.context_length == 1_000_000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.threshold_tokens == 500000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+
+
+@pytest.mark.parametrize("settings", [{"unknown": 1}, {"threshold": True}, {"target": 0.9}])
+def test_absolute_budget_does_not_bypass_strict_kritic_settings(env, settings):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text(json.dumps({"compression": {"threshold_tokens": 28000},
+                                  "kritic_context": settings}), encoding="utf-8")
+    with pytest.raises(ValueError):
+        engine()
+
+
+@pytest.mark.parametrize("compression", [[], "28000", True])
+def test_absolute_budget_rejects_non_object_compression_settings(env, compression):
+    import hermes_constants
+    config = Path(hermes_constants.get_hermes_home()) / "config.yaml"
+    config.write_text(json.dumps({"compression": compression}), encoding="utf-8")
+    with pytest.raises(ValueError, match="compression must be an object"):
+        engine()
+
+
+def test_whole_request_overhead_reduces_message_budget(env, monkeypatch):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    mod = load_plugin()
+    message_tokens = mod._rough_tokens(messages)
+    payloads = []
+    monkeypatch.setattr(e, "_run", lambda op, payload: payloads.append(payload))
+    e.compress(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000  # 14k total target minus 9k fixed overhead  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    e.prune_tool_results_only(messages, current_tokens=message_tokens + 9000)
+    assert payloads[-1]["target_tokens"] == 5000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    e.compress(messages, current_tokens=message_tokens + 20000)
+    assert payloads[-1]["target_tokens"] == 1  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+
+
+def test_schema_heavy_request_actually_shrinks_with_real_backend(env):
+    e = engine()
+    e.update_model("fixture", 40000)
+    messages = transcript()
+    estimate = load_plugin()._rough_tokens(messages)
+    assert estimate < 14000  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    result = e.compress(messages, current_tokens=estimate + 12000)
+    after = load_plugin()._rough_tokens(result)
+    assert after < estimate  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert e.last_prompt_tokens >= 12000  # fixed tool/system cost is not erased by archiving  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert [m.get("tool_call_id") for m in result if m["role"] == "tool"] == [  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+        m["tool_call_id"] for m in messages if m["role"] == "tool"]
 def test_fails_open_without_implicit_kritic(env, monkeypatch):
     monkeypatch.delenv("KRITIC_EXE", raising=False)
     monkeypatch.setenv("PATH", str(env / "empty"))

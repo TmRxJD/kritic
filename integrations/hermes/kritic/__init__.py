@@ -23,6 +23,11 @@ Activate with ``context.engine: kritic`` in Hermes' ``config.yaml`` (``kritic re
       use_kev: true         # rank by relevance with Kev; false = oldest first
       timeout_s: 90         # one kritic call
 
+The host's ``compression.threshold_tokens`` is also an absolute trigger ceiling
+(an integer greater than one). Kritic scales its target proportionally when that
+ceiling applies, while preserving the real model context length. Built-in tail
+retention settings remain separate.
+
 Concise replies: when ``output.style = "concise"`` in kritic.toml (the default), ``kritic register``
 writes ``concise.md`` beside this file and the plugin adds it to each turn through Hermes'
 ``pre_llm_call`` hook (about 70 tokens per turn). Delete the file, or set ``output.style =
@@ -121,6 +126,15 @@ def _settings() -> Dict[str, Any]:
             raise ValueError(f"kritic_context.{key} must be a nonnegative integer")
     if type(defaults["use_kev"]) is not bool:
         raise ValueError("kritic_context.use_kev must be boolean")
+    compression = cfg.get("compression", {})
+    if compression is None:
+        compression = {}
+    if not isinstance(compression, dict):
+        raise ValueError("compression must be an object")
+    cap = compression.get("threshold_tokens")
+    if cap is not None and (type(cap) is not int or cap < 2):
+        raise ValueError("compression.threshold_tokens must be an integer greater than one")
+    defaults["threshold_tokens_cap"] = cap
     return defaults
 
 
@@ -141,6 +155,7 @@ class KriticContextEngine(ContextEngine):
         s = _settings()
         self.threshold_percent = float(s["threshold"])
         self.target_percent = float(s["target"])
+        self.threshold_tokens_cap = s.get("threshold_tokens_cap")
         self.protect_first_n = int(s["protect_first_n"])
         self.protect_last_n = int(s["protect_last_n"])
         self.big_chars = int(s["big_chars"])
@@ -232,8 +247,18 @@ class KriticContextEngine(ContextEngine):
                 return "invalid response schema: found must be a list of objects"
         return None
 
-    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def _shrink(self, messages: List[Dict[str, Any]], mode: str, focus: Optional[str] = None,
+                current_tokens: Optional[int] = None) -> Optional[Dict[str, Any]]:
         target = int(self.context_length * self.target_percent) if self.context_length else 0
+        if self.threshold_tokens_cap is not None and self.threshold_tokens:
+            # Preserve retention without overstating actual model capacity.
+            target = min(target, int(self.threshold_tokens * self.target_percent / self.threshold_percent))
+        if self.threshold_tokens > 1:
+            target = min(target, self.threshold_tokens - 1)
+        # Hermes supplies the whole-request estimate; the backend receives only messages.
+        # Reserve the system/tool overhead instead of spending the full budget twice.
+        if type(current_tokens) is int and current_tokens >= 0:
+            target -= max(0, current_tokens - _rough_tokens(messages))
         return self._run("compress", {
             "messages": messages, "target_tokens": max(target, 1), "session_id": self.session_id,
             "focus": focus, "protect_first_n": self.protect_first_n, "protect_last_n": self.protect_last_n,
@@ -242,6 +267,11 @@ class KriticContextEngine(ContextEngine):
         })
 
     # ---------------------------------------------------------------- ContextEngine
+
+    def update_model(self, *args: Any, **kwargs: Any) -> None:
+        super().update_model(*args, **kwargs)
+        if self.threshold_tokens_cap is not None:
+            self.threshold_tokens = min(self.threshold_tokens, self.threshold_tokens_cap)
 
     def update_from_response(self, usage: Dict[str, Any]) -> None:
         self.last_prompt_tokens = int(usage.get("prompt_tokens") or 0)
@@ -275,16 +305,17 @@ class KriticContextEngine(ContextEngine):
 
     def compress(self, messages: List[Dict[str, Any]], current_tokens: Optional[int] = None,
                  focus_topic: Optional[str] = None, force: bool = False, memory_context: str = "") -> List[Dict[str, Any]]:
-        result = self._shrink(messages, "compress", focus_topic)
+        result = self._shrink(messages, "compress", focus_topic, current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages
         self.compression_count += 1
         self.archived_total += len(result.get("archived") or [])
-        self.last_prompt_tokens = int(result.get("tokens_after") or 0)
+        overhead = max(0, current_tokens - _rough_tokens(messages)) if type(current_tokens) is int and current_tokens >= 0 else 0
+        self.last_prompt_tokens = int(result.get("tokens_after") or 0) + overhead
         return result["messages"]
 
     def prune_tool_results_only(self, messages: List[Dict[str, Any]], current_tokens: int = None):
-        result = self._shrink(messages, "prune")
+        result = self._shrink(messages, "prune", current_tokens=current_tokens)
         if not result or not isinstance(result.get("messages"), list):
             return messages, 0
         n = len(result.get("archived") or [])
