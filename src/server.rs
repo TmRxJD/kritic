@@ -1375,6 +1375,9 @@ impl Kritic {
         if !base.is_dir() {
             return Err(format!("base_dir is not a directory: {}", p.base_dir));
         }
+        // load_files resolves canonical native paths. Compare against the same
+        // base identity before serializing the relative inventory protocol.
+        let base = crate::files::dunce_canonical(&base);
         let paths = if p.paths.is_empty() {
             crate::tools::source_files(&base, crate::files::MAX_FILES)
         } else {
@@ -1388,7 +1391,12 @@ impl Kritic {
                 (
                     std::path::Path::new(&f)
                         .strip_prefix(&base)
-                        .map(|x| x.display().to_string())
+                        .map(|x| {
+                            x.iter()
+                                .map(|part| part.to_string_lossy())
+                                .collect::<Vec<_>>()
+                                .join("/")
+                        })
                         .unwrap_or(f),
                     t,
                 )
