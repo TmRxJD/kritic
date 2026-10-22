@@ -292,7 +292,8 @@ fn informational_advisory(v: &Value) -> bool {
 
 /// osv-scanner v2 `scan source --format json`. One finding per vulnerable package, at the
 /// package's worst group severity (CVSS), listing its advisory ids.
-pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
+/// Retain manifest provenance relative to the scan root, as with the other analyzers.
+pub fn parse_osv(base: &Path, json: &str) -> Result<Vec<Finding>, String> {
     let v: Value = serde_json::from_str(json).map_err(|e| format!("osv JSON: {e}"))?;
     let mut out = Vec::new();
     for r in v["results"].as_array().ok_or("osv: no results array")? {
@@ -340,10 +341,7 @@ pub fn parse_osv(json: &str) -> Result<Vec<Finding>, String> {
                 } else {
                     "medium".into()
                 },
-                file: Path::new(&src)
-                    .file_name()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or(src.clone()),
+                file: rel(base, &src),
                 line: 0,
                 message: format!(
                     "{name} {ver}: {vulns} {} ({}), e.g. {}",

@@ -128,7 +128,7 @@ pub async fn security<D: Decider>(
             "osv-scanner",
             scan::tool_path(bin, "osv-scanner"),
             &["scan", "source", "-r", "--format", "json", "."],
-            scan::parse_osv,
+            |o| scan::parse_osv(base, o),
         )
         .await;
     } else {

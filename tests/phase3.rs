@@ -48,10 +48,10 @@ fn parses_gitleaks_and_redacts() {
 
 #[test]
 fn parses_osv_one_finding_per_package_at_worst_cvss() {
-    let j = r#"{"results":[{"source":{"path":"C:/p/requirements.txt"},"packages":[
+    let j = r#"{"results":[{"source":{"path":"requirements.txt"},"packages":[
         {"package":{"name":"jinja2","version":"2.10"},"vulnerabilities":[{"id":"PYSEC-1"},{"id":"PYSEC-2"}],"groups":[{"max_severity":"5.4"},{"max_severity":"8.6"}]},
         {"package":{"name":"ok","version":"1"},"vulnerabilities":[],"groups":[]}]}]}"#;
-    let f = scan::parse_osv(j).unwrap();
+    let f = scan::parse_osv(Path::new("."), j).unwrap();
     assert_eq!(f.len(), 1);
     assert_eq!(
         (f[0].severity.as_str(), f[0].file.as_str()),
@@ -60,6 +60,41 @@ fn parses_osv_one_finding_per_package_at_worst_cvss() {
     assert!(f[0].message.contains("2 security advisories"));
     assert_eq!(cvss_to_severity(9.8), "critical");
     assert_eq!(cvss_to_severity(0.0), "info");
+}
+
+#[test]
+fn osv_preserves_nested_manifest_identity() {
+    let base = std::env::temp_dir().join("kritic-osv-source");
+    let paths = [
+        "requirements.txt".to_owned(),
+        "tools/analyzer/requirements.txt".to_owned(),
+        base.join("services/api/requirements.txt")
+            .to_string_lossy()
+            .into_owned(),
+    ];
+    let results: Vec<_> = paths
+        .iter()
+        .map(|path| {
+            json!({
+                "source": {"path": path},
+                "packages": [{
+                    "package": {"name": "example", "version": "1.0"},
+                    "vulnerabilities": [{"id": "TEST-1"}],
+                    "groups": [{"max_severity": "8.0"}]
+                }]
+            })
+        })
+        .collect();
+    let findings = scan::parse_osv(&base, &json!({"results": results}).to_string()).unwrap();
+    assert_eq!(
+        findings.iter().map(|f| f.file.as_str()).collect::<Vec<_>>(),
+        [
+            "requirements.txt",
+            "tools/analyzer/requirements.txt",
+            "services/api/requirements.txt"
+        ]
+    );
+    assert!(findings.iter().all(|f| f.severity == "high"));
 }
 
 #[test]
