@@ -14,6 +14,7 @@ pub mod critic;
 pub mod debt;
 pub mod events;
 pub mod files;
+pub mod framing;
 pub mod gpu;
 pub mod history;
 pub mod history_api;

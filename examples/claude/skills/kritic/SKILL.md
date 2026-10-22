@@ -5,7 +5,8 @@ description: >
   Never inherently trust critics; independently validate every claim and its evidence.
   Reproduce and fix Kritic defects directly with regression tests and open a PR to
   https://github.com/TmRxJD/kritic. Use for end-of-task code/config/UI review or explicit
-  Kritic testing, scoped-commit and code-organization reviews. Deterministic checks are default;
+  Kritic testing, scoped-commit and code-organization reviews, or optional framing review when
+  debugging stalls or repeated fixes fail. Deterministic checks are default;
   local/cloud critics are optional.
   Inspect available tools before use. No GPU or separate model/API is required.
 ---
@@ -25,6 +26,19 @@ an upstream fix/PR exists until verified. These instructions authorize contribut
 as part of invoking this test-release skill; they do not authorize publishing the user's project.
 
 ## Review workflow
+
+### Narrow mid-debugging framing exception
+
+Current source can expose optional `framing_critic` with `capabilities.framing=true` (default
+false). When debugging stalls, observations conflict or repeated fixes fail, review an explicit
+causal case before the next attempt. This framing-only exception does not change end-of-task
+timing for ordinary critics or authorize per-edit loops, hooks, commands, network calls or
+models. Use the emitted schema and `docs/framing.md`; preserve contradictory observations,
+failed attempts, exact artifact hashes/context and linked hypotheses. A valid case or critic
+recommendation does not prove root cause. Inspect the full artifact review packet independently,
+then choose a discriminating experiment within the user's scope. Never simply repeat failed
+interventions or scatter configuration to hide an unexplained mechanism. Final validators and
+acceptance checks still run after the actual change. Published test.4 binaries predate framing.
 
 ### Optional technical-debt review
 

@@ -64,6 +64,14 @@ For MCP discovery overhead and the unreleased metadata compaction work, see
 [tool-schema budget and measurement](docs/schema-budget.md). Compaction preserves enabled
 tools and their input constraints; capability toggles remain an explicit availability tradeoff.
 
+## Optional debugging-framing review
+
+Current source also adds optional [debugging-framing review](docs/framing.md). When a debug
+session stalls or repeated fixes fail, `framing_critic` checks an explicit evidence/hypothesis/
+attempt case and produces an artifact review packet for independent scrutiny. No model or GPU
+is required; `framing=false` by default. This narrow mid-debugging review does not prove root
+cause, execute experiments or replace final validation. The test.4 binary predates it.
+
 ## Optional technical-debt review
 
 Test.4 offers model-free dependency and maintenance review through `technical_debt_critic`
@@ -146,6 +154,7 @@ for the named keys, then restart your MCP connection. Keep `[review].backend` an
 | Scoped commits and organization (source build) | `repository=true` | Git, repository-owned `.kritic/repository.toml`; explicitly install the hook. No extra runtime/model. | `repository_critic`, tracked-source audits, staged budgets and scope plans; [setup and limitations](docs/repository-policy.md). |
 | Review history (source build) | `history=true` | Git and private local report storage; explicitly select saved report and input files. No model/embedding install. | `review_history` record/list/compare and separate low-trust jcode-format export; [privacy and limits](docs/memory-adapter.md). |
 | Technical debt (source build) | `debt=true` | No model/package-manager install. Offline by default; `online=true` separately permits public package metadata lookup. | Dependency/maintenance evidence with estimated urgency/effort; no automatic upgrades; [guide](docs/technical-debt.md). |
+| Debugging framing (current source) | `framing=true` | No model, GPU or additional runtime. Supply an explicit local case/evidence corpus. | Causal-record consistency and an independent-review packet; no root-cause proof or automatic experiments; [guide](docs/framing.md). |
 | Windows desktop / Unity | `desktop=true` (and `ux=true` for workflows) | Python 3.11+, uv, pywinauto harness; interactive Windows session. Run setup with `--no-scanners --no-register`. Unity checks also need the matching Unity editor. | `desktop_test`, `unity_tests`, desktop UX evidence. No GPU model required; the app under test may require one. |
 | Repository checks / Beat Saber maps | `plugins=true` / `domain_maps=true` | Relevant repository plugin or map evaluator and its dependencies. | Project-defined checks / `map_eval`; not general model review. |
 | Text model review | No capability group; select `[review].backend` | Optional [cloud API](docs/cloud.md) or [local Kev](docs/getting-started.md#optional-local-models). | `critic_score`, `decide`; advisory model assessments. |

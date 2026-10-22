@@ -1,5 +1,12 @@
 ## Kritic TEST RELEASE
 
+Optional source-only `framing_critic` is disabled by default. It alone may run mid-debugging
+when evidence conflicts or repeated fixes fail: review a bounded, explicit causal case and
+independently inspect the full artifact packet before choosing the next experiment. Preserve
+contradictory evidence and stale-context warnings; no result proves root cause or bug resolution.
+This does not permit ordinary per-edit critic loops, hooks, automatic commands or model/network
+use. Final task review remains necessary. See docs/framing.md and the emitted schema.
+
 Optional `technical_debt_critic` is disabled by default. Use it for an explicit
 maintenance review, offline unless the user authorizes public package metadata lookup.
 Inspect coverage gaps and source/date/status evidence; validate urgency and estimated effort.

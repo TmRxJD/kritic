@@ -1,0 +1,17 @@
+{
+  "context": {
+    "revision": "synthetic-fixture-v1",
+    "run_id": "timeout-reproduction-1",
+    "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "data": {
+    "from": "normalize",
+    "to": "client",
+    "stage": "client",
+    "symptom_persists": false,
+    "intervention": "pass canonical timeout through client construction",
+    "normalized_timeout_ms": 1500,
+    "client_timeout_ms": 1500,
+    "timeout_mismatch": false
+  }
+}

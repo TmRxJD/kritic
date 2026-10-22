@@ -192,6 +192,7 @@ pub(super) fn known_tool(tool: &str) -> bool {
             | "security_critic"
             | "code_quality_critic"
             | "technical_debt_critic"
+            | "framing_critic"
             | "contract_critic"
             | "visual_critic"
             | "ux_critic"

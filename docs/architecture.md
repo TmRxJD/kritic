@@ -31,6 +31,10 @@ advisory judgments; cloud/off calls do not acquire GPU locks or unload local mod
   same capability through the CLI. No model, package-manager script or automatic update runs.
   [Privacy, coverage and budgets](technical-debt.md).
 - vision.rs/ux.rs: optional local/cloud screenshot and novice judgments; deterministic workflow rules.
+- framing.rs/framing/: optional bounded debugging-case validation, evidence integrity and causal
+  relationship review. It produces a local artifact packet for independent scrutiny, without
+  automatic command execution, network/indexing or model inference. A frame is not a proven
+  root cause. [Case workflow and timing exception](framing.md).
 
 GPU coordination applies only to explicitly selected local inference. One selected model at a
 time is coordinated within/across Kritic processes; unrelated applications are outside that

@@ -5,6 +5,7 @@ backend = "off"
 [vision]
 backend = "off"
 [capabilities]
+framing = false
 web = false
 ux = false
 security = false

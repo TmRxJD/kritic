@@ -16,6 +16,7 @@ scores, and a model opinion never removes a deterministic failure.
 
 | Tool | Deterministic part | Kev / model part | Approval rule |
 |---|---|---|---|
+| `framing_critic` (source only, opt-in) | bounded explicit debugging case, artifact/context integrity and linked observations/hypotheses/attempts; independent artifact review packet | none | no root-cause attestation or task acceptance; narrow stalled-debugging timing exception; [guide](framing.md) |
 | `technical_debt_critic` (opt-in) | bounded dependency inventory, explicit maintenance/migration evidence, optional selected comment markers; offline by default, explicit public registry/cache evidence | none | advisory, no approval; unknown versions, missing evidence and coverage gaps remain explicit; [guide](technical-debt.md) |
 | `review_history` (opt-in) | explicit private report snapshots, input/context hashes, bounded historical comparison and sanitized jcode-format export | none | no approval; always historical/unverified, never cached acceptance or current freshness; [guide](memory-adapter.md) |
 | `contract_critic` | declared acceptance checks, fresh commands when opted in, evidence hashes/age, static enforcement wiring | none; calling agent reviews prose/coverage | false on required violations; null on uncovered/stale/unrun required checks; only declared assertions may be verified |

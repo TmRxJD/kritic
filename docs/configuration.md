@@ -23,6 +23,7 @@ contracts = true
 repository = true
 history = false
 debt = false
+framing = false
 plugins = true
 context = false
 domain_maps = false
@@ -53,6 +54,12 @@ pass as current verification. [Commands, privacy, bounds and limitations](memory
 model and defaults to no HTTP. Registry lookups require explicit per-call `online=true` /
 `--online`; `refresh` additionally requires that online opt-in. Repository declarations live
 in `.kritic/debt.toml`. [Coverage, privacy, cache, ratings and upgrade workflow](technical-debt.md).
+
+`capabilities.framing=false` / `KRITIC_CAP_FRAMING=false` is the default for source-only
+`framing_critic` / `kritic framing`. Enable deliberately and restart MCP. It needs no model
+or GPU and reads only the explicit debugging case/evidence; no commands, HTTP or workspace
+indexing run. The default case is `.kritic/debug-case.json`; `kritic framing --schema` prints
+the schema. [Case construction, privacy and mid-debugging exception](framing.md).
 
 `review.backend`: off, local, cloud, or explicitly selected auto (discover local installation
 only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting values disable
