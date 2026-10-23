@@ -189,6 +189,9 @@ fn malformed_answers_never_default_and_truncation_is_explicit() {
     r["answers"]["s"]["probabilities"] = json!({"0":0.2,"3":0.8});
     cases.push(r);
     let mut r = response();
+    r["answers"]["s"]["legend"] = json!({"0":"high", "1":"low"});
+    cases.push(r);
+    let mut r = response();
     r["usage"] = json!({});
     cases.push(r);
     let mut r = response();

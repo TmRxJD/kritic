@@ -18,7 +18,10 @@ Do not download 4B weights merely to test configuration. Adapter merging has a t
 memory peak; see the measured M1 results below. Avoid compiling Rust during inference
 latency measurements on an 8 GiB machine.
 
-Use Python 3.12 and uv, and a separate upstream checkout:
+Use Python 3.12 and uv, and a separate upstream checkout. Keep the upstream checkout,
+venv and logs in a normal project directory such as `~/Projects`, outside macOS-protected
+Documents/Desktop folders: launchd may be denied access to those folders even when your
+interactive terminal can read them. The commands below assume Kritic is in `~/Projects/kritic`:
 
 ```sh
 git clone https://github.com/jaredpalmer/kev.git ../kev
@@ -29,18 +32,33 @@ cd ../kritic
 uv run --python 3.12 scripts/serve-mlx.py \
   --config examples/profiles/mac-mlx-0.8b.toml \
   --kev-dir ../kev --log-dir "$PWD/.kritic-mlx"
+/bin/launchctl bootstrap "gui/$(id -u)" "$PWD/.kritic-mlx/kev-mlx.plist"
 export KRITIC_CONFIG="$PWD/examples/profiles/mac-mlx-0.8b.toml"
 cargo run --locked -- doctor --online --json
 ```
 
-The launcher detaches the service with null stdin and file logs, binds only `127.0.0.1`,
-forces `KEV_BACKEND=mlx`, `KEV_DTYPE=bf16`, and `--device mps`, and refuses occupied ports.
-It records a PID but does not claim readiness until `/v1/models` answers. Check its log
-while the first download/load runs. Kritic never installs, starts, restarts or kills this
-native service, including on timeout. Stop only the PID in your launcher's `kev-mlx.pid`
-after inspecting that process; remove that PID file after it exits. Preserve unrelated
-services. This launcher requires 24 GiB for larger models as a conservative policy,
-not a measured hardware minimum.
+The script **only writes** an owner-readable/writable launchd plist; it executes no
+programs. Inspect its fixed `ProgramArguments`, absolute venv executable and working
+directory, then submit it with the explicit `launchctl bootstrap` command above.
+launchd owns the detached background process, with null stdin and file logs. The job
+binds only `127.0.0.1`, forces `KEV_BACKEND=mlx`, `KEV_DTYPE=bf16`, and `--device mps`,
+and does not automatically restart after exit. The generator refuses occupied ports
+and existing plist files, and obtains physical RAM through `os.sysconf`, without a
+PATH-resolved utility or shell. Its environment is explicit; temperature/adapter
+transforms and API keys are not inherited.
+
+Readiness still requires `/v1/models`; inspect the log during first download/load.
+Inspect and stop **only your job** (the port determines its label):
+
+```sh
+/bin/launchctl print "gui/$(id -u)/com.kritic.kev-mlx.8009"
+/bin/launchctl bootout "gui/$(id -u)/com.kritic.kev-mlx.8009"
+```
+
+Kritic never installs, starts, restarts or kills this native service, including on
+timeout. Preserve unrelated launchd jobs. After your job exits, remove only its
+owned plist before generating it again. The generator requires 24 GiB for larger
+models as a conservative policy, not a measured hardware minimum.
 
 ## Configuration and production-size selection
 
@@ -75,7 +93,8 @@ introducing acceptance gates. Native model cards are self-reported runtime evide
 not a cryptographic attestation of weights. Do not infer parity or accuracy from a
 successful request. `noul` omits confidence upstream; Kritic derives binary certainty
 `max(p, 1-p)` solely for compatibility, not reliability. Choice/score confidence is
-validated as supplied; score distributions and legends must have the requested indices.
+validated as supplied; score distributions and legends must have the requested indices and exact textual level labels.
+Native score levels in Kritic are textual; nontextual levels are refused.
 
 ## Diagnose and verify
 
@@ -94,6 +113,7 @@ validated as supplied; score distributions and legends must have the requested i
   scanners/Windows desktop dependencies can make doctor nonzero; model-off is expected.
 
 ```sh
+python -m unittest discover -s scripts -p test_serve_mlx.py
 cargo fmt --check
 cargo clippy --lib --bins -- -D warnings
 cargo test --test kev_mlx --test external_models --test config --test unit

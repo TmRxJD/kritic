@@ -79,3 +79,32 @@ No model probabilities are presented as accuracy or reliability measurements.
 See [setup, configuration and troubleshooting](mac-mlx.md). All native MLX identities
 remain unverified and advisory, including 4B. Temporary owned services were stopped;
 unrelated services were preserved.
+
+## CI security follow-up
+
+The first PR run (`39882375459`) passed Semgrep, Windows Rust and legacy-browser,
+but Bandit 1.9.4 failed on four low-severity/high-confidence findings in the original
+launcher: B404 (`subprocess` import), B607 (PATH-resolved `sysctl`) and two B603
+process calls. The downloaded job artifact contained no parser errors. No rules,
+thresholds, scan targets or suppression comments were changed.
+
+The launcher now generates an exclusive, mode-0600 launchd plist instead of executing
+programs. RAM comes from `os.sysconf`; fixed argv, an absolute operator-selected venv
+path, loopback host, explicit environment, null stdin, file logs and non-restarting
+background ownership are declared in the plist. Startup/shutdown use explicit
+`launchctl bootstrap`/`bootout` commands. Four model-free unit regressions verify the
+job, memory/profile restrictions, occupied-port refusal, serialization, permissions
+and no-overwrite behavior, and run in CI. A real launchd lifecycle smoke used a
+fixture-only HTTP listener on 127.0.0.1:18009, verified arguments/environment/logging,
+and stopped only that owned job. A first fixture under Documents was denied by macOS
+privacy protection at Python initialization; the same fixture under the normal Projects
+checkout passed. Setup documentation now requires an unprotected project directory for
+launchd inputs/logs. No model weights were loaded for this follow-up.
+Previous inference and memory measurements above describe the unchanged upstream
+MLX runtime; the revised launchd path has been lifecycle-tested with the fixture,
+not rebenchmarked with model weights.
+
+Native score parsing also now rejects swapped/mismatched textual legend labels,
+with a negative response regression. Bandit 1.9.4 and Semgrep 1.178.0 p/default both
+pass locally with zero findings/errors; the existing nonempty-coverage verifier also
+passes. Targeted Rust tests, format and strict all-target Clippy pass.

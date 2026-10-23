@@ -108,10 +108,10 @@ pub fn normalize(
                     || legend.len() != levels.len()
                     || (0..levels.len()).any(|i| {
                         !probabilities.contains_key(&i.to_string())
-                            || !legend.contains_key(&i.to_string())
+                            || levels[i].as_str() != legend.get(&i.to_string()).map(String::as_str)
                     })
                 {
-                    return Err("native score distribution/legend must contain exactly the requested level indices".into());
+                    return Err("native score distribution/legend must match requested textual levels and indices".into());
                 }
             }
             _ => {}
