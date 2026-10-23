@@ -324,7 +324,7 @@ async fn install_local_kev(
     if !cfg.config_errors.is_empty() {
         return Err("Fix config_errors before local model setup".into());
     }
-    if cfg.kev_externally_managed {
+    if cfg.local_runtime == "mlx" || cfg.kev_externally_managed {
         ui::skip(
             "Kev is externally managed; no service/model provisioning (probe with doctor --online)",
         );

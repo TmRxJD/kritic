@@ -571,7 +571,9 @@ impl DecisionSpec {
     }
 
     pub fn gates_apply_for(&self, model: &str) -> bool {
-        self.calibrated_for.iter().any(|m| m == model) && !model.starts_with("cloud:")
+        self.calibrated_for.iter().any(|m| m == model)
+            && !model.starts_with("cloud:")
+            && !model.starts_with("unverified-mlx:")
     }
 
     /// Clone a spec with gates made advisory for this exact decision's provenance.

@@ -125,7 +125,7 @@ pub async fn unload_vision(cfg: &Config) {
 
 /// Stop laya so the vision model gets the GPU. Returns whether a process was stopped.
 pub async fn stop_laya(cfg: &Config) -> bool {
-    if cfg.kev_externally_managed || !cfg.config_errors.is_empty() {
+    if cfg.local_runtime == "mlx" || cfg.kev_externally_managed || !cfg.config_errors.is_empty() {
         return false;
     }
     if !matches!(cfg.backend.as_str(), "local" | "auto") {

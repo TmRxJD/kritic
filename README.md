@@ -274,3 +274,7 @@ credentials and reports out of public issues. [Agent setup](docs/agent-setup.md)
 [Architecture](docs/architecture.md) · [Security audit](docs/security-audit.md)
 
 Apache-2.0. Optional models, runtimes, scanners and other dependencies retain their own licenses.
+
+Apple Silicon can opt into [native Kev-0.8B MLX testing](docs/mac-mlx.md), without laya.
+The pinned M1 profile uses bounded short requests; all MLX probabilities remain advisory.
+A separate 4B configuration template requires fresh quality checks and a larger Mac.

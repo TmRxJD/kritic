@@ -1,0 +1,17 @@
+# Production-size selection template. Requires a larger Mac and fresh quality/calibration checks.
+[review]
+backend = "local"
+[kev]
+local_runtime = "mlx"
+externally_managed = true
+native_url = "http://127.0.0.1:8009"
+native_run = "jaredpalmer/kev-4b@6cfce5c2fa4b4bd64026336ab649c5ca78857d52"
+native_base = "Qwen/Qwen3.5-4B-Base"
+native_dtype = "bfloat16"
+model = "kev-latest"
+chunk_chars = 600
+token_budget = 1024
+max_seq_tokens = 1024
+request_s = 30
+[vision]
+backend = "off"

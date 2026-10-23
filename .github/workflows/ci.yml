@@ -78,6 +78,8 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/_test_deps/hermes
           KRITIC_EXE: ${{ github.workspace }}/target/debug/kritic.exe
+      - name: Model-free native MLX launchd contract
+        run: python -m unittest discover -s scripts -p test_serve_mlx.py
       - run: python scripts/test_calibration_policy.py
       - name: Stage validated Windows test binary
         shell: pwsh

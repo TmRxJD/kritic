@@ -34,6 +34,12 @@ pub struct Config {
     pub cloud_key_env: String,
     /// An explicit file is an intentional credential selection; default saved keys are origin-bound.
     pub cloud_key_file_explicit: bool,
+    /// Local protocol/runtime: legacy laya or upstream native MLX (externally managed).
+    pub local_runtime: String,
+    pub native_url: String,
+    pub native_run: String,
+    pub native_base: String,
+    pub native_dtype: String,
     pub laya_url: String,
     pub laya_exe: PathBuf,
     pub kev_gguf: PathBuf,
@@ -101,6 +107,11 @@ pub const KEYS: &[(&str, &str)] = &[
     ("cloud.max_output_tokens", "KRITIC_CLOUD_MAX_OUTPUT_TOKENS"),
     ("cloud.key_env", "KRITIC_CLOUD_KEY_ENV"),
     ("cloud.key_file", "KRITIC_CLOUD_KEY_FILE"),
+    ("kev.local_runtime", "KRITIC_LOCAL_RUNTIME"),
+    ("kev.native_url", "KRITIC_NATIVE_URL"),
+    ("kev.native_run", "KRITIC_NATIVE_RUN"),
+    ("kev.native_base", "KRITIC_NATIVE_BASE"),
+    ("kev.native_dtype", "KRITIC_NATIVE_DTYPE"),
     ("kev.laya_url", "KRITIC_LAYA_URL"),
     ("kev.laya_port", "KRITIC_LAYA_PORT"),
     ("kev.laya_exe", "KRITIC_LAYA_EXE"),
@@ -586,6 +597,17 @@ impl Config {
                 }),
             ),
             cloud_key_env: s.str("cloud.key_env", default_env),
+            local_runtime: choice_setting(
+                &s,
+                "kev.local_runtime",
+                &["laya", "mlx"],
+                "laya",
+                &mut config_errors,
+            ),
+            native_url: s.str("kev.native_url", "http://127.0.0.1:8009"),
+            native_run: s.str("kev.native_run", "jaredpalmer/kev-0.8b"),
+            native_base: s.str("kev.native_base", "Qwen/Qwen3.5-0.8B-Base"),
+            native_dtype: s.str("kev.native_dtype", "bfloat16"),
             laya_url: s.str("kev.laya_url", format!("http://127.0.0.1:{port}")),
             laya_exe: s.path(
                 "kev.laya_exe",
@@ -642,6 +664,32 @@ impl Config {
     }
 
     fn validate_settings(&mut self) {
+        if self.local_runtime == "mlx" {
+            let local = reqwest::Url::parse(&self.native_url).ok().is_some_and(|u| {
+                u.scheme() == "http"
+                    && matches!(u.host_str(), Some("127.0.0.1" | "[::1]"))
+                    && u.username().is_empty()
+                    && u.password().is_none()
+                    && u.path() == "/"
+                    && u.query().is_none()
+                    && u.fragment().is_none()
+            });
+            if !local {
+                self.config_errors
+                    .push("kev.native_url must be an HTTP loopback origin".into());
+            }
+            if self.kev_cpu_only {
+                self.config_errors
+                    .push("MLX requires Metal; kev.cpu_only is incompatible".into());
+            }
+            if self.native_run.is_empty()
+                || self.native_base.is_empty()
+                || self.native_dtype.is_empty()
+            {
+                self.config_errors
+                    .push("MLX requires explicit run, base and dtype identity".into());
+            }
+        }
         self.visual_quality_target = self.visual_quality_target.to_ascii_lowercase();
         if self.visual_quality_target == "aaa" {
             self.visual_quality_target = "showcase".into();
@@ -735,6 +783,10 @@ impl Config {
         match self.backend.as_str() {
             "cloud" => format!("cloud:{}:{}", self.cloud_provider, self.cloud_model),
             "off" => "disabled".into(),
+            _ if self.local_runtime == "mlx" => format!(
+                "unverified-mlx:{}:{}:{}:{}",
+                self.model, self.native_run, self.native_base, self.native_dtype
+            ),
             _ => format!(
                 "unverified-local:{}:{}",
                 self.model,

@@ -112,67 +112,74 @@ pub async fn checks(cfg: Arc<Config>, online: bool) -> Vec<Check> {
                 format!("local Kev ({})", cfg.model),
                 None,
             ));
-            if cfg.kev_externally_managed {
-                c.push(check("kev", "runtime ownership", Level::Skip,
-                    "externally managed; local executable, weights and CUDA installation are the service owner's responsibility", None));
+            if cfg.local_runtime == "mlx" {
+                let result = kev.ensure_up().await;
+                c.push(check("kev", "native MLX", if result.is_ok() { Level::Ok } else { Level::Fail },
+                    result.err().unwrap_or_else(|| format!("verified external MLX at {}; judgments advisory", cfg.native_url)),
+                    Some("see docs/mac-mlx.md; Kritic never provisions or restarts the native service")));
             } else {
-            let gguf = cfg.kev_gguf.metadata().map(|m| m.len()).unwrap_or(0);
-            c.push(if gguf > 1_000_000_000 {
-                check(
-                    "kev",
-                    "weights",
-                    Level::Ok,
-                    format!("{} ({})", cfg.kev_gguf.display(), ui::bytes(gguf)),
-                    None,
-                )
-            } else {
-                check(
-                    "kev",
-                    "weights",
-                    Level::Fail,
-                    format!("{} missing or incomplete", cfg.kev_gguf.display()),
-                    Some("kritic setup"),
-                )
-            });
-            if cfg!(windows) && cfg.laya_exe.is_file() {
-                let dir = cfg.laya_exe.parent().unwrap_or(Path::new("."));
-                let cuda_build = std::fs::metadata(&cfg.laya_exe)
-                    .map(|m| m.len() > 100_000_000)
-                    .unwrap_or(false);
-                if cuda_build
-                    && !dir.join("cublas64_12.dll").is_file()
-                    && crate::config::which("cublas64_12").is_none()
-                {
-                    c.push(check(
-                        "kev",
-                        "CUDA runtime",
-                        Level::Fail,
-                        format!("cublas64_12.dll not beside {}", cfg.laya_exe.display()),
-                        Some("kritic setup (fetches NVIDIA's CUDA 12 runtime DLLs)"),
-                    ));
+                if cfg.kev_externally_managed {
+                    c.push(check("kev", "runtime ownership", Level::Skip,
+                        "externally managed; local executable, weights and CUDA installation are the service owner's responsibility", None));
+                } else {
+                    let gguf = cfg.kev_gguf.metadata().map(|m| m.len()).unwrap_or(0);
+                    c.push(if gguf > 1_000_000_000 {
+                        check(
+                            "kev",
+                            "weights",
+                            Level::Ok,
+                            format!("{} ({})", cfg.kev_gguf.display(), ui::bytes(gguf)),
+                            None,
+                        )
+                    } else {
+                        check(
+                            "kev",
+                            "weights",
+                            Level::Fail,
+                            format!("{} missing or incomplete", cfg.kev_gguf.display()),
+                            Some("kritic setup"),
+                        )
+                    });
+                    if cfg!(windows) && cfg.laya_exe.is_file() {
+                        let dir = cfg.laya_exe.parent().unwrap_or(Path::new("."));
+                        let cuda_build = std::fs::metadata(&cfg.laya_exe)
+                            .map(|m| m.len() > 100_000_000)
+                            .unwrap_or(false);
+                        if cuda_build
+                            && !dir.join("cublas64_12.dll").is_file()
+                            && crate::config::which("cublas64_12").is_none()
+                        {
+                            c.push(check(
+                                "kev",
+                                "CUDA runtime",
+                                Level::Fail,
+                                format!("cublas64_12.dll not beside {}", cfg.laya_exe.display()),
+                                Some("kritic setup (fetches NVIDIA's CUDA 12 runtime DLLs)"),
+                            ));
+                        }
+                    }
                 }
-            }
-            }
-            match kev.health().await {
-                Some(_) => c.push(check(
-                    "kev",
-                    "laya",
-                    Level::Ok,
-                    format!("answering at {}", cfg.laya_url),
-                    None,
-                )),
-                None if cfg.kev_externally_managed => c.push(check(
-                    "kev", "laya", Level::Fail,
-                    format!("externally managed reviewer is not reachable at {}; Kritic will not start it", cfg.laya_url),
-                    Some("verify the configured endpoint with its service owner; do not install or restart an externally managed reviewer. Deterministic critics remain available"),
-                )),
-                None => c.push(check(
-                    "kev",
-                    "laya",
-                    Level::Ok,
-                    "not running; kritic starts it on first use (~40 s the very first time)",
-                    None,
-                )),
+                match kev.health().await {
+                    Some(_) => c.push(check(
+                        "kev",
+                        "laya",
+                        Level::Ok,
+                        format!("answering at {}", cfg.laya_url),
+                        None,
+                    )),
+                    None if cfg.kev_externally_managed => c.push(check(
+                        "kev", "laya", Level::Fail,
+                        format!("externally managed reviewer is not reachable at {}; Kritic will not start it", cfg.laya_url),
+                        Some("verify the configured endpoint with its service owner; do not install or restart an externally managed reviewer. Deterministic critics remain available"),
+                    )),
+                    None => c.push(check(
+                        "kev",
+                        "laya",
+                        Level::Ok,
+                        "not running; kritic starts it on first use (~40 s the very first time)",
+                        None,
+                    )),
+                }
             }
         }
         Ok(Backend::Cloud { .. }) => {

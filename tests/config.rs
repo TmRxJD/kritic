@@ -115,6 +115,51 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     unsafe { std::env::remove_var("KRITIC_DISABLED_TOOLS") };
     assert_eq!(Config::load().disabled_tools, DEFAULT_DISABLED);
 
+    // Profile selection only reads TOML: no service or weight download is involved.
+    unsafe { std::env::remove_var("KRITIC_KEV_MODEL") };
+    for (profile, model) in [
+        ("mac-mlx-0.8b.toml", "kev-0.8b@"),
+        ("mac-mlx-4b.toml", "kev-4b@"),
+    ] {
+        unsafe {
+            std::env::set_var(
+                "KRITIC_CONFIG",
+                format!("{}/examples/profiles/{profile}", env!("CARGO_MANIFEST_DIR")),
+            )
+        };
+        let cfg = Config::load();
+        assert!(cfg.config_errors.is_empty(), "{:?}", cfg.config_errors);
+        assert_eq!(cfg.backend, "local");
+        assert_eq!(cfg.local_runtime, "mlx");
+        assert!(cfg.native_run.contains(model));
+        assert_eq!(cfg.max_seq_tokens, 1024);
+        assert!(cfg.decision_identity().starts_with("unverified-mlx:"));
+        for spec in kritic::spec::builtin().values() {
+            assert!(!spec.gates_apply_for(&cfg.decision_identity()));
+        }
+    }
+    unsafe { std::env::set_var("KRITIC_NATIVE_URL", "https://example.com") };
+    assert!(
+        Config::load()
+            .config_errors
+            .iter()
+            .any(|e| e.contains("loopback"))
+    );
+    unsafe {
+        std::env::remove_var("KRITIC_NATIVE_URL");
+        std::env::set_var("KRITIC_KEV_CPU_ONLY", "true")
+    };
+    assert!(
+        Config::load()
+            .config_errors
+            .iter()
+            .any(|e| e.contains("Metal"))
+    );
+    unsafe {
+        std::env::remove_var("KRITIC_CONFIG");
+        std::env::remove_var("KRITIC_KEV_CPU_ONLY")
+    };
+
     // Set-but-empty means unset; a relative home is made absolute.
     unsafe { std::env::set_var("KRITIC_HOME", "") };
     assert!(

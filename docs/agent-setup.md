@@ -35,3 +35,6 @@ Use test.5 or later for these runtime additions; older releases may omit preflig
 The reference explains the manual fallback using supported `status`, `doctor --json` and project
 inspection. Binary/global configuration changes require reconnecting MCP; project files are
 reread per critic call. Setup guidance does not confer execution or publication permission.
+
+Apple Silicon local review uses the explicit [native MLX profile](mac-mlx.md). Keep
+model-off deterministic setup as the default; do not provision laya/GGUF for that profile.

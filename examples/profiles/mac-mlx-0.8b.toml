@@ -1,0 +1,17 @@
+# Advisory M1 testing; start the matching loopback service separately (docs/mac-mlx.md).
+[review]
+backend = "local"
+[kev]
+local_runtime = "mlx"
+externally_managed = true
+native_url = "http://127.0.0.1:8009"
+native_run = "jaredpalmer/kev-0.8b@bf75a6a8848ea6960ff2ed108d9ed44c2941174f"
+native_base = "Qwen/Qwen3.5-0.8B-Base"
+native_dtype = "bfloat16"
+model = "kev-latest"
+chunk_chars = 600
+token_budget = 1024
+max_seq_tokens = 1024
+request_s = 30
+[vision]
+backend = "off"
