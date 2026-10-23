@@ -42,10 +42,13 @@ programs. Inspect its fixed `ProgramArguments`, absolute venv executable and wor
 directory, then submit it with the explicit `launchctl bootstrap` command above.
 launchd owns the detached background process, with null stdin and file logs. The job
 binds only `127.0.0.1`, forces `KEV_BACKEND=mlx`, `KEV_DTYPE=bf16`, and `--device mps`,
-and does not automatically restart after exit. The generator refuses occupied ports
+and does not automatically restart after exit. `ProcessType=Interactive` supplies normal
+foreground scheduling for inference while the process stays detached and headless;
+launchd's Background resource policy can severely throttle Python/model startup. The generator refuses occupied ports
 and existing plist files, and obtains physical RAM through `os.sysconf`, without a
-PATH-resolved utility or shell. Its environment is explicit; temperature/adapter
-transforms and API keys are not inherited.
+PATH-resolved utility or shell. Its fixed `/usr/bin/env -i` argument list clears the inherited launchd environment before
+setting the explicit profile variables, HOME and PATH; temperature/adapter transforms
+and API keys are not inherited. `EnvironmentVariables` alone would not provide isolation.
 
 Readiness still requires `/v1/models`; inspect the log during first download/load.
 Inspect and stop **only your job** (the port determines its label):
@@ -128,7 +131,11 @@ question types through Kritic. It checks protocol/identity/truncation, not quali
 ## Measured M1 validation
 
 See the [exact checks, failures/skips and measurements](mac-mlx-validation.md).
-The successful short-request smoke test does not establish model quality or parity.
+The small retry-TOML `artifact_validate(use_model=true)` workflow also completed with
+one chunk scored, completeness assessed, no truncation, `kev_ok=true` and `approval=null`
+at the shipped 1,024 estimated-token row cap. This establishes small-review integration,
+not general workload fit, model quality or parity. Larger task text/state/questions may
+still exceed the conservative row cap and must be shortened.
 
 ## Upstream evidence
 

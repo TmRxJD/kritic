@@ -99,12 +99,45 @@ fixture-only HTTP listener on 127.0.0.1:18009, verified arguments/environment/lo
 and stopped only that owned job. A first fixture under Documents was denied by macOS
 privacy protection at Python initialization; the same fixture under the normal Projects
 checkout passed. Setup documentation now requires an unprotected project directory for
-launchd inputs/logs. No model weights were loaded for this follow-up.
+launchd inputs/logs. No model weights were loaded for the fixture lifecycle tests.
 Previous inference and memory measurements above describe the unchanged upstream
-MLX runtime; the revised launchd path has been lifecycle-tested with the fixture,
-not rebenchmarked with model weights.
+MLX runtime; a later bounded real 0.8B workflow below validates launchd integration, but the revised
+startup path was not used to replace the original memory/latency benchmark.
 
 Native score parsing also now rejects swapped/mismatched textual legend labels,
 with a negative response regression. Bandit 1.9.4 and Semgrep 1.178.0 p/default both
 pass locally with zero findings/errors; the existing nonempty-coverage verifier also
 passes. Targeted Rust tests, format and strict all-target Clippy pass.
+
+### Built-in workflow and inherited-environment validation
+
+The bounded follow-up launched the same pinned 0.8B upstream service through the
+shipped launchd configuration from `~/Projects/kev`. Background scheduling delayed
+initial Python imports beyond 90 seconds; switching the detached job to launchd's
+Interactive scheduling made it ready within a 13.24-second readiness wait. This
+is integration evidence, not a replacement startup benchmark.
+
+Through MCP, `artifact_validate(use_model=true)` reviewed this meaningful fixture:
+
+```toml
+[retry]
+max_attempts = 3
+backoff_ms = 250
+```
+
+Task: “Configure three retry attempts with a 250 millisecond backoff.” With the
+unchanged shipped 1,024 estimated-token row cap, parse/UTF-8/marker checks passed;
+the built-in code_chunk and completeness questions ran successfully across four
+upstream inference requests: one chunk scored, zero unscored/truncated chunks,
+572 reported input tokens total, 2,443 ms aggregate inference latency,
+`kev_ok=true`, `advisory=true`, `approval=null`, and no acceptance gates. This is a
+small-review compatibility smoke, not an accuracy/calibration result. The model job
+was stopped afterward; no production weights were loaded.
+
+Review identified that launchd EnvironmentVariables augments inherited values.
+The generator now declares an absolute `/usr/bin/env -i` argv wrapper, then only
+fixed profile variables and HOME/PATH, without a shell. Unit tests assert that
+boundary and full allowed assignments. A real fixture launchd job was given
+job-local hostile KEV_API_KEY/KEV_TEMPERATURE/KEV_BACKEND values; its child observed
+no API key/temperature and the selected mlx/bf16 values. No global launchd variables
+were changed, and only the owned fixture job was stopped.

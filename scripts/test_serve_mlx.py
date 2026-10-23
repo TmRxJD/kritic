@@ -32,15 +32,20 @@ class LaunchdTests(unittest.TestCase):
 
     def test_fixed_argv_environment_and_headless_ownership(self):
         job = self.build()
-        self.assertEqual(job['ProgramArguments'], [str(self.python.resolve()), '-m', 'kev.serve', '--run',
+        args = job['ProgramArguments']
+        self.assertEqual(args[:2], ['/usr/bin/env', '-i'])
+        interpreter = args.index(str(self.python.resolve()))
+        self.assertEqual(args[interpreter:], [str(self.python.resolve()), '-m', 'kev.serve', '--run',
             'jaredpalmer/kev-0.8b@revision', '--device', 'mps', '--host', '127.0.0.1', '--port', '8009'])
-        self.assertEqual(job['EnvironmentVariables']['KEV_BACKEND'], 'mlx')
-        self.assertEqual(job['EnvironmentVariables']['KEV_PREFIX_MAX_TOKENS'], '1024')
-        self.assertNotIn('KEV_API_KEY', job['EnvironmentVariables'])
-        self.assertNotIn('KEV_TEMPERATURE', job['EnvironmentVariables'])
+        self.assertEqual(set(args[2:interpreter]), {
+            'HOME=' + str(Path.home()), 'PATH=/usr/bin:/bin:/usr/sbin:/sbin',
+            'KEV_BACKEND=mlx', 'KEV_DTYPE=bf16', 'KEV_MERGE=1', 'KEV_TRUNCATE_STATES=0',
+            'KEV_PREFIX_CACHE=1', 'KEV_PREFIX_MAX_TOKENS=1024', 'PYTHONUNBUFFERED=1'})
+        self.assertNotIn('EnvironmentVariables', job)
         self.assertEqual(job['StandardInPath'], '/dev/null')
         self.assertFalse(job['KeepAlive'])
         self.assertTrue(job['RunAtLoad'])
+        self.assertEqual(job['ProcessType'], 'Interactive')
         self.assertNotIn('Shell', job)
 
     def test_refuses_unsafe_profiles_and_large_model_before_start(self):

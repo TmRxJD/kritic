@@ -35,19 +35,22 @@ def build_job(cfg, kev_dir, log_dir, ram):
     python = kev / '.venv/bin/python'
     if not python.is_file():
         raise ValueError(f'{python} missing; sync the upstream serve environment first')
+    # launchd EnvironmentVariables augments its inherited environment. env -i is the
+    # actual isolation boundary; arguments are fixed data, interpreted by no shell.
+    environment = {
+        'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin',
+        'KEV_BACKEND': 'mlx', 'KEV_DTYPE': 'bf16', 'KEV_MERGE': '1',
+        'KEV_TRUNCATE_STATES': '0', 'KEV_PREFIX_CACHE': '1',
+        'KEV_PREFIX_MAX_TOKENS': str(k['max_seq_tokens']), 'PYTHONUNBUFFERED': '1',
+    }
     return {
         'Label': f'com.kritic.kev-mlx.{port}',
-        'ProgramArguments': [str(python), '-m', 'kev.serve', '--run', run, '--device', 'mps',
+        'ProgramArguments': ['/usr/bin/env', '-i',
+                             *[f'{key}={value}' for key, value in sorted(environment.items())],
+                             str(python), '-m', 'kev.serve', '--run', run, '--device', 'mps',
                              '--host', '127.0.0.1', '--port', str(port)],
         'WorkingDirectory': str(kev),
-        # Explicit environment: do not inherit temperature/adapter transforms or API keys.
-        'EnvironmentVariables': {
-            'HOME': str(Path.home()), 'PATH': '/usr/bin:/bin:/usr/sbin:/sbin',
-            'KEV_BACKEND': 'mlx', 'KEV_DTYPE': 'bf16', 'KEV_MERGE': '1',
-            'KEV_TRUNCATE_STATES': '0', 'KEV_PREFIX_CACHE': '1',
-            'KEV_PREFIX_MAX_TOKENS': str(k['max_seq_tokens']), 'PYTHONUNBUFFERED': '1',
-        },
-        'RunAtLoad': True, 'KeepAlive': False, 'ProcessType': 'Background',
+        'RunAtLoad': True, 'KeepAlive': False, 'ProcessType': 'Interactive',
         'StandardInPath': '/dev/null',
         'StandardOutPath': str(logs / 'kev-mlx.log'),
         'StandardErrorPath': str(logs / 'kev-mlx.log'),
