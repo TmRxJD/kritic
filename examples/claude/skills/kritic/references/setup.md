@@ -101,3 +101,14 @@ validators. Report what was configured, what ran, what remains unverified and an
 Do not stop at “review unavailable” when a missing project file or known dependency can be repaired
 within the existing task. Do not turn setup recovery into permission to download models, change
 providers, run arbitrary contract/plugin commands, or publish the user's project.
+
+## Apple Silicon native reviewer
+
+Consult `docs/mac-mlx.md` in the matching Kritic checkout and
+`examples/profiles/mac-mlx-0.8b.toml`. Native MLX is externally managed and uses
+`/v1/models` plus `/v1/systemone`, not laya `/health` or `/v1/decide`. Inspect RAM, disk,
+memory pressure and startup peak before loading. Download only the selected 0.8B/base
+weights on an 8 GiB M1. Preserve model-off defaults and unrelated services; do not
+install laya/GGUF or switch to cloud/CPU to repair a native profile. All MLX scores
+remain advisory, including 4B; checkpoint/precision/backend changes require fresh
+quality checks and calibration. Use native `local_ready` status, not `laya_up`.

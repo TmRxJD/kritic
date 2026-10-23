@@ -9,6 +9,12 @@
 # evidence in specs/*.json. Recalibrate (scripts/calibrate-specs.mjs) instead of editing them.
 
 [kev]
+# Local transport: laya (default) or upstream native MLX; see profiles/mac-mlx-0.8b.toml.
+# local_runtime = "laya" # KRITIC_LOCAL_RUNTIME
+# native_url = "http://127.0.0.1:8009" # KRITIC_NATIVE_URL
+# native_run = "jaredpalmer/kev-0.8b" # KRITIC_NATIVE_RUN
+# native_base = "Qwen/Qwen3.5-0.8B-Base" # KRITIC_NATIVE_BASE
+# native_dtype = "bfloat16" # KRITIC_NATIVE_DTYPE
 # Legacy backend alias. Prefer review.backend; conflicting aliases fail closed.
 # Who answers Kev's typed questions:
 #   auto  - explicitly selected local discovery; never falls back to cloud

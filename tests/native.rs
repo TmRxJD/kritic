@@ -21,6 +21,7 @@ fn python() -> Option<String> {
 
 // The parent opens an inheritable listening socket, starts a child that inherits it, and exits:
 // the port stays bound by an exited owner, which is exactly what a real Unity app's engine did.
+#[cfg(windows)]
 const PARENT: &str = r#"
 import socket, subprocess, sys
 s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(); s.set_inheritable(True)
@@ -198,6 +199,10 @@ fn slope_is_least_squares() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "verified process sampling is supported on Windows and Linux only"
+)]
 async fn resource_sampler_separates_a_leak_from_an_idle_process() {
     let Some(py) = python() else {
         return eprintln!("skipped: no python");

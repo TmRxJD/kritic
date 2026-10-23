@@ -20,6 +20,7 @@ pub mod history;
 pub mod history_api;
 pub mod hygiene;
 pub mod kev;
+pub mod kev_native;
 pub mod map;
 pub mod metrics;
 pub mod native;

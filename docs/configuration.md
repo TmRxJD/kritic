@@ -122,3 +122,7 @@ Scanner feeds/rules, installers and tested websites can use networks independent
 
 Cloud provider examples: [cloud.md](cloud.md). Contract execution is a separate per-call opt-in:
 `run_commands=true` / CLI `--run-commands`, after reviewing the manifest's commands.
+
+For Apple Silicon, see [native MLX setup and profiles](mac-mlx.md). `kev.local_runtime`
+selects `laya` (default) or `mlx`; native endpoint/checkpoint/base/dtype are explicit,
+loopback-only, externally managed and never inherit laya Q8 calibration.

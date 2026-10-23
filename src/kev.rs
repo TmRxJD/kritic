@@ -328,14 +328,22 @@ fn require_answer_ids(
     answers: &serde_json::Map<String, Value>,
 ) -> Result<(), String> {
     if answers.len() != questions.len() || questions.keys().any(|id| !answers.contains_key(id)) {
-        return Err("cloud answers must contain exactly the requested question IDs".into());
+        return Err("answers must contain exactly the requested question IDs".into());
     }
     Ok(())
 }
 
 impl KevClient {
     pub fn new(cfg: Arc<Config>) -> Self {
-        let http = reqwest::Client::builder()
+        let builder = reqwest::Client::builder();
+        let builder = if cfg.local_runtime == "mlx" {
+            builder
+                .no_proxy()
+                .redirect(reqwest::redirect::Policy::none())
+        } else {
+            builder
+        };
+        let http = builder
             .connect_timeout(Duration::from_secs(3))
             .timeout(Duration::from_secs(cfg.kev_request_s))
             .build()
@@ -352,7 +360,8 @@ impl KevClient {
     /// Whether a local Kev is installed (laya answering, or its binary and weights present).
     pub async fn local_available(&self) -> bool {
         self.health().await.is_some()
-            || (self.cfg.laya_exe.is_file() && self.cfg.kev_gguf.is_file())
+            || (self.cfg.local_runtime == "laya"
+                && (self.cfg.laya_exe.is_file() && self.cfg.kev_gguf.is_file()))
     }
 
     /// Resolve `kev.backend` once. `auto` prefers the local model: code is sent to the cloud only
@@ -443,6 +452,9 @@ impl KevClient {
     }
 
     pub async fn health(&self) -> Option<Value> {
+        if self.cfg.local_runtime == "mlx" {
+            return self.native_health().await.ok();
+        }
         let r = self
             .http
             .get(format!("{}/health", self.cfg.laya_url))
@@ -479,6 +491,13 @@ impl KevClient {
 
     /// Start laya if it isn't answering. Returns Err with a human-readable reason on failure.
     pub async fn ensure_up(&self) -> Result<(), String> {
+        if self.cfg.local_runtime == "mlx" {
+            if !self.cfg.config_errors.is_empty() {
+                return Err("MLX unavailable until config_errors are fixed".into());
+            }
+            self.native_health().await?;
+            return Ok(());
+        }
         if !self.cfg.config_errors.is_empty() {
             return Err("Kev unavailable until config_errors are fixed".into());
         }
@@ -591,6 +610,12 @@ impl KevClient {
         match tokio::time::timeout(limit, self.exchange(state, questions)).await {
             Ok(result) => result,
             Err(_) => {
+                if self.cfg.local_runtime == "mlx" {
+                    return Err(format!(
+                        "native MLX request stalled after {}s; externally managed service left running",
+                        limit.as_secs()
+                    ));
+                }
                 let stopped = crate::gpu::stop_laya(&self.cfg).await;
                 let recovery = if stopped {
                     "stopped it; the next call restarts it"
@@ -614,16 +639,54 @@ impl KevClient {
         }
     }
 
+    async fn native_health(&self) -> Result<Value, String> {
+        let response = self
+            .http
+            .get(format!(
+                "{}/v1/models",
+                self.cfg.native_url.trim_end_matches('/')
+            ))
+            .timeout(Duration::from_secs(3))
+            .send()
+            .await
+            .map_err(|e| {
+                format!("native MLX readiness failed: {e}; start the external loopback service")
+            })?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("native MLX readiness HTTP {status}"));
+        }
+        let health: Value = response
+            .json()
+            .await
+            .map_err(|e| format!("native MLX invalid model card: {e}"))?;
+        let models: crate::kev_native::Models = serde_json::from_value(health.clone())
+            .map_err(|e| format!("native MLX invalid model card: {e}"))?;
+        models.validate(&self.cfg)?;
+        Ok(health)
+    }
+
     async fn exchange(
         &self,
         state: &Value,
         questions: &BTreeMap<String, Question>,
     ) -> Result<(Value, u64), String> {
+        if self.cfg.local_runtime == "mlx" {
+            for q in questions.values() {
+                if est_row_tokens(state, q) > self.cfg.max_seq_tokens {
+                    return Err("native MLX request exceeds conservative short-context budget; shorten state/questions".into());
+                }
+            }
+        }
         let body = json!({"model": self.cfg.model, "state": state, "questions": questions});
         let t0 = Instant::now();
         let r = self
             .http
-            .post(format!("{}/v1/decide", self.cfg.laya_url))
+            .post(if self.cfg.local_runtime == "mlx" {
+                format!("{}/v1/systemone", self.cfg.native_url.trim_end_matches('/'))
+            } else {
+                format!("{}/v1/decide", self.cfg.laya_url)
+            })
             .json(&body)
             .send()
             .await
@@ -638,14 +701,20 @@ impl KevClient {
         let v: Value = r
             .json()
             .await
-            .map_err(|e| format!("laya returned non-JSON ({status}): {e}"))?;
+            .map_err(|e| format!("local reviewer returned non-JSON ({status}): {e}"))?;
         if !status.is_success() {
             let msg = v
                 .pointer("/error/message")
+                .or_else(|| v.get("detail"))
                 .and_then(Value::as_str)
                 .unwrap_or("unknown error");
-            return Err(format!("laya HTTP {status}: {msg}"));
+            return Err(format!("local reviewer HTTP {status}: {msg}"));
         }
+        let v = if self.cfg.local_runtime == "mlx" {
+            crate::kev_native::normalize(v, questions, &self.cfg.model)?
+        } else {
+            v
+        };
         Ok((v, t0.elapsed().as_millis() as u64))
     }
 }
@@ -694,6 +763,8 @@ impl Decider for KevClient {
                 .get("answers")
                 .and_then(Value::as_object)
                 .ok_or("laya response has no answers")?;
+            require_answer_ids(&group, answers)?;
+            out.truncated |= v["truncated"].as_bool().unwrap_or(false);
             for (id, q) in &group {
                 let raw = answers
                     .get(id)
@@ -706,6 +777,7 @@ impl Decider for KevClient {
                 .unwrap_or(0) as usize;
             // laya cuts rows silently at max_seq_tokens; the cloud model's window is not ours to know.
             if backend == Backend::Local
+                && self.cfg.local_runtime == "laya"
                 && tokens / group.len().max(1) >= self.cfg.max_seq_tokens.saturating_sub(8)
             {
                 out.truncated = true;

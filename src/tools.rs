@@ -518,6 +518,10 @@ pub struct StatusResult {
     pub gates_calibrated: bool,
     /// A gateway key is configured (the key itself is never shown).
     pub cloud_key_configured: bool,
+    pub local_runtime: String,
+    pub local_url: String,
+    pub local_ready: bool,
+    /// Legacy laya-only status; native readiness is local_ready.
     pub laya_up: bool,
     pub laya_url: String,
     pub health: Option<Value>,
@@ -588,7 +592,14 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
             }),
         decision_model,
         cloud_key_configured: cfg.cloud_key().is_some(),
-        laya_up: health.is_some(),
+        local_runtime: cfg.local_runtime.clone(),
+        local_url: if cfg.local_runtime == "mlx" {
+            cfg.native_url.clone()
+        } else {
+            cfg.laya_url.clone()
+        },
+        local_ready: health.is_some(),
+        laya_up: cfg.local_runtime == "laya" && health.is_some(),
         laya_url: cfg.laya_url.clone(),
         health,
         laya_exe: cfg.laya_exe.display().to_string(),

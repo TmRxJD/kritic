@@ -116,6 +116,10 @@ async fn nonexistent_pid_never_becomes_zero_usage_success() {
 }
 
 #[tokio::test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "verified process sampling is supported on Windows and Linux only"
+)]
 async fn live_attachment_collects_actual_samples_without_gpu_probe() {
     let result =
         resource::resource(None, Some(std::process::id()), true, None, 0.2, 100, 0.0).await;
