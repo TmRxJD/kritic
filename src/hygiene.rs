@@ -51,7 +51,12 @@ pub fn judge_leaks(h: &Value) -> Vec<String> {
     let mut b = Vec::new();
     for p in h["processes"].as_array().into_iter().flatten() {
         b.push(format!(
-            "process started by the run was still alive after it ended (killed): {}",
+            "process started by the run was still alive after it ended ({}): {}",
+            match p["killed"].as_bool() {
+                Some(true) => "termination requested",
+                Some(false) => "termination failed or identity changed",
+                None => "cleanup status unverified",
+            },
             proc_label(p)
         ));
     }

@@ -2,6 +2,7 @@
 //! resource sampling, and (Windows) desktop UI automation. No external runtime needed.
 
 pub mod hygiene;
+mod ownership;
 pub mod procs;
 pub mod resource;
 pub mod web;

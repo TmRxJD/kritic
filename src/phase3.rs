@@ -950,10 +950,9 @@ pub async fn resource<D: Decider>(
         ..Default::default()
     };
     let _ = cfg;
-    // Whatever the run starts must be gone when it ends: snapshot, run, then report leaks.
-    let roots = crate::native::hygiene::roots_for(None, command.as_ref(), cwd, &[]);
-    let before = (!roots.is_empty()).then(|| crate::native::hygiene::snapshot(&roots));
-    let mut rep = crate::native::resource::resource(
+    // The native sampler owns descendants by observed ancestry and creation identity.
+    // Interpreter directories, cwd, baseline absence and process age never confer ownership.
+    let rep = crate::native::resource::resource(
         command.clone(),
         pid,
         allow_attach,
@@ -963,14 +962,6 @@ pub async fn resource<D: Decider>(
         1.0,
     )
     .await;
-    if let Some(b) = before
-        && rep["ok"] == true
-    {
-        rep["hygiene"] =
-            tokio::task::spawn_blocking(move || crate::native::hygiene::leaks(&b, true))
-                .await
-                .unwrap_or(Value::Null);
-    }
     if rep["ok"] != true {
         r.error = rep["error"].as_str().map(String::from);
         return r;

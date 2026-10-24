@@ -1218,6 +1218,7 @@ dependencies = [
  "clap",
  "flate2",
  "futures-util",
+ "libc",
  "netstat2",
  "regex",
  "reqwest",

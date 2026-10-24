@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
+use super::ownership::{self, Identity, Ownership};
 use super::procs::{self, pid};
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -65,23 +66,23 @@ fn round(v: f64, places: i32) -> f64 {
 
 fn sample_tree(
     sys: &mut sysinfo::System,
-    root: u32,
-    cum_disk: &mut std::collections::HashMap<u32, (u64, u64)>,
-) -> (Sample, HashSet<u32>) {
+    owned: &mut Ownership,
+    cum_disk: &mut std::collections::HashMap<Identity, (u64, u64)>,
+) -> (Sample, HashSet<Identity>) {
     procs::refresh(sys);
-    let pids = procs::tree_pids(sys, root);
+    let pids = owned.observe(&ownership::table(sys));
     let threads = procs::thread_counts();
     let mut s = Sample {
         procs: pids.len() as f64,
         ..Default::default()
     };
     for p in &pids {
-        let Some(proc_) = sys.process(pid(*p)) else {
+        let Some(proc_) = sys.process(pid(p.pid)) else {
             continue;
         };
         s.cpu += proc_.cpu_usage() as f64;
         s.rss += proc_.memory() as f64;
-        let x = procs::extra(*p, &threads);
+        let x = procs::extra(p.pid, &threads);
         s.private += if x.private_bytes > 0 {
             x.private_bytes as f64
         } else {
@@ -190,6 +191,12 @@ fn start(
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        cmd.creation_flags(CREATE_NO_WINDOW.0);
+    }
     let child = cmd
         .spawn()
         .map_err(|e| format!("cannot start command: {e}"))?;
@@ -230,10 +237,18 @@ fn resource_blocking(
     interval_ms: u64,
     warmup_s: f64,
 ) -> Value {
+    if !cfg!(any(windows, target_os = "linux")) {
+        return json!({"ok": false, "error": "authenticated resource process ownership is unsupported on this platform"});
+    }
     let (root, mut child) = match start(command, attach, allow_attach, cwd) {
         Ok(x) => x,
         Err(e) => return json!({"ok": false, "error": e}),
     };
+    let Some(root_identity) = ownership::identity(root) else {
+        // Never substitute path/age/PID heuristics if creation identity is unavailable.
+        return json!({"ok": false, "error": "cannot authenticate root process creation identity"});
+    };
+    let mut owned = Ownership::new(root_identity);
     let interval = Duration::from_millis(interval_ms.max(100));
     let mut sys = procs::system();
     let mut cum_disk = std::collections::HashMap::new();
@@ -243,7 +258,7 @@ fn resource_blocking(
     let t0 = Instant::now();
     let mut n = 0usize;
     while t0.elapsed().as_secs_f64() < duration_s + warmup_s {
-        let (mut s, tree) = sample_tree(&mut sys, root, &mut cum_disk);
+        let (mut s, tree) = sample_tree(&mut sys, &mut owned, &mut cum_disk);
         let t = t0.elapsed().as_secs_f64();
         if t >= warmup_s {
             s.t = round(t - warmup_s, 2);
@@ -257,21 +272,20 @@ fn resource_blocking(
         }
         if let Some(c) = child.as_mut()
             && let Ok(Some(status)) = c.try_wait()
-            && tree.len() <= 1
+            && tree.iter().all(|p| *p == owned.root())
         {
             exit_code = Some(status.code().unwrap_or(-1));
             break;
         }
         std::thread::sleep(interval);
     }
-    if let Some(c) = child.as_mut()
-        && c.try_wait().ok().flatten().is_none()
-    {
-        procs::refresh(&mut sys);
-        procs::kill_all(&sys, &procs::tree_pids(&sys, root));
-        let _ = c.kill();
-        let _ = c.wait();
-    }
+    // Only a launched run is ours to terminate; attachment is strictly observational.
+    // Retained identities also cover observed children orphaned before the final snapshot.
+    let hygiene = if let Some(c) = child.as_mut() {
+        cleanup(&mut sys, &mut owned, c)
+    } else {
+        json!({"processes": [], "ports": []})
+    };
     if samples.is_empty() {
         return json!({"ok": false, "error": "no samples (process exited immediately?)", "exit_code": exit_code});
     }
@@ -282,5 +296,50 @@ fn resource_blocking(
         .step_by(step)
         .map(|s| json!({"t": s.t, "cpu": round(s.cpu, 1), "rss_mb": round(s.rss / mb, 1)}))
         .collect();
-    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code), "timeline": timeline, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
+    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code), "timeline": timeline, "hygiene": hygiene, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
+}
+
+fn cleanup(
+    sys: &mut sysinfo::System,
+    owned: &mut Ownership,
+    child: &mut std::process::Child,
+) -> Value {
+    let root_exited = child.try_wait().ok().flatten().is_some();
+    procs::refresh(sys);
+    let mut live: Vec<_> = owned.observe(&ownership::table(sys)).into_iter().collect();
+    live.sort_by_key(|p| std::cmp::Reverse(p.born));
+    let ports = procs::ports_by_pid();
+    let mut processes = Vec::new();
+    let mut leaked_ports = Vec::new();
+    for identity in live {
+        let Some(p) = sys.process(pid(identity.pid)) else {
+            continue;
+        };
+        // Root termination ends the sampling window; surviving descendants are leaks.
+        let process_ports = ports.get(&identity.pid).cloned().unwrap_or_default();
+        let killed = ownership::terminate(identity);
+        if (identity != owned.root() && root_exited) || !killed {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            processes.push(json!({"pid": identity.pid, "ppid": p.parent().map(|p| p.as_u32()),
+                "name": p.name().to_string_lossy(), "cmd": procs::cmdline(p).chars().take(200).collect::<String>(),
+                "age_s": now.saturating_sub(procs::start_time(p)), "ports": process_ports, "killed": killed}));
+            for port in process_ports {
+                leaked_ports.push(
+                    json!({"port": port, "pid": identity.pid, "name": p.name().to_string_lossy()}),
+                );
+            }
+        }
+    }
+    // Reap a terminated root without waiting indefinitely on a failed termination. Never
+    // fall back to Child::kill (a bare PID on some platforms).
+    for _ in 0..20 {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => break,
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+    json!({"processes": processes, "ports": leaked_ports})
 }

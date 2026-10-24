@@ -156,6 +156,20 @@ fn budgets_and_leak_heuristics() {
 }
 
 #[test]
+fn leak_reporting_distinguishes_termination_from_unverified_cleanup() {
+    let report = json!({"processes": [
+        {"pid": 10, "name": "owned", "age_s": 1, "killed": true},
+        {"pid": 11, "name": "owned", "age_s": 1, "killed": false},
+        {"pid": 12, "name": "legacy", "age_s": 1}
+    ]});
+    let reasons = kritic::hygiene::judge_leaks(&report);
+    assert!(reasons[0].contains("termination requested"));
+    assert!(reasons[1].contains("termination failed or identity changed"));
+    assert!(reasons[2].contains("cleanup status unverified"));
+    assert!(reasons.iter().all(|r| !r.contains("(killed)")));
+}
+
+#[test]
 fn desktop_judging() {
     let rep = json!({"ok": true,
         "interactions": [
