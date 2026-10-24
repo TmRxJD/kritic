@@ -673,6 +673,13 @@ fn progress(event: &str, data: Value) {
 }
 
 pub async fn ui_test(cfg: &crate::config::Config, input: &Value) -> Value {
+    let flows = match crate::ui::normalize_flows(&input["flows"]) {
+        Ok(flows) => flows,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let mut normalized = input.clone();
+    normalized["flows"] = json!(flows);
+    let input = &normalized;
     let url = input["url"].as_str().unwrap_or_default().to_string();
     if !input["allow_remote"].as_bool().unwrap_or(false) && !is_local(&url) {
         return json!({"ok": false, "error": format!("refusing non-local URL {} (set allow_remote)", origin(&url))});

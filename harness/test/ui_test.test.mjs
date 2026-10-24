@@ -44,6 +44,29 @@ function run(input) {
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "kritic-ui-"));
 
+test("JSON-encoded MCP flows execute assertions and screenshots", async () => {
+  const r = await run({ url: `${base}/good.html`, out_dir: tmp(), explore: false, axe: false,
+    flows: [JSON.stringify({ name: "encoded flow", steps: [
+      { do: "expect_visible", target: "#name" }, { do: "screenshot" },
+      { do: "expect_visible", target: "#missing", timeout_ms: 200 },
+    ] })],
+  });
+  assert.equal(r.ok, true, r.error);
+  assert.equal(r.flows[0].name, "encoded flow");
+  assert.equal(r.flows[0].passed, false);
+  assert.deepEqual(r.flows[0].steps.map(s => s.result), ["ok", "ok", "fail"]);
+  assert.ok(fs.existsSync(r.flows[0].steps[1].screenshot));
+});
+
+test("empty and malformed flows are rejected before browser execution", async () => {
+  for (const flow of [{}, { steps: [] }, JSON.stringify({ steps: [] }), "not JSON", "[]", { steps: [{}] }]) {
+    const r = await run({ url: `${base}/good.html`, out_dir: tmp(), explore: false, flows: [flow] });
+    assert.equal(r.ok, false, JSON.stringify(flow));
+    assert.ok(r.error);
+    assert.equal(r.flows, undefined);
+  }
+});
+
 test("good app: no errors, persistence holds, links crawled", async () => {
   const r = await run({
     url: `${base}/good.html`, out_dir: tmp(),

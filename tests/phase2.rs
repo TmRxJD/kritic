@@ -321,3 +321,52 @@ fn failed_flows_become_breakages_naming_the_step() {
         b[0]
     );
 }
+
+#[test]
+fn ui_flows_decode_mcp_strings_and_reject_empty_or_malformed_scripts() {
+    let flow =
+        json!({"name": "visible player", "steps": [{"do": "expect_visible", "target": "#player"}]});
+    assert_eq!(
+        kritic::ui::normalize_flows(&json!([flow.to_string()])).unwrap(),
+        vec![flow.clone()]
+    );
+    assert_eq!(
+        kritic::ui::normalize_flows(&json!([flow.clone()])).unwrap(),
+        vec![flow]
+    );
+    for invalid in [
+        json!(["not JSON"]),
+        json!(["[]"]),
+        json!([{}]),
+        json!([{"steps": []}]),
+        json!([{"steps": [{}]}]),
+        json!([{"steps": ["click"]}]),
+        json!({}),
+    ] {
+        assert!(kritic::ui::normalize_flows(&invalid).is_err(), "{invalid}");
+    }
+    for steps in [
+        json!([]),
+        json!([{"result": "skipped"}]),
+        json!([{"result": "ok"}, {"result": "fail"}]),
+    ] {
+        assert_eq!(
+            kritic::ui::judge_flows(&[json!({"name": "vacuous", "passed": true, "steps": steps})])
+                .len(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_ui_rejects_empty_flow_before_browser_launch() {
+    let result = kritic::native::web::ui_test(
+        &Config::load(),
+        &json!({"url": "http://127.0.0.1:1", "explore": false,
+            "flows": ["{\"name\":\"empty\",\"steps\":[]}"]}),
+    )
+    .await;
+    assert_eq!(result["ok"], false);
+    assert_eq!(result["error"], "flow 1: steps must be a non-empty array");
+    assert!(result["flows"].is_null());
+}

@@ -140,6 +140,14 @@ async function screenshot(input) {
 }
 
 async function uiTest(input) {
+  if (input.flows != null && !Array.isArray(input.flows)) throw new Error("flows must be an array");
+  input.flows = (input.flows || []).map((raw, i) => {
+    const flow = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!flow || typeof flow !== "object" || Array.isArray(flow)) throw new Error(`flow ${i + 1}: must be an object`);
+    if (!Array.isArray(flow.steps) || flow.steps.length === 0) throw new Error(`flow ${i + 1}: steps must be a non-empty array`);
+    if (flow.steps.some(s => !s || typeof s !== "object" || typeof s.do !== "string" || !s.do.length)) throw new Error(`flow ${i + 1}: each step must be an object with a non-empty do action`);
+    return flow;
+  });
   const start = new URL(input.url);
   if (!input.allow_remote && !isLocal(start)) throw new Error(`refusing non-local URL ${start.origin} (set allow_remote)`);
   const maxPages = input.max_pages ?? 5;
