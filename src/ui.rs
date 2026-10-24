@@ -199,7 +199,12 @@ pub fn judge(
 pub fn judge_flows(flows: &[Value]) -> Vec<String> {
     flows
         .iter()
-        .filter(|f| f["passed"] != true)
+        .filter(|f| {
+            f["passed"] != true
+                || !f["steps"].as_array().is_some_and(|steps| {
+                    !steps.is_empty() && steps.iter().all(|s| s["result"] == "ok")
+                })
+        })
         .map(|f| {
             let step = f["steps"]
                 .as_array()
@@ -215,6 +220,42 @@ pub fn judge_flows(flows: &[Value]) -> Vec<String> {
                 ),
                 None => format!("flow \"{}\" failed", f["name"].as_str().unwrap_or("?")),
             }
+        })
+        .collect()
+}
+
+/// Accept object flows and JSON-encoded MCP flow strings; reject vacuous scripts before launch.
+pub fn normalize_flows(flows: &Value) -> Result<Vec<Value>, String> {
+    if flows.is_null() {
+        return Ok(Vec::new());
+    }
+    flows
+        .as_array()
+        .ok_or("flows must be an array")?
+        .iter()
+        .enumerate()
+        .map(|(i, raw)| {
+            let invalid = |reason: &str| format!("flow {}: {reason}", i + 1);
+            let flow = match raw.as_str() {
+                Some(encoded) => serde_json::from_str(encoded)
+                    .map_err(|e| invalid(&format!("invalid JSON: {e}")))?,
+                None => raw.clone(),
+            };
+            if !flow.is_object() {
+                return Err(invalid("must be an object"));
+            }
+            let steps = flow["steps"]
+                .as_array()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| invalid("steps must be a non-empty array"))?;
+            if steps.iter().any(|s| {
+                !s.is_object() || !s["do"].as_str().is_some_and(|action| !action.is_empty())
+            }) {
+                return Err(invalid(
+                    "each step must be an object with a non-empty do action",
+                ));
+            }
+            Ok(flow)
         })
         .collect()
 }
