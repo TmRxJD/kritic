@@ -95,6 +95,17 @@ fn child_fixture() {
             std::thread::sleep(Duration::from_secs(3));
             std::fs::write(std::env::var_os("KEV_MARKER").unwrap(), "alive").unwrap();
         }
+        #[cfg(unix)]
+        "tree" => {
+            let mut descendant = Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "child_fixture", "--ignored", "--nocapture"])
+                .env("KEV_TEST_CASE", "sleep")
+                .spawn()
+                .unwrap();
+            println!("DESCENDANT_PID={}", descendant.id());
+            std::io::stdout().flush().unwrap();
+            let _ = descendant.wait();
+        }
         "flood" => loop {
             println!("a long output line that must be counted against the raw capture budget");
         },
@@ -298,6 +309,9 @@ fn local_kev_actually_ranks_candidates_but_cannot_hide_diagnostics() {
         while !stop.load(std::sync::atomic::Ordering::Relaxed) && Instant::now() < deadline {
             match listener.accept() {
                 Ok((mut socket, _)) => {
+                    // Darwin may inherit O_NONBLOCK from the polling listener. The
+                    // per-connection reader uses a bounded blocking read on every OS.
+                    socket.set_nonblocking(false).unwrap();
                     socket
                         .set_read_timeout(Some(Duration::from_secs(1)))
                         .unwrap();
@@ -382,4 +396,70 @@ fn killing_wrapper_closes_job_and_stops_started_command() {
     child.wait().unwrap();
     std::thread::sleep(Duration::from_secs(3));
     assert!(!root.join("marker").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn sigterm_cancels_wrapper_and_stops_started_descendant_group() {
+    let root = root();
+    let mut child = command("tree", &root)
+        .arg("--")
+        .args(fixture_args())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut started = false;
+    while Instant::now() < deadline {
+        started = std::fs::read_dir(&root).unwrap().any(|entry| {
+            std::fs::read_to_string(entry.unwrap().path().join("stdout.log"))
+                .is_ok_and(|text| text.contains("STARTED") && text.contains("DESCENDANT_PID="))
+        });
+        if started {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // SAFETY: signal only the exact wrapper Child this test owns, never an image name.
+    let signal_result = unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
+    let cancel_deadline = Instant::now() + Duration::from_secs(3);
+    while child.try_wait().unwrap().is_none() && Instant::now() < cancel_deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let ended = child.try_wait().unwrap().is_some();
+    if !ended {
+        child.kill().unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        started,
+        "must observe the requested process and its descendant before signalling"
+    );
+    assert_eq!(signal_result, 0);
+    assert!(ended, "cooperative SIGTERM must finish promptly");
+    assert_eq!(output.status.code(), Some(130));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["termination"], "cancelled");
+    assert_eq!(report["cancel_handler_error"], Value::Null);
+    std::thread::sleep(Duration::from_secs(3));
+    assert!(
+        !root.join("marker").exists(),
+        "started descendant must not survive the owned group cleanup"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn child_signal_is_reported_separately_from_wrapper_cancellation() {
+    let root = root();
+    let output = command("unused", &root)
+        .args(["--", "/bin/sh", "-c", "kill -TERM $$"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(143));
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["child"]["signal"], libc::SIGTERM);
+    assert!(report["child"]["exit_code"].is_null());
+    assert!(report["termination"].is_null());
 }
