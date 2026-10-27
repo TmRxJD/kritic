@@ -1,5 +1,10 @@
 # Connect Codex, local Work, Cursor or another agent
 
+To reduce command output in any client's shell tool, explicitly wrap a noninteractive
+command with test.6 `kev run -- PROGRAM ARG...`. This is independent of MCP/skill
+registration and adds no tool schemas. Preserve its exit code and inspect `run.json`
+and raw logs when selected output is insufficient. [Usage and privacy](cli-filter.md).
+
 Install the executable/config first using [the minimal quickstart](../README.md#quickstart-install-the-minimum-then-choose-extras).
 Then connect **two things**: the MCP server provides checks; the skill tells the agent how to
 interpret and independently validate them. Your host's existing model does the reasoning;

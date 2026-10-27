@@ -17,9 +17,9 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --all-targets
-      - run: cargo build --release --locked
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --all-targets
+      - run: cargo build --workspace --release --bins --locked
       - name: Package binary, skill, config and optional desktop harness
         shell: pwsh
         run: ./scripts/package-test-release.ps1
@@ -27,4 +27,25 @@ jobs:
         with:
           name: kritic-windows-x86_64-test
           path: kritic-windows-x86_64-test.zip
+  mac-cli:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249
+        with:
+          components: clippy, rustfmt
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - run: test "$(uname -m)" = arm64
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy -p kev-filter --all-targets --locked -- -D warnings
+      - run: cargo test -p kev-filter --all-targets --locked
+      - run: cargo build -p kev-filter --release --bins --locked --target aarch64-apple-darwin
+      - run: bash scripts/package-cli-test-release.sh target/aarch64-apple-darwin/release
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: kritic-cli-macos-arm64-test
+          path: kritic-cli-macos-arm64-test.tar.gz
 # Packaging only: publishing a GitHub release/tag requires a separate maintainer action.
