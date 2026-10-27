@@ -1,6 +1,6 @@
 [package]
 name = "kritic"
-version = "0.5.0-test.5"
+version = "0.5.0-test.6"
 edition = "2024"
 rust-version = "1.89"
 description = "Experimental evidence-based review for coding agents: deterministic checks, work contracts, optional cloud/local reviewers."
@@ -39,6 +39,11 @@ toml_edit = "0.25.15"
 zip = { version = "9.0.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
+
+[workspace]
+members = ["crates/kev-filter"]
+default-members = [".", "crates/kev-filter"]
+resolver = "3"
 
 [profile.release]
 opt-level = 3
