@@ -1,5 +1,10 @@
 # Native Kev on Apple Silicon
 
+Test.6 provides a prebuilt **Apple Silicon CLI-only** archive. Use its `kev` or
+`kev-filter` without any model; optionally point `--kev-url` to the 0.8B endpoint
+configured below. That archive does not include a prebuilt Kritic MCP server.
+[CLI setup, retrieval and limitations](cli-filter.md).
+
 The deterministic default remains `review.backend="off"`, `vision.backend="off"`.
 No model is needed for CLI/MCP governance, contracts or repository checks. Build with
 `cargo build --locked`; register that executable with your MCP client as usual.

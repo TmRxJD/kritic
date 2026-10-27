@@ -4,7 +4,7 @@
 #   bin/harness/       optional desktop/Python harnesses; web checks use native CDP (found beside the binary)
 #   kritic.toml        created from examples/kritic.toml if absent
 #
-#   scripts/install.sh [--no-harness] [--with-models] [--backend <laya backend>]
+#   scripts/install.sh [--no-harness] [--with-cli] [--with-models] [--backend <laya backend>]
 #
 # --with-models runs scripts/fetch-models.sh (laya + Kev-4B GGUF, ~4.5 GB).
 # Windows locks a running exe: if a session is running the server, the old binary is renamed
@@ -12,11 +12,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HOME_DIR="${KRITIC_HOME:-$HOME/.kritic}"
-HARNESS=1 MODELS=0 BACKEND_ARGS=()
+HARNESS=1 MODELS=0 CLI=0 BACKEND_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-harness) HARNESS=0 ;;
     --with-models) MODELS=1 ;;
+    --with-cli) CLI=1 ;;
     --backend) BACKEND_ARGS=(--backend "$2"); shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -39,6 +40,15 @@ if ! cp "$TARGET/release/$EXE" "$DEST" 2>/dev/null; then
   echo "note: a running session holds the previous build; restart it to pick this one up"
 fi
 echo "installed $DEST"
+
+if [ "$CLI" = 1 ]; then
+  cargo build -p kev-filter --release --bins --locked
+  SUFFIX="${EXE#kritic}"
+  for NAME in kev kev-filter; do
+    cp "$TARGET/release/$NAME$SUFFIX" "$HOME_DIR/bin/$NAME$SUFFIX"
+    echo "installed $HOME_DIR/bin/$NAME$SUFFIX"
+  done
+fi
 
 if [ "$HARNESS" = 1 ]; then
   rm -rf "$HOME_DIR/bin/harness"

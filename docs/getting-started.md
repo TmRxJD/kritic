@@ -1,5 +1,10 @@
 # Getting started — test release
 
+For **command-output filtering only**, test.6 includes `kev` / `kev-filter`: no MCP,
+model or GPU setup needed. The Windows ZIP includes all three executables. The Apple
+Silicon CLI archive includes only the two filter aliases plus source/docs; build the
+Kritic MCP server separately. Start with [the CLI guide](cli-filter.md).
+
 Kritic runs deterministic checks by default. Your calling agent interprets the evidence using
 its existing session; no local model, dedicated GPU or separate cloud API key is required.
 Do not trust results without checking the underlying assertions and coverage.

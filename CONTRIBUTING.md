@@ -28,8 +28,8 @@ belongs in the feature. [Evidence and validation workflow](docs/technical-debt.m
 1. Reproduce the defect and distinguish it from a bug in the user's project.
 2. Add a regression that fails for the demonstrated behavior (avoid vacuous/mirrored assertions).
 3. Fix the implementation without weakening checks, expanding approval scope or hiding coverage gaps.
-4. Run `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, and
-   `cargo test --all-targets`. Run the relevant Python/legacy harness tests for changes there.
+4. Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+   `cargo test --workspace --all-targets`. Run the relevant Python/legacy harness tests for changes there.
 5. Record tests that actually ran, live checks skipped, and provider/OS coverage limits. Open a PR
    to https://github.com/TmRxJD/kritic with expected/actual behavior and evidence.
 

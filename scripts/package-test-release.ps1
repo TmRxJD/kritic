@@ -24,10 +24,20 @@ tar -xf package/source.tar -C package/kritic
 if ($LASTEXITCODE -ne 0) { throw 'source extraction failed' }
 Remove-Item -LiteralPath package/source.tar
 Copy-Item target/release/kritic.exe package/kritic/bin/
+$binaryHashes = @{'bin/kritic.exe' = (Get-FileHash target/release/kritic.exe -Algorithm SHA256).Hash.ToLowerInvariant()}
+foreach ($name in @('kev', 'kev-filter')) {
+    $path = "target/release/$name.exe"
+    $cliVersion = (& $path --version | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $cliVersion -ne "kev-filter $version") {
+        throw "CLI version mismatch for $name : expected kev-filter $version; got $cliVersion"
+    }
+    Copy-Item -LiteralPath $path -Destination package/kritic/bin/
+    $binaryHashes["bin/$name.exe"] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 # Copy only canonical tracked harness files, never working-tree caches.
 Copy-Item package/kritic/harness/py package/kritic/bin/harness/ -Recurse
 $binaryHash = (Get-FileHash package/kritic/bin/kritic.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-@{ version = $version; source_revision = $revision; platform = 'windows-x86_64'; binary_sha256 = $binaryHash } |
-    ConvertTo-Json | Set-Content package/kritic/RELEASE-MANIFEST.json -Encoding utf8
+@{ version = $version; source_revision = $revision; platform = 'windows-x86_64'; binary_sha256 = $binaryHash; binaries = $binaryHashes } |
+    ConvertTo-Json -Depth 4 | Set-Content package/kritic/RELEASE-MANIFEST.json -Encoding utf8
 Set-Content package/kritic/SOURCE-REVISION.txt -Value $revision -Encoding ascii
 Compress-Archive -Path package/kritic -DestinationPath kritic-windows-x86_64-test.zip

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0-test.6 — test release
+
+- Add the standalone Rust `kev` / `kev-filter` CLI: finite noninteractive command
+  supervision, byte-exact raw stream archives, bounded extractive output and retrieval.
+  Default filtering requires no model/GPU/MCP. Optional local Kev ranks ordinary stdout;
+  it cannot run commands, generate summaries or alter the child's success/failure.
+- Bound execution, capture and inference; expose clipping, fallback and incomplete
+  evidence. Contain owned child processes with Windows Job Objects / Unix groups.
+  HTTP ranking is restricted to numeric loopback endpoints without proxies/redirects.
+- Include the filter in the Windows package and provide an Apple Silicon CLI-only
+  archive, matching tracked source, versions and per-binary hashes. Run portable CLI
+  checks on Linux and macOS as well as the Windows workspace checks.
+- Include native Kev / MLX transport and explicit 0.8B Mac testing / larger production
+  profiles, with pinned setup and measured M1 evidence. Configuration selection is
+  separate from weight loading; smaller-model smoke tests do not establish 4B parity.
+- Document installation, optional ranking, log privacy, resource/process boundaries,
+  failure codes and coverage limits without increasing MCP tool-schema overhead.
+
 ## 0.5.0-test.5 — test release (2026-10-22)
 
 - Optional model-free test-staleness and invariant review share one canonical ownership/test

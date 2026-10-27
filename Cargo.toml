@@ -42,7 +42,7 @@ zip = { version = "9.0.0", default-features = false, features = ["deflate"] }
 
 [workspace]
 members = ["crates/kev-filter"]
-default-members = [".", "crates/kev-filter"]
+default-members = ["."]
 resolver = "3"
 
 [profile.release]

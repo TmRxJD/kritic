@@ -1,4 +1,4 @@
-//! One typed-decision transport shared by the existing MCP helpers and command filter.
+//! Bounded local typed-decision transport for optional command-output ranking.
 use serde_json::{Value, json};
 use std::io::Read;
 use std::time::Duration;

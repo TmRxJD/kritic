@@ -1,5 +1,9 @@
 # Tools — test release
 
+Test.6 also ships `kev run` / `kev show` (alias `kev-filter`), a standalone finite-command
+filter with raw-log retrieval and optional local Kev ranking. It adds **no MCP tools**,
+capability flags or automatic command hooks. [CLI guide](cli-filter.md).
+
 Test.5 adds optional `staleness_critic` and `invariant_critic`: read-only test inventory,
 canonical ownership, review hashes/fixtures, and declared invariant enforcement/negative-test
 bindings. Configure `capabilities.staleness=true` / `capabilities.invariants=true` and

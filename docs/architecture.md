@@ -1,5 +1,11 @@
 # Architecture — test release
 
+`crates/kev-filter` is a separate portable workspace package. Its `kev` / `kev-filter`
+binaries supervise finite noninteractive commands, archive raw streams and select bounded
+excerpts. Optional local typed relevance decisions cannot execute commands or change
+exit status. It has no dependency on the MCP server or legacy memory/handoff tools;
+its HTTP-only loopback client excludes unused TLS features. [Execution boundaries](cli-filter.md).
+
 Kritic connects repository expectations to evidence, independent agent review, selected enforcement
 and fresh verification. Contracts and policies belong to the repository; the skill guides the
 agent, while opt-in hooks and CI enforce only their configured checks.

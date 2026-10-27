@@ -1,5 +1,18 @@
 # Test-release protocol
 
+Test.6 adds the standalone `kev` / `kev-filter` command-output filter and optional native
+MLX reviewer profiles. The Windows ZIP contains Kritic and both filter aliases. The
+Apple Silicon CLI archive contains the two filter aliases plus matching source/docs,
+**not a prebuilt Kritic MCP server**. See [filter setup and limits](cli-filter.md) and
+[Mac model setup](mac-mlx.md). Filtering itself needs no model, GPU or MCP connection.
+
+For CLI tests, execute actual failed children, compare both raw streams byte-for-byte,
+exercise literal arguments, timeout/cancellation, bounded log/excerpt limits and raw
+retrieval. For model-enabled tests require nonzero successful ranking calls, distinguish
+protocol/fallback checks from calibrated quality, and verify protected diagnostics and
+child failures survive. Measure the full emitted output, including metadata. Synthetic
+byte reduction is not general token savings. Test defaults with inference disabled too.
+
 Use matching binary/configuration versions: repository policies/hooks, expanded organization
 review, history and technical-debt tools require `v0.5.0-test.4` or later.
 Framing, staleness, invariants, compact discovery and project-aware setup recovery require
@@ -31,8 +44,9 @@ from a fresh extracted directory, not just from a source checkout.
 
 ## Development CI binaries
 
-A CI run stages `kritic-windows-test` after its Rust checks pass. It contains `kritic.exe` and
-`manifest.json`, with the PR head, tested checkout, run ID and executable SHA-256. Artifacts are
+A CI run stages `kritic-windows-test` after its Rust checks pass. It contains `kritic.exe`,
+`kev.exe`, `kev-filter.exe` and
+`manifest.json`, with the PR head, tested checkout, run ID and per-executable SHA-256. Artifacts are
 retained for three days. Choose the run for the source revision you intend to test and confirm
 its checks passed; compare the executable hash with that manifest before using it.
 

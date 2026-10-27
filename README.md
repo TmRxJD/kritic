@@ -18,7 +18,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 
 [Get started](#quickstart-install-the-minimum-then-choose-extras) ·
 [Choose capabilities](#choose-your-capabilities) · [Hardware](#what-your-hardware-can-run) ·
-[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.5)
+[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.6)
 
 ## What Kritic governs
 
@@ -30,6 +30,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 | **Implementation and behavior** | Project validators, security scanners, linters, browser interactions, accessibility/workflow rules, Windows desktop tests and resource/process measurements. | Evidence covers the checks and states actually exercised. Missing dependencies and unobserved effects remain gaps. |
 | **Problem framing and product quality** | Debugging-case consistency, competing explanations and causal evidence; optional screenshot/novice review against explicit visual and workflow goals. | A consistent frame is not a proven root cause. Functional success does not establish professional or AAA quality. |
 | **Maintenance and continuity** | Dependency inventory, opt-in registry lookups, estimated urgency/upgrade effort, private review history and comparison of explicit snapshots. | No automatic dependency upgrades, compatibility guarantee, cached acceptance or demonstrated cross-task learning. |
+| **Command output** | Portable `kev run` / `kev show`, raw stdout/stderr archives, bounded deterministic excerpts and optional local relevance ranking. No GPU or MCP required. | Finite noninteractive commands only; excerpts can clip diagnostics. Model rankings never establish success. [Guide](docs/cli-filter.md). |
 | **Agent context and project extensions** | Compact MCP discovery, optional context helpers, a separately enabled Hermes archive/recall engine, repository plugins and a Beat Saber evaluator. | No autonomous agent orchestration, implicit context takeover or general proof of domain quality. |
 
 Governance here means **explicit expectations, scoped evidence, review and deliberate enforcement**.
@@ -63,11 +64,11 @@ flowchart LR
 
 ## Quickstart: install the minimum, then choose extras
 
-**Windows x86-64 is the tested distribution.** Start without models and add only relevant tools.
+**Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter only; the Mac MCP server requires a source build. Start without models and add only relevant tools.
 
-1. Download the Windows ZIP from [v0.5.0-test.5](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.5),
+1. Download the Windows ZIP from [v0.5.0-test.6](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.6),
    verify it against the release's `SHA256SUMS`, and extract it into a persistent location.
-   The ZIP includes the executable, skill, examples, documentation and optional desktop harness.
+   The ZIP includes `kritic.exe`, `kev.exe`, `kev-filter.exe`, the skill, examples, documentation and optional desktop harness.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
    if absent. The minimum setup needs no Rust, Python, Node, Ollama, model or separate API key.
 2. In PowerShell, open the extracted `kritic` folder and use the fresh-install commands below.
@@ -97,6 +98,23 @@ If a critic cannot collect evidence, use [agent setup and recovery](docs/agent-s
 `doctor --base-dir <repo> --json` and project-scoped status explain what to configure.
 Missing project contracts should be derived from the repository's actual rules, not copied as
 all-passing templates. Disabled irrelevant tools are expected.
+
+## Filter noisy command output
+
+```sh
+kev run --goal "Find test failures and their causes" -- cargo test
+kev show /path/to/runs/run-ID --stream stderr --from 1 --lines 30
+# Optional: an already configured Mac Kev-0.8B / MLX endpoint.
+kev run --kev --kev-url http://127.0.0.1:8009/v1/systemone --kev-model kev-latest -- cargo test
+```
+
+Use `bin/kev.exe` on Windows or `bin/kev` from the Apple Silicon CLI archive;
+`kev-filter` is an equivalent alias. No model, GPU or MCP setup is required for
+filtering. Rust preserves raw output and child exit status; optional Kev ranks
+ordinary stdout rather than generating summaries or deciding success. Excerpts
+are bounded and may omit useful text: retrieve the raw evidence before drawing
+conclusions. Private logs have no automatic redaction/retention. [Full setup,
+limits, exit codes and source-build instructions](docs/cli-filter.md).
 
 ## Choose your capabilities
 
