@@ -202,8 +202,8 @@ pub fn install_cancel_handler() -> Result<(), String> {
         }
         // SAFETY: signal handler performs only an atomic store; registered once by the CLI.
         unsafe {
-            libc::signal(libc::SIGINT, handler as libc::sighandler_t);
-            libc::signal(libc::SIGTERM, handler as libc::sighandler_t);
+            libc::signal(libc::SIGINT, handler as *const () as libc::sighandler_t);
+            libc::signal(libc::SIGTERM, handler as *const () as libc::sighandler_t);
         }
     }
     Ok(())
