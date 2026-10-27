@@ -116,6 +116,12 @@ are bounded and may omit useful text: retrieve the raw evidence before drawing
 conclusions. Private logs have no automatic redaction/retention. [Full setup,
 limits, exit codes and source-build instructions](docs/cli-filter.md).
 
+[Actual 8 GB M1 testing](docs/mac-kev-filter-validation.md) confirmed optional
+Kev-0.8B inference and preserved failure evidence. A noisy synthetic command emitted
+about 97.7% fewer bytes through deterministic filtering. The model kept every scored
+candidate, so that test showed no additional pruning from 0.8B. Byte reduction on
+this fixture is not a general token-savings or model-quality claim.
+
 ## Choose your capabilities
 
 Set the relevant keys in `[capabilities]` in `$KRITIC_HOME/kritic.toml`, then reconnect MCP.
@@ -231,6 +237,16 @@ orchestrator's implementation; it does not sandbox commands or make reviewer jud
 from fresh verification. Report outcomes with the input scope and actual execution evidence.
 
 ## Known limitations and experiments
+
+- CLI filtering can clip useful diagnostics, and short commands can produce more output
+  once metadata is included. Kev ranking remains uncalibrated; consult raw logs.
+  [CLI limits and evidence](docs/cli-filter.md).
+- The browser stack still resolves `block-buffer 0.10.4` through chromiumoxide's
+  WebSocket dependencies, flagged by [GHSA-qwgh-2vcv-g2f7](https://github.com/advisories/GHSA-qwgh-2vcv-g2f7).
+  The published fix is a semver-major dependency change, not a compatible lockfile bump.
+  Exploitability in Kritic has not been established; this unresolved advisory is not
+  a clean security bill. Track its dependency path in [issue #24](https://github.com/TmRxJD/kritic/issues/24).
+  The standalone filter does not depend on that browser stack.
 
 - Canvas/audio/app-state effects can remain unobserved; [issue #1](https://github.com/TmRxJD/kritic/issues/1)
   tracks canvas observation. Unobserved effects produce uncertainty, not a fabricated broken-control claim.

@@ -54,6 +54,13 @@ profile and switching to a larger production profile. The alias `kev-latest` doe
 not select/download weights: the server configuration owns the actual model.
 Do not infer production quality, calibration or RAM savings from a successful smoke test.
 
+[Measured 8 GiB M1 validation](mac-kev-filter-validation.md) exercised real 0.8B
+inference, failed children, exact raw bytes, Unix cancellation and optimized arm64
+binaries. On its noisy synthetic fixture, deterministic filtering reduced total
+emitted bytes by about 97.7%; 0.8B scored four records but kept all four, adding no
+observed pruning benefit. This is evidence for keeping the model-free path primary,
+not a model-quality or general token-savings benchmark.
+
 Defaults are `http://127.0.0.1:8089/v1/decide` / `kev-4b`; `/v1/systemone` defaults
 to `kev-latest`. Only numeric loopback HTTP endpoints with those exact routes are
 accepted. Proxies, redirects and cloud fallback are disabled. The HTTP client has

@@ -17,6 +17,9 @@
   separate from weight loading; smaller-model smoke tests do not establish 4B parity.
 - Document installation, optional ranking, log privacy, resource/process boundaries,
   failure codes and coverage limits without increasing MCP tool-schema overhead.
+- Update Tokio to address RUSTSEC-2026-0386. Disclose the unresolved transitive
+  block-buffer advisory in the browser dependency stack; no forced semver substitution
+  or scanner suppression is used. Standalone CLI filtering does not use that stack.
 
 ## 0.5.0-test.5 — test release (2026-10-22)
 
