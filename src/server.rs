@@ -271,6 +271,7 @@ pub struct UiParams {
     /// | wait | expect_text | expect_visible | expect_hidden | expect_url | screenshot.
     /// target: Playwright selector ("#id", "text=Save", "role=button[name='Save']").
     #[serde(default)]
+    #[schemars(with = "Vec<crate::ui::UiFlow>")]
     pub flows: Vec<serde_json::Value>,
     /// Crawl and exercise every control (default true). false = run only `flows`.
     #[serde(default = "yes")]

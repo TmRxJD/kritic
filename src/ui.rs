@@ -164,6 +164,35 @@ pub struct UiOptions {
     pub ignore: Vec<String>,
 }
 
+/// Concrete MCP input shape; JSON-encoded objects remain accepted for older clients.
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UiFlow {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub continue_on_error: bool,
+    #[schemars(length(min = 1))]
+    pub steps: Vec<UiFlowStep>,
+}
+
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UiFlowStep {
+    /// navigate, click, dblclick, fill, select, check, uncheck, press, hover, wait_for,
+    /// wait, expect_text, expect_visible, expect_hidden, expect_url, or screenshot.
+    #[serde(rename = "do")]
+    pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+}
+
 fn is_noise(url: &str) -> bool {
     url.ends_with("/favicon.ico")
 }
@@ -185,9 +214,13 @@ pub fn judge(
     b.extend(judge_interactions(&report.interactions, opts, &mut s));
     b.extend(judge_errors(&report));
     b.extend(judge_flows(&report.flows));
+    summarize_flows(&report.flows, &mut s);
+    if b.is_empty() && s.pages == 0 && s.interactions == 0 && report.persistence.is_empty() {
+        b.push("no browser pages, interactions or persistence checks were measured".into());
+    }
     let approval = if !b.is_empty() {
         Some(false)
-    } else if report.pages.is_empty() || !s.unverified_effects.is_empty() {
+    } else if s.pages == 0 || !s.unverified_effects.is_empty() {
         None
     } else {
         Some(true)
@@ -218,10 +251,46 @@ pub fn judge_flows(flows: &[Value]) -> Vec<String> {
                     st["target"],
                     st["error"].as_str().unwrap_or("?")
                 ),
-                None => format!("flow \"{}\" failed", f["name"].as_str().unwrap_or("?")),
+                None => {
+                    let executed = f["steps"].as_array().is_some_and(|steps| {
+                        steps
+                            .iter()
+                            .any(|step| matches!(step["result"].as_str(), Some("ok" | "fail")))
+                    });
+                    format!(
+                        "flow \"{}\" failed{}",
+                        f["name"].as_str().unwrap_or("?"),
+                        if executed { "" } else { ": no executed steps" }
+                    )
+                }
             }
         })
         .collect()
+}
+
+pub(crate) fn summarize_flows(flows: &[Value], summary: &mut UiSummary) {
+    for flow in flows {
+        let steps = flow["steps"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+        // New reports record browser-page creation explicitly. Older reports still prove a page
+        // existed when they contain requested flow steps (an open failure is synthetic).
+        if flow["page_opened"].as_bool().unwrap_or_else(|| {
+            steps
+                .iter()
+                .any(|step| step["do"].as_str().is_some_and(|action| action != "open"))
+        }) {
+            summary.pages += 1;
+        }
+        for step in steps {
+            if step["do"] != "open" {
+                summary.interactions += 1;
+            }
+            match step["result"].as_str() {
+                Some("ok") => summary.ok += 1,
+                Some("skipped") => summary.skipped += 1,
+                _ => summary.errors += 1,
+            }
+        }
+    }
 }
 
 /// Accept object flows and JSON-encoded MCP flow strings; reject vacuous scripts before launch.
@@ -255,6 +324,8 @@ pub fn normalize_flows(flows: &Value) -> Result<Vec<Value>, String> {
                     "each step must be an object with a non-empty do action",
                 ));
             }
+            let _: UiFlow = serde_json::from_value(flow.clone())
+                .map_err(|e| invalid(&format!("invalid flow: {e}")))?;
             Ok(flow)
         })
         .collect()
