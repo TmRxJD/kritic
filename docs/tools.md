@@ -64,6 +64,14 @@ MCP response keeps only problems and the top items (25 at most; `critic_score` f
 so large reports stay out of the agent's context. The [benchmark](benchmarks.md) measures the
 difference.
 
+`ui_test.flows` exposes object entries with a required nonempty `steps` array. Older clients may
+still send JSON-encoded objects; malformed scripts fail before browser launch. Summary `pages`
+includes each fresh flow page (including repeated URLs), and `interactions` includes recorded
+flow actions/assertions as well as explored controls; `ok`, `errors` and `skipped` include their
+actual step outcomes. Synthetic open failures count as errors rather than interactions; failed
+browser-page creation does not count as an opened page. An empty report or a flow with no
+executed steps cannot approve.
+
 ## Safety defaults
 
 - `ui_test`, `visual_critic` and `ux_critic` refuse non-local URLs unless `allow_remote=true`.

@@ -705,6 +705,13 @@ fn progress(event: &str, data: Value) {
 }
 
 pub async fn ui_test(cfg: &crate::config::Config, input: &Value) -> Value {
+    let flows = match crate::ui::normalize_flows(&input["flows"]) {
+        Ok(flows) => flows,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let mut normalized = input.clone();
+    normalized["flows"] = json!(flows);
+    let input = &normalized;
     let url = input["url"].as_str().unwrap_or_default().to_string();
     if !input["allow_remote"].as_bool().unwrap_or(false) && !is_local(&url) {
         return json!({"ok": false, "error": format!("refusing non-local URL {} (set allow_remote)", origin(&url))});
@@ -1079,9 +1086,14 @@ async fn run_ui_test(
             .collect();
     }
     chrome.dispose(ctx).await;
+    let mut flow_summary = crate::ui::UiSummary::default();
+    if let Some(flows) = flows.as_ref().and_then(Value::as_array) {
+        crate::ui::summarize_flows(flows, &mut flow_summary);
+    }
     progress(
         "done",
-        json!({"pages": pages.len(), "interactions": interactions.len()}),
+        json!({"pages": pages.len() + flow_summary.pages,
+            "interactions": interactions.len() + flow_summary.interactions}),
     );
 
     // Merge every page log (a crash replaces the page and its log).
@@ -1310,7 +1322,7 @@ async fn run_flows(
             .unwrap_or_else(|| format!("flow {}", fi + 1));
         let steps = flow["steps"].as_array().cloned().unwrap_or_default();
         progress("flow", json!({"name": name, "steps": steps.len()}));
-        let mut fr = json!({"name": name, "passed": true, "steps": []});
+        let mut fr = json!({"name": name, "passed": true, "steps": [], "page_opened": false});
         let (page, log, ctx) = match chrome.page(vp).await {
             Ok(x) => x,
             Err(e) => {
@@ -1325,6 +1337,8 @@ async fn run_flows(
             .and_then(|u| reqwest::Url::parse(start).and_then(|b| b.join(u)).ok())
             .map(|u| u.to_string())
             .unwrap_or_else(|| start.to_string());
+        fr["url"] = json!(open);
+        fr["page_opened"] = json!(true);
         let mut passed = true;
         let mut recs = Vec::new();
         if let Err(e) = goto(&page, &log, &open, Duration::from_secs(15)).await {

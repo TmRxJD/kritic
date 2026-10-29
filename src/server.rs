@@ -264,12 +264,14 @@ pub struct UiParams {
     /// Control names (substring) to ignore for no_effect/error results, e.g. tooltips.
     #[serde(default)]
     pub ignore: Vec<String>,
-    /// Scripted multi-step flows, each on a fresh page:
+    /// Scripted multi-step flows, each on a fresh page (objects or JSON-encoded strings).
+    /// Each flow must contain a non-empty steps array:
     /// [{name, url?, continue_on_error?, steps: [{do, target?, value?, timeout_ms?}]}].
     /// do: navigate | click | dblclick | fill | select | check | uncheck | press | hover | wait_for
     /// | wait | expect_text | expect_visible | expect_hidden | expect_url | screenshot.
     /// target: Playwright selector ("#id", "text=Save", "role=button[name='Save']").
     #[serde(default)]
+    #[schemars(with = "Vec<crate::ui::UiFlow>")]
     pub flows: Vec<serde_json::Value>,
     /// Crawl and exercise every control (default true). false = run only `flows`.
     #[serde(default = "yes")]
