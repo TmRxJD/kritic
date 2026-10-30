@@ -921,7 +921,15 @@ pub struct ResourceResult {
     pub full_result: Option<String>,
 }
 
-/// Deterministic budget checks. Defaults: RSS growth > 5 MB/min over >= 15 s, handles +500.
+/// A zero root exit alone is insufficient: every owned descendant must finish.
+fn completed_command(stats: &Value) -> bool {
+    stats["exited_early"] == true
+        && stats["exit_code"].as_i64() == Some(0)
+        && stats["tree_completed"] == true
+}
+
+/// Deterministic budget checks. Defaults: live RSS growth > 5 MB/min over >= 15 s,
+/// handles +500. Completed finite commands still obey every explicitly requested cap.
 pub fn check_budgets(stats: &Value, b: &Budgets) -> Vec<String> {
     let f = |k: &str| stats[k].as_f64();
     let mut v = Vec::new();
@@ -946,6 +954,7 @@ pub fn check_budgets(stats: &Value, b: &Budgets) -> Vec<String> {
     }
     let slope_max = b.max_rss_slope_mb_per_min.unwrap_or(5.0);
     if let (Some(x), Some(dur)) = (f("rss_slope_mb_per_min"), f("duration_s"))
+        && (b.max_rss_slope_mb_per_min.is_some() || !completed_command(stats))
         && dur >= 15.0
         && x > slope_max
     {
@@ -961,7 +970,7 @@ pub fn check_budgets(stats: &Value, b: &Budgets) -> Vec<String> {
             "handle count grew by {handles} > {hmax} (possible handle leak)"
         ));
     }
-    if stats["exited_early"] == true {
+    if stats["exited_early"] == true && !completed_command(stats) {
         v.push(format!(
             "process exited during sampling (code {})",
             stats["exit_code"]
@@ -982,10 +991,13 @@ pub fn resource_budget_gaps(stats: &Value, b: &Budgets) -> Vec<String> {
             gaps.push(format!("requested budget measurement unavailable: {key}"));
         }
     }
-    if !stats["rss_slope_mb_per_min"]
-        .as_f64()
-        .is_some_and(f64::is_finite)
-        || !stats["duration_s"].as_f64().is_some_and(|d| d >= 15.0)
+    // Startup growth is not a persistent leak after the complete job has exited.
+    // An explicit slope request still needs the full observation interval.
+    if (b.max_rss_slope_mb_per_min.is_some() || !completed_command(stats))
+        && (!stats["rss_slope_mb_per_min"]
+            .as_f64()
+            .is_some_and(f64::is_finite)
+            || !stats["duration_s"].as_f64().is_some_and(|d| d >= 15.0))
     {
         gaps.push("RSS growth budget needs at least 15 seconds of measured observation".into());
     }
