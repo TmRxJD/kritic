@@ -191,6 +191,70 @@ fn budgets_and_leak_heuristics() {
 }
 
 #[test]
+fn completed_finite_command_obeys_requested_budgets_without_a_default_leak_gap() {
+    // Real frozen-model inference finished in8.2s. Startup allocation yields a
+    // steep slope, but all descendants exited successfully within both caps.
+    let stats = json!({"duration_s":8.2,"samples":15,"cpu_avg_pct":145.4,
+        "rss_peak_mb":564.2,"rss_slope_mb_per_min":1568.29,
+        "handles_start":361,"handles_end":487,"exited_early":true,
+        "exit_code":0,"tree_completed":true});
+    let budgets = Budgets {
+        max_cpu_avg_pct: Some(200.0),
+        max_rss_mb: Some(2048.0),
+        ..Default::default()
+    };
+    assert!(check_budgets(&stats, &budgets).is_empty());
+    assert!(phase3::resource_budget_gaps(&stats, &budgets).is_empty());
+
+    let explicit_growth = Budgets {
+        max_rss_slope_mb_per_min: Some(5.0),
+        ..budgets.clone()
+    };
+    assert!(
+        phase3::resource_budget_gaps(&stats, &explicit_growth)
+            .iter()
+            .any(|g| g.contains("15 seconds"))
+    );
+    let over_cap = Budgets {
+        max_rss_mb: Some(500.0),
+        ..budgets.clone()
+    };
+    assert!(
+        check_budgets(&stats, &over_cap)
+            .iter()
+            .any(|v| v.contains("peak memory"))
+    );
+
+    let mut failed = stats.clone();
+    failed["exit_code"] = json!(7);
+    assert!(
+        check_budgets(&failed, &budgets)
+            .iter()
+            .any(|v| v.contains("code 7"))
+    );
+    let mut incomplete = stats.clone();
+    incomplete["tree_completed"] = json!(false);
+    assert!(
+        check_budgets(&incomplete, &budgets)
+            .iter()
+            .any(|v| v.contains("exited during sampling"))
+    );
+    let mut unknown = stats.clone();
+    unknown.as_object_mut().unwrap().remove("tree_completed");
+    assert!(!check_budgets(&unknown, &budgets).is_empty());
+    assert!(!phase3::resource_budget_gaps(&unknown, &budgets).is_empty());
+
+    let mut long = stats.clone();
+    long["duration_s"] = json!(30.0);
+    assert!(check_budgets(&long, &budgets).is_empty());
+    assert!(
+        check_budgets(&long, &explicit_growth)
+            .iter()
+            .any(|v| v.contains("memory growing"))
+    );
+}
+
+#[test]
 fn desktop_judging() {
     let rep = json!({"ok": true,
         "interactions": [
