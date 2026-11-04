@@ -197,6 +197,27 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "plugins.md",
             "No plugins is a valid state. Define a project evaluator manifest only when needed, inspect its executable/commands and dependencies, then select its actual plugin ID. Plugin execution is not implied by listing.",
         ),
+        "policy_schema" => (
+            None,
+            None,
+            false,
+            "policy-runner.md",
+            "Supply the game's schema file or inline schema and check its state layout, action ranges and protocol version before running a client.",
+        ),
+        "policy_run" => (
+            None,
+            None,
+            false,
+            "policy-runner.md",
+            "Validate the game schema first. Supply a trusted local executable or loopback client, bounded episodes and tick limits. Defer and scripted policies require no model.",
+        ),
+        "trajectory_diagnose" => (
+            None,
+            None,
+            false,
+            "policy-runner.md",
+            "Supply the matching game schema and recorded JSONL trajectories or inline state arrays. Verify findings against the game's success criteria and representative runs.",
+        ),
         "spec_lint" => (
             None,
             None,

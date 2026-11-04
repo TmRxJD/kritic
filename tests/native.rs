@@ -231,7 +231,9 @@ async fn resource_sampler_separates_a_leak_from_an_idle_process() {
     assert_eq!(r["stats"]["exited_early"], true, "{r}");
     assert_eq!(r["stats"]["exit_code"], 0, "{r}");
     assert_eq!(r["stats"]["tree_completed"], true, "{r}");
-    assert_eq!(r["stats"]["procs_peak"], 1, "{r}");
+    // Some Windows Python distributions launch the interpreter through a shim.
+    assert!(r["stats"]["procs_peak"].as_u64().unwrap() >= 1, "{r}");
+    assert_eq!(r["hygiene"]["processes"], json!([]), "{r}");
     let r = resource(None, Some(std::process::id()), false, None, 1.0, 250, 0.0).await;
     assert!(r["error"].as_str().unwrap().contains("allow_attach"));
 }
