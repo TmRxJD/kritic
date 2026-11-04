@@ -91,6 +91,9 @@ documentation when a tool supports an explicit path override. Install only relev
 | `resource_critic` | `capabilities.resources=true`; authorized command or explicit PID attachment, workload, duration and measured budgets. No model needed for budget checks. Preserve shared processes and resources. |
 | `hygiene_critic` | Resources capability, exact project roots and owned run identity. Start with `clean=false`; do not kill shared/unrelated processes to clear results. |
 | `plugin_list`, `plugin_run` | `capabilities.plugins=true`; optional `.kritic/plugins/*.toml`, declared evaluator dependencies and actual selected plugin ID. Empty plugin lists are valid. Inspect execution before running. |
+| `policy_schema` | Supply the actual game schema file or inline schema. Validate the state layout, action ranges and protocol version before running a client. |
+| `policy_run` | Validate the schema first. Supply a trusted local executable or loopback client and bounded episodes/ticks. Defer and scripted policies work without a model. See `docs/policy-runner.md`. |
+| `trajectory_diagnose` | Supply the matching schema and recorded trajectories or inline state arrays. Verify reported patterns against representative runs and the game's success criteria. |
 | `spec_lint` | Matching bundled specs. Fix genuine schema/spec defects with regressions; do not relax gates or invent calibration. |
 | `token_metrics` | A supported session/transcript if available. Missing accounting is unavailable, not zero or precise billing. Keep private transcripts private. |
 | `route`, `context_trim`, `locate` | Optional `capabilities.context=true`, selected reviewer and explicit text/query. Preserve agent-routing policy; never silently index a workspace. |
