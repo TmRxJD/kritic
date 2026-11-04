@@ -77,6 +77,15 @@ fn cfg(primary: &str, vision: &str, alt: Option<&str>) -> Config {
     c.laya_url = primary.into();
     c.ollama_url = vision.into();
     c.kev_cpu_only = false;
+    c.local_runtime = "laya".into();
+    c.backend = "local".into();
+    c.vision_backend = "local".into();
+    c.laya_device = "vulkan:0".into();
+    c.kev_gpu_uuid = None;
+    c.vision_gpu_uuid = None;
+    c.kev_externally_managed = false;
+    c.vision_externally_managed = false;
+    c.config_errors.clear();
     c.vision_gpu_kev_url = alt.map(String::from);
     c.vision_gpu_kev_start = None;
     c.vision_gpu_kev_stop = None;

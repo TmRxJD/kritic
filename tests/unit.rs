@@ -1000,10 +1000,15 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
     use kritic::kev::KevClient;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let mut c = cfg();
-    // Health must satisfy the configured device policy so this test reaches
-    // the request timeout rather than failing early on GPU validation.
-    let health =
-        json!({"status":"ok", "device":c.laya_device, "gpu_uuid":c.kev_gpu_uuid}).to_string();
+    c.backend = "local".into();
+    c.local_runtime = "laya".into();
+    c.config_errors.clear();
+    c.kev_cpu_only = true;
+    c.laya_device = "cpu".into();
+    c.kev_gpu_uuid = None;
+    c.kev_externally_managed = true;
+    c.vision_gpu_kev_url = None;
+    let health = json!({"status":"ok", "device":"cpu"}).to_string();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     tokio::spawn(async move {
@@ -1024,12 +1029,6 @@ async fn kev_request_to_a_silent_laya_fails_within_its_limit() {
         }
     });
     c.laya_url = format!("http://127.0.0.1:{port}");
-    // This fixture selects its fake local HTTP service explicitly; the product default is off.
-    c.backend = "local".into();
-    c.config_errors.clear();
-    c.kev_cpu_only = true; // no GPU locks, unloads or process termination in an offline test
-    c.vision_gpu_kev_url = None; // never route this test to a real second Kev
-    c.laya_exe = "kritic-test-no-such-laya.exe".into(); // the stall handler's stop must not touch a real laya
     c.kev_request_s = 1;
     let kev = KevClient::new(std::sync::Arc::new(c));
     let qs = kritic::critic::completeness_spec("code").wire();
