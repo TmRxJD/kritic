@@ -26,9 +26,9 @@ use crate::vision::VisualResult;
 #[derive(Clone)]
 pub struct Kritic {
     kev: Arc<KevClient>,
-    /// One model on the GPU at a time: every model-backed tool (and the startup warm-up) holds
-    /// this for its whole run, so Kev (laya) and the vision model never overlap.
+    /// Shared-mode model mutex, or the Kev mutex when explicit dedicated GPUs are configured.
     gpu: Arc<tokio::sync::Mutex<()>>,
+    vision_gpu: Arc<tokio::sync::Mutex<()>>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -193,6 +193,87 @@ pub struct DecideParams {
 }
 fn default_threshold() -> f64 {
     0.75
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PolicySchemaParams {
+    /// Path to the game's schema definition (JSON).
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Schema JSON text, used when `path` is empty. With neither, returns the JSON Schema of the
+    /// definition format.
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PolicyRunParams {
+    /// Path to the game's schema definition (JSON).
+    #[serde(default)]
+    pub schema_path: Option<String>,
+    /// Schema JSON text, used when `schema_path` is empty.
+    #[serde(default)]
+    pub schema: Option<String>,
+    /// Loopback address of a client that listens (e.g. "127.0.0.1:47800").
+    #[serde(default)]
+    pub connect: Option<String>,
+    /// Or a client command to spawn; the protocol runs over its stdin/stdout.
+    #[serde(default)]
+    pub command: Vec<String>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    /// Policy evaluator: {"kind": "defer" | "constant" | "cycle" | "rules" | "random" |
+    /// "process" | "kev", ...}. Default defer (the game's own policy; kritic only records).
+    #[serde(default)]
+    pub policy: Option<crate::policy::policies::PolicySpec>,
+    /// Game-provided context rules, passed to the policy opaquely.
+    #[serde(default)]
+    pub rules: String,
+    /// Episode seeds. When empty, seeds 0..episodes.
+    #[serde(default)]
+    pub seeds: Vec<u64>,
+    #[serde(default = "default_episodes")]
+    pub episodes: u32,
+    /// Ticks per episode, including the final state.
+    #[serde(default = "default_max_ticks")]
+    pub max_ticks: u32,
+    /// lockstep (reproducible; the client waits for each action) or hold (native rate; the
+    /// last finished action is held while the policy evaluates).
+    #[serde(default)]
+    pub mode: crate::policy::runner::LoopMode,
+    #[serde(default = "default_frame_timeout")]
+    pub frame_timeout_ms: u64,
+    /// Write per-episode telemetry (JSONL) under `<runs_dir>/policy/`.
+    #[serde(default = "default_true")]
+    pub record: bool,
+}
+fn default_episodes() -> u32 {
+    1
+}
+fn default_max_ticks() -> u32 {
+    1000
+}
+fn default_frame_timeout() -> u64 {
+    5000
+}
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TrajectoryParams {
+    /// Path to the game's schema definition (JSON).
+    #[serde(default)]
+    pub schema_path: Option<String>,
+    /// Schema JSON text, used when `schema_path` is empty.
+    #[serde(default)]
+    pub schema: Option<String>,
+    /// A recorded episode file or a directory of them (policy_run's `record_dir`).
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Inline trajectories, used when `path` is empty: [{"seed": 0, "states": [[...], ...]}].
+    #[serde(default)]
+    pub trajectories: Vec<crate::policy::diagnostics::Trajectory>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -722,10 +803,23 @@ impl Kritic {
         if !crate::gpu::requires_gpu(self.kev.cfg.kev_cpu_only, workload) {
             return None;
         }
-        let g = self.gpu.lock().await;
+        let mutex = if self.kev.cfg.dedicated_gpus() && workload == crate::gpu::Workload::Vision {
+            &self.vision_gpu
+        } else {
+            &self.gpu
+        };
+        let g = mutex.lock().await;
         // in-process first, then across sessions; if the cross-process wait times out the tool
         // still runs (slower if another session's model is resident) rather than failing
-        let x = match crate::gpu::lock_across_processes(&self.kev.cfg, tool).await {
+        // ux_critic can use either model; select the physical lease by actual workload.
+        let lease_tool = if workload == crate::gpu::Workload::Vision {
+            "visual_critic"
+        } else if tool == "ux_critic" {
+            "critic_score"
+        } else {
+            tool
+        };
+        let x = match crate::gpu::lock_across_processes(&self.kev.cfg, lease_tool).await {
             Ok(l) => Some(l),
             Err(e) => {
                 crate::events::ready("gpu", "contended", &e);
@@ -759,6 +853,7 @@ impl Kritic {
         Kritic {
             kev: Arc::new(KevClient::new(Arc::new(cfg))),
             gpu: Arc::new(tokio::sync::Mutex::new(())),
+            vision_gpu: Arc::new(tokio::sync::Mutex::new(())),
             tool_router,
         }
     }
@@ -1192,6 +1287,119 @@ impl Kritic {
         .await;
         finished("decide", t0, &r);
         audit(cfg, "decide", &r);
+        Ok(Json(r))
+    }
+
+    /// Parse and validate a game's schema definition for policy_run (state byte layout, action
+    /// heads and packing, diagnostic thresholds). With no input, returns the format's JSON Schema.
+    #[tool(name = "policy_schema")]
+    pub async fn policy_schema_tool(
+        &self,
+        Parameters(p): Parameters<PolicySchemaParams>,
+    ) -> Result<Json<crate::policy::SchemaCheck>, String> {
+        if !self.kev.cfg.tool_enabled("policy_schema") {
+            return Err("policy_schema is disabled".into());
+        }
+        let r = crate::policy::check_schema(p.path.as_deref(), p.content.as_deref());
+        audit(&self.kev.cfg, "policy_schema", &r);
+        Ok(Json(r))
+    }
+
+    /// Run a local game client through the framed-buffer protocol at its native tick rate with a
+    /// pluggable policy (defer, scripted, external process, or Kev at low frequency), record the
+    /// state arrays, then diagnose: behavior families, stuck states, oscillation, unrecoverable
+    /// metrics, and a veto of any family with 0% success. Reports per-tick policy latency against
+    /// the tick budget. Loopback/stdio only.
+    #[tool(name = "policy_run")]
+    pub async fn policy_run_tool(
+        &self,
+        Parameters(p): Parameters<PolicyRunParams>,
+    ) -> Result<Json<crate::policy::RunReport>, String> {
+        if !self.kev.cfg.tool_enabled("policy_run") {
+            return Err("policy_run is disabled".into());
+        }
+        let t0 = started("policy_run");
+        let cfg = &self.kev.cfg;
+        let schema = crate::policy::load_schema(p.schema_path.as_deref(), p.schema.as_deref())?;
+        let spec = p
+            .policy
+            .unwrap_or(crate::policy::policies::PolicySpec::Defer);
+        let transport = match (p.connect, p.command.is_empty()) {
+            (Some(a), _) => crate::policy::Transport::Connect(a),
+            (None, false) => crate::policy::Transport::Command {
+                argv: p.command,
+                cwd: p.cwd,
+            },
+            (None, true) => return Err("give connect or command".into()),
+        };
+        let seeds = if p.seeds.is_empty() {
+            (0..p.episodes.max(1) as u64).collect()
+        } else {
+            p.seeds
+        };
+        let safe: String = schema
+            .name
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let opts = crate::policy::runner::RunOptions {
+            seeds,
+            max_ticks: p.max_ticks,
+            rules: p.rules,
+            mode: p.mode,
+            frame_timeout: std::time::Duration::from_millis(p.frame_timeout_ms.max(1)),
+            record_dir: p.record.then(|| {
+                cfg.runs_dir.join("policy").join(format!(
+                    "{safe}-{}",
+                    chrono::Local::now().format("%Y%m%d-%H%M%S")
+                ))
+            }),
+        };
+        let _gpu = if spec.is_kev() {
+            let g = self.gpu("policy_run").await;
+            if g.is_some() {
+                crate::gpu::unload_vision(cfg).await;
+            }
+            g
+        } else {
+            None
+        };
+        let mut r =
+            crate::policy::run(&schema, &spec, Some(self.kev.as_ref()), &transport, &opts).await?;
+        if spec.is_kev() {
+            r.notes
+                .push(format!("Kev endpoint: {}", self.kev.last_endpoint()));
+        }
+        finished("policy_run", t0, &r);
+        audit(cfg, "policy_run", &r);
+        Ok(Json(r))
+    }
+
+    /// Diagnose recorded trajectories (policy_run's record_dir, or inline state arrays) under the
+    /// game's thresholds: behavior families by per-dimension mean/variance/distribution over
+    /// time, stuck states, oscillation, unrecoverable metrics, and the 0%-success family veto
+    /// with each rejected family's coordinate signature.
+    #[tool(name = "trajectory_diagnose")]
+    pub async fn trajectory_diagnose_tool(
+        &self,
+        Parameters(p): Parameters<TrajectoryParams>,
+    ) -> Result<Json<crate::policy::diagnostics::Diagnostics>, String> {
+        if !self.kev.cfg.tool_enabled("trajectory_diagnose") {
+            return Err("trajectory_diagnose is disabled".into());
+        }
+        let schema = crate::policy::load_schema(p.schema_path.as_deref(), p.schema.as_deref())?;
+        let trajs = match p.path {
+            Some(path) => crate::policy::runner::read_recordings(std::path::Path::new(&path))?,
+            None => p.trajectories,
+        };
+        let r = crate::policy::diagnostics::diagnose(&schema, &trajs)?;
+        audit(&self.kev.cfg, "trajectory_diagnose", &r);
         Ok(Json(r))
     }
 
@@ -1673,6 +1881,7 @@ impl Kritic {
                         ("vision", Err(e)) => run.set_novice_error(&cfg.vision_model, e),
                         ("vision" | "auto", Ok(())) => {
                             if cfg.vision_backend == "local" {
+                                crate::gpu::free_vision_gpu(cfg).await;
                                 crate::gpu::stop_laya(cfg).await;
                             }
                             run.novice(
@@ -1972,6 +2181,11 @@ mod gpu_tests {
             cfg.kev_cpu_only = cpu_only;
             cfg.backend = "local".into();
             cfg.vision_backend = "local".into();
+            // This test exercises the legacy shared GPU contract independently of the
+            // developer's live dedicated placement configuration.
+            cfg.kev_gpu_uuid = None;
+            cfg.vision_gpu_uuid = None;
+            cfg.laya_device = "auto".into();
             let server = Kritic::new(cfg);
             let _held = server.gpu.lock().await;
             for tool in ["artifact_validate", "security_critic"] {
@@ -2002,5 +2216,26 @@ mod gpu_tests {
                 "vision must still wait for GPU"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn dedicated_vision_does_not_queue_for_the_kev_mutex() {
+        let mut cfg = crate::config::Config::load();
+        let dir = tempfile::tempdir().unwrap();
+        cfg.runs_dir = dir.path().into();
+        cfg.kev_cpu_only = false;
+        cfg.vision_backend = "local".into();
+        cfg.kev_gpu_uuid = Some("GPU-11111111-1111-1111-1111-111111111111".into());
+        cfg.vision_gpu_uuid = Some("GPU-22222222-2222-2222-2222-222222222222".into());
+        cfg.laya_device = "cuda:0".into();
+        let server = Kritic::new(cfg);
+        let _held = server.gpu.lock().await;
+        let guard = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            server.gpu("visual_critic"),
+        )
+        .await
+        .expect("dedicated vision must use its own GPU mutex");
+        assert!(guard.is_some());
     }
 }

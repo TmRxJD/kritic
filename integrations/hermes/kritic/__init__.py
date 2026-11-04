@@ -96,7 +96,12 @@ def _settings() -> Dict[str, Any]:
     defaults = {"threshold": 0.5, "target": 0.35, "protect_first_n": 3, "protect_last_n": 6,
                 "big_chars": 8000, "use_kev": True, "timeout_s": 90}
     try:
-        import yaml  # Hermes depends on PyYAML
+        try:
+            import hermes_yaml as yaml  # Current Hermes owns its YAML parsing policy.
+        except ModuleNotFoundError as exc:
+            if exc.name != "hermes_yaml":
+                raise
+            import yaml  # Older Hermes releases use PyYAML.
 
         from hermes_constants import get_hermes_home  # canonical host profile, including Windows
         home = Path(get_hermes_home())
@@ -183,6 +188,7 @@ class KriticContextEngine(ContextEngine):
             proc = subprocess.run(  # noqa: S603; explicit argv, operator-selected executable or fixed test harness  # nosec B603
                 [exe, "context", op], input=json.dumps(payload), capture_output=True, text=True,
                 encoding="utf-8", timeout=self.timeout_s,
+                **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}),
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             self.last_error = f"kritic context {op}: {exc}"

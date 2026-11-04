@@ -292,7 +292,7 @@ pub async fn ensure_ollama(http: &reqwest::Client, cfg: &Config) -> Result<(), S
     if ollama_up(http, cfg).await {
         return Ok(());
     }
-    if cfg.vision_externally_managed {
+    if cfg.vision_externally_managed || cfg.dedicated_gpus() {
         return Err(format!(
             "externally managed vision service unreachable at {}; Kritic will not launch or restart it",
             cfg.ollama_url
@@ -448,7 +448,8 @@ pub async fn critique_with_kind(
         return r;
     }
     if cfg.vision_backend == "local" {
-        r.stopped_laya = crate::gpu::stop_laya(cfg).await;
+        let freed = crate::gpu::free_vision_gpu(cfg).await;
+        r.stopped_laya = crate::gpu::stop_laya(cfg).await || freed;
     }
     let (system, prompt, format) = match kind {
         ReviewKind::Ui => (
@@ -583,7 +584,7 @@ async fn chat(http: &reqwest::Client, cfg: &Config, body: &Value) -> Result<Valu
     crate::events::ready("vision", "loading", &cfg.vision_model);
     // The external provider owns residency/loading policy for normal inference.
     let mut local_body = body.clone();
-    if cfg.vision_externally_managed {
+    if cfg.vision_externally_managed || cfg.dedicated_gpus() {
         local_body
             .as_object_mut()
             .ok_or("vision request must be an object")?

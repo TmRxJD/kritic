@@ -11,6 +11,7 @@ import importlib.util
 import json
 import os
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -74,7 +75,7 @@ def test_recall_forwards_options_and_bounds_python_serialization(monkeypatch):
 
     def recall_result(op, payload):
         calls.append((op, payload))
-        return {"found": [{"original_content": "🦀" * 10000}]}
+        return {"found": [{"original_content": "\U0001f980" * 10000}]}
 
     monkeypatch.setattr(e, "_run", recall_result)
     result = e.handle_tool_call("kritic_recall", {"id": "kr-test", "format": "original", "max_chars": 0, "max_output_bytes": 256})
@@ -149,6 +150,25 @@ def test_invalid_explicit_kritic_exe_is_configuration_error(env, monkeypatch):
     msgs = transcript()
     with pytest.raises(ValueError, match="KRITIC_EXE must be an existing absolute file"):
         e.compress(msgs)
+    with pytest.raises(ValueError, match="KRITIC_EXE must be an existing absolute file"):
+        e.handle_tool_call("kritic_recall", {"id": "kr-1"})
+
+
+def test_settings_prefers_hermes_yaml_without_pyyaml(env, monkeypatch):
+    parsed = []
+    parser = types.ModuleType("hermes_yaml")
+
+    def safe_load(text):
+        parsed.append(text)
+        return {"kritic_context": {"use_kev": False, "protect_first_n": 4}}
+
+    parser.safe_load = safe_load
+    monkeypatch.setitem(sys.modules, "hermes_yaml", parser)
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    settings = load_plugin()._settings()
+    assert settings["protect_first_n"] == 4  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert settings["use_kev"] is False  # noqa: S101; test assertion, not runtime authorization  # nosec B101
+    assert len(parsed) == 1 and "kritic_context:" in parsed[0]  # noqa: S101; test assertion, not runtime authorization  # nosec B101
 
 
 def test_absolute_budget_survives_model_switches_and_clone(env, monkeypatch):

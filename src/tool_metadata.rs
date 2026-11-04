@@ -75,6 +75,15 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "spec_lint" => {
             "Validate decision specs, question definitions and calibration evidence. builtin lists specs; with_schema returns the schema."
         }
+        "policy_schema" => {
+            "Validate a local game policy schema, including state layout and actions."
+        }
+        "policy_run" => {
+            "Run a trusted local game client and policy, then report trajectory diagnostics and tick latency. Loopback or stdio only."
+        }
+        "trajectory_diagnose" => {
+            "Analyze recorded or supplied game trajectories for behavior families and failure patterns."
+        }
         "token_metrics" => {
             "Measure supported transcript/context and local-model usage. Missing or estimated accounting is not exact billing."
         }

@@ -524,6 +524,8 @@ pub struct StatusResult {
     /// Legacy laya-only status; native readiness is local_ready.
     pub laya_up: bool,
     pub laya_url: String,
+    /// Configured placement; health cannot prove physical UUID identity on older laya builds.
+    pub gpu_placement: Value,
     pub health: Option<Value>,
     pub laya_exe: String,
     pub laya_exe_exists: bool,
@@ -601,6 +603,18 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
         local_ready: health.is_some(),
         laya_up: cfg.local_runtime == "laya" && health.is_some(),
         laya_url: cfg.laya_url.clone(),
+        gpu_placement: json!({
+            "dedicated": cfg.dedicated_gpus(),
+            "cpu_only": cfg.kev_cpu_only,
+            "kev_externally_managed": cfg.kev_externally_managed,
+            "kev_gpu_uuid": cfg.kev_gpu_uuid,
+            "vision_gpu_uuid": cfg.vision_gpu_uuid,
+            "laya_device": cfg.laya_device,
+            "vulkan_visible_devices": cfg.vulkan_visible_devices,
+            "vision_endpoint": cfg.ollama_url,
+            "error": cfg.validate_gpu_placement().err().or_else(|| health.as_ref().and_then(|h| k.validate_health(h).err())),
+            "physical_identity_verified_by_health": false,
+        }),
         health,
         laya_exe: cfg.laya_exe.display().to_string(),
         laya_exe_exists: cfg.laya_exe.exists(),

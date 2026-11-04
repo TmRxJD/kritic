@@ -305,7 +305,7 @@ credentials and reports out of public issues. [Agent setup](docs/agent-setup.md)
 [Contracts](docs/contracts.md) · [Repository policy](docs/repository-policy.md) ·
 [Test/invariant contracts](docs/staleness.md) · [Debugging framing](docs/framing.md) ·
 [Technical debt](docs/technical-debt.md) · [Review history](docs/memory-adapter.md) ·
-[Architecture](docs/architecture.md) · [Security audit](docs/security-audit.md)
+[Architecture](docs/architecture.md) · [Security audit](docs/security-audit.md) · [Policy runner](docs/policy-runner.md) · [Other Kev testing uses](docs/kev-testing-uses.md)
 
 Apache-2.0. Optional models, runtimes, scanners and other dependencies retain their own licenses.
 

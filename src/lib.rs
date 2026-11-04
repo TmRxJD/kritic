@@ -27,6 +27,7 @@ pub mod native;
 pub mod organization;
 pub mod phase3;
 pub mod plugins;
+pub mod policy;
 pub mod proc;
 pub mod provider;
 pub mod repository;

@@ -20,8 +20,15 @@ pub struct Config {
     pub backend: String,
     /// Explicit CPU-only Kev service: never acquire its GPU lease or stop its process.
     pub kev_cpu_only: bool,
-    /// External owner controls service start/stop; inference still uses normal GPU leases.
+    /// A separately supervised laya service: never spawn or stop it.
     pub kev_externally_managed: bool,
+    /// Explicit paired GPU placement. Both UUIDs must be configured and distinct.
+    pub kev_gpu_uuid: Option<String>,
+    pub vision_gpu_uuid: Option<String>,
+    pub laya_device: String,
+    pub laya_max_batch: Option<usize>,
+    /// Vulkan ordinal from laya's device discovery (not a CUDA ordinal).
+    pub vulkan_visible_devices: Option<String>,
     /// Agent reply style kritic installs: "concise" (default) or "default" (leave the agent alone).
     pub output_style: String,
     /// Cloud Jev (TypeSafe's model through an AI Gateway `/v1/evaluate` endpoint).
@@ -92,6 +99,17 @@ pub struct Config {
     pub context_limit: u64,
     /// MCP tools not offered to the client. Default: `map_eval`, the Beat Saber domain pack.
     pub disabled_tools: Vec<String>,
+    /// A second Kev (laya) on the vision GPU. Used instead of `laya_url` whenever the vision
+    /// model is not loaded; stopped before vision work. None: always `laya_url`.
+    pub vision_gpu_kev_url: Option<String>,
+    /// Command that launches the vision-GPU Kev detached when it does not answer (run hidden).
+    pub vision_gpu_kev_start: Option<String>,
+    /// Command that stops the vision-GPU Kev before vision work (run hidden).
+    pub vision_gpu_kev_stop: Option<String>,
+    /// GPU of the vision-GPU Kev: only a router lane on this GPU counts as vision work.
+    pub vision_gpu_kev_uuid: Option<String>,
+    /// Stop the vision-GPU Kev after this many seconds without a request (0: never).
+    pub vision_gpu_kev_idle_s: u64,
 }
 
 /// Every key the config file accepts, as `section.key`, with the environment variable that
@@ -101,10 +119,18 @@ pub const KEYS: &[(&str, &str)] = &[
     ("kev.backend", "KRITIC_KEV_BACKEND"),
     ("kev.cpu_only", "KRITIC_KEV_CPU_ONLY"),
     ("kev.externally_managed", "KRITIC_KEV_EXTERNALLY_MANAGED"),
-    ("cloud.url", "KRITIC_CLOUD_URL"),
-    ("cloud.model", "KRITIC_CLOUD_MODEL"),
     ("cloud.provider", "KRITIC_CLOUD_PROVIDER"),
     ("cloud.max_output_tokens", "KRITIC_CLOUD_MAX_OUTPUT_TOKENS"),
+    ("kev.gpu_uuid", "KRITIC_KEV_GPU_UUID"),
+    ("kev.device", "KRITIC_LAYA_DEVICE"),
+    ("kev.max_batch", "KRITIC_LAYA_MAX_BATCH"),
+    (
+        "kev.vulkan_visible_devices",
+        "KRITIC_VULKAN_VISIBLE_DEVICES",
+    ),
+    ("vision.gpu_uuid", "KRITIC_VISION_GPU_UUID"),
+    ("cloud.url", "KRITIC_CLOUD_URL"),
+    ("cloud.model", "KRITIC_CLOUD_MODEL"),
     ("cloud.key_env", "KRITIC_CLOUD_KEY_ENV"),
     ("cloud.key_file", "KRITIC_CLOUD_KEY_FILE"),
     ("kev.local_runtime", "KRITIC_LOCAL_RUNTIME"),
@@ -171,12 +197,20 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
+    ("kev.vision_gpu_laya_url", "KRITIC_VISION_GPU_KEV_URL"),
+    ("kev.vision_gpu_start", "KRITIC_VISION_GPU_KEV_START"),
+    ("kev.vision_gpu_stop", "KRITIC_VISION_GPU_KEV_STOP"),
+    ("kev.vision_gpu_uuid", "KRITIC_VISION_GPU_KEV_UUID"),
+    ("kev.vision_gpu_idle_s", "KRITIC_VISION_GPU_KEV_IDLE_S"),
 ];
 
 /// Tools off unless the config turns them on: domain packs that most projects don't need.
 pub const DEFAULT_DISABLED: &[&str] = &[];
 
 pub const TOOL_NAMES: &[&str] = &[
+    "policy_schema",
+    "policy_run",
+    "trajectory_diagnose",
     "status",
     "artifact_validate",
     "contract_critic",
@@ -318,6 +352,12 @@ impl Source {
             .expect("key listed in KEYS");
         if let Some(v) = env_var(env) {
             return Some(v);
+        }
+        // Compatibility with the dedicated-GPU profile spelling; canonical vision setting wins.
+        if key == "vision.externally_managed" {
+            if let Some(value) = env_var("KRITIC_OLLAMA_EXTERNALLY_MANAGED") {
+                return Some(value);
+            }
         }
         let (section, name) = key.split_once('.').expect("section.key");
         match self.file.get(section)?.get(name)? {
@@ -583,6 +623,13 @@ impl Config {
             cloud_max_tokens: s.num("cloud.max_output_tokens", 4096),
             kev_cpu_only,
             kev_externally_managed,
+            kev_gpu_uuid: s.get("kev.gpu_uuid").filter(|v| !v.trim().is_empty()),
+            vision_gpu_uuid: s.get("vision.gpu_uuid").filter(|v| !v.trim().is_empty()),
+            laya_device: s.str("kev.device", "auto"),
+            laya_max_batch: s.get("kev.max_batch").map(|v| v.parse().unwrap_or(0)),
+            vulkan_visible_devices: s
+                .get("kev.vulkan_visible_devices")
+                .filter(|v| !v.trim().is_empty()),
             vision_externally_managed,
             output_style,
             backend,
@@ -654,6 +701,20 @@ impl Config {
             unity_hub_editors: s.path("unity.hub_editors", default_unity_hub()),
             context_limit: s.num("review.context_limit", 1_000_000),
             disabled_tools: s.list("tools.disabled", DEFAULT_DISABLED),
+            vision_gpu_kev_url: s
+                .get("kev.vision_gpu_laya_url")
+                .map(|v| v.trim().trim_end_matches('/').to_string())
+                .filter(|v| !v.is_empty()),
+            vision_gpu_kev_start: s
+                .get("kev.vision_gpu_start")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_stop: s
+                .get("kev.vision_gpu_stop")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_uuid: s
+                .get("kev.vision_gpu_uuid")
+                .filter(|v| !v.trim().is_empty()),
+            vision_gpu_kev_idle_s: s.num("kev.vision_gpu_idle_s", 120),
             home,
             config_file,
             config_errors,
@@ -728,6 +789,9 @@ impl Config {
             self.max_seq_tokens = self.max_seq_tokens.max(1);
             self.command_timeout_s = self.command_timeout_s.max(1);
             self.kev_request_s = self.kev_request_s.max(1);
+        }
+        if let Err(error) = self.validate_gpu_placement() {
+            self.config_errors.push(error);
         }
     }
 
@@ -832,4 +896,52 @@ impl Config {
     pub fn from_env() -> Self {
         Self::load()
     }
+
+    /// Fail closed on partial or ambiguous dedicated placement.
+    pub fn validate_gpu_placement(&self) -> Result<(), String> {
+        if self.laya_max_batch == Some(0) {
+            return Err("kev.max_batch: expected a positive integer".into());
+        }
+        if self.laya_device == "cpu" && !self.kev_cpu_only {
+            return Err(
+                "kev.device=cpu requires kev.cpu_only=true for correct GPU coordination".into(),
+            );
+        }
+        if !["auto", "cpu", "cuda", "cuda:0", "vulkan", "vulkan:0"]
+            .contains(&self.laya_device.as_str())
+        {
+            return Err("kev.device: expected auto, cpu, cuda, cuda:0, vulkan or vulkan:0".into());
+        }
+        match (&self.kev_gpu_uuid, &self.vision_gpu_uuid) {
+            (None, None) => Ok(()),
+            (Some(kev), Some(vision)) if !kev.eq_ignore_ascii_case(vision) && valid_gpu_uuid(kev) && valid_gpu_uuid(vision) => {
+                if self.kev_cpu_only || !["cuda:0", "vulkan:0"].contains(&self.laya_device.as_str()) {
+                    return Err("dedicated GPUs require an explicit Kev cuda:0 or vulkan:0 device and cpu_only=false".into());
+                }
+                if self.laya_device.starts_with("vulkan") && !self.vulkan_visible_devices.as_ref().is_some_and(|v| v.parse::<u32>().is_ok()) {
+                    return Err("dedicated Vulkan requires kev.vulkan_visible_devices: one verified Vulkan ordinal".into());
+                }
+                Ok(())
+            }
+            _ => Err("dedicated GPUs require kev.gpu_uuid and vision.gpu_uuid as distinct full NVIDIA GPU UUIDs".into()),
+        }
+    }
+
+    pub fn dedicated_gpus(&self) -> bool {
+        self.kev_gpu_uuid.is_some() && self.validate_gpu_placement().is_ok()
+    }
+}
+
+fn valid_gpu_uuid(value: &str) -> bool {
+    let Some(id) = value.strip_prefix("GPU-") else {
+        return false;
+    };
+    id.len() == 36
+        && id.chars().enumerate().all(|(i, c)| {
+            if [8, 13, 18, 23].contains(&i) {
+                c == '-'
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
 }

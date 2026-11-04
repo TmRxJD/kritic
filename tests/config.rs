@@ -159,6 +159,44 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
         std::env::remove_var("KRITIC_CONFIG");
         std::env::remove_var("KRITIC_KEV_CPU_ONLY")
     };
+    unsafe {
+        std::env::set_var(
+            "KRITIC_KEV_GPU_UUID",
+            "GPU-11111111-1111-1111-1111-111111111111",
+        );
+        std::env::set_var(
+            "KRITIC_VISION_GPU_UUID",
+            "GPU-22222222-2222-2222-2222-222222222222",
+        );
+        std::env::set_var("KRITIC_LAYA_DEVICE", "vulkan:0");
+        std::env::set_var("KRITIC_VULKAN_VISIBLE_DEVICES", "1");
+        std::env::set_var("KRITIC_LAYA_MAX_BATCH", "4");
+        std::env::set_var("KRITIC_OLLAMA_EXTERNALLY_MANAGED", "true");
+    }
+    let dedicated = Config::load();
+    assert!(dedicated.dedicated_gpus());
+    assert!(dedicated.config_errors.is_empty());
+    assert!(dedicated.vision_externally_managed);
+    assert_eq!(dedicated.laya_max_batch, Some(4));
+    unsafe {
+        std::env::set_var(
+            "KRITIC_VISION_GPU_UUID",
+            "GPU-11111111-1111-1111-1111-111111111111",
+        )
+    };
+    assert!(!Config::load().config_errors.is_empty());
+    unsafe {
+        for key in [
+            "KRITIC_KEV_GPU_UUID",
+            "KRITIC_VISION_GPU_UUID",
+            "KRITIC_LAYA_DEVICE",
+            "KRITIC_VULKAN_VISIBLE_DEVICES",
+            "KRITIC_LAYA_MAX_BATCH",
+            "KRITIC_OLLAMA_EXTERNALLY_MANAGED",
+        ] {
+            std::env::remove_var(key);
+        }
+    }
 
     // Set-but-empty means unset; a relative home is made absolute.
     unsafe { std::env::set_var("KRITIC_HOME", "") };

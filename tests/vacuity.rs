@@ -52,7 +52,7 @@ async fn skipped_artifacts_and_blank_commands_cannot_pass() {
 }
 
 #[test]
-fn no_browser_pages_and_no_desktop_evidence_stay_unknown() {
+fn empty_browser_report_fails_and_missing_desktop_evidence_stays_unknown() {
     let report = kritic::ui::HarnessReport {
         ok: true,
         ..Default::default()
@@ -66,7 +66,7 @@ fn no_browser_pages_and_no_desktop_evidence_stay_unknown() {
             }
         )
         .2,
-        None
+        Some(false)
     );
     assert_eq!(
         kritic::phase3::judge_desktop(&json!({"ok":true}), &[]).2,
