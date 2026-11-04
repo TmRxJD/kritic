@@ -237,26 +237,18 @@ fn example_documents_every_key_and_file_env_precedence_holds() {
     // An explicit KRITIC_CONFIG that doesn't exist is an error, not silently ignored.
     unsafe { std::env::set_var("KRITIC_CONFIG", dir.path().join("missing.toml")) };
     assert_eq!(Config::load().config_errors.len(), 1);
-    let unsupported = dir.path().join("unsupported.toml");
-    std::fs::write(
-        &unsupported,
-        "[kev]\ndevice='cuda'\ngpu_uuid='test'\nmax_batch=4\nvulkan_visible_devices='0'\n",
-    )
-    .unwrap();
-    unsafe { std::env::set_var("KRITIC_CONFIG", unsupported) };
-    let unsupported = Config::load();
-    for key in [
-        "kev.device",
-        "kev.gpu_uuid",
-        "kev.max_batch",
-        "kev.vulkan_visible_devices",
+    let invalid = dir.path().join("invalid-gpu.toml");
+    unsafe { std::env::set_var("KRITIC_CONFIG", &invalid) };
+    for (setting, error_key) in [
+        ("device='unknown'", "kev.device"),
+        ("gpu_uuid='test'", "kev.gpu_uuid"),
+        ("max_batch=0", "kev.max_batch"),
     ] {
+        std::fs::write(&invalid, format!("[kev]\n{setting}\n")).unwrap();
+        let errors = Config::load().config_errors;
         assert!(
-            unsupported
-                .config_errors
-                .iter()
-                .any(|error| error.contains(key)),
-            "{key} must not be accepted as a no-op"
+            errors.iter().any(|error| error.contains(error_key)),
+            "{setting} must be rejected: {errors:?}"
         );
     }
 }
