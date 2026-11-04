@@ -60,6 +60,10 @@ response to `visual_critic(host_review=...)` with the original image hashes and 
 If the host cannot open a session, report
 the independent review as outstanding.
 
+For `codex`, use the `codex_follow_up` report on visual critiques. When Kritic
+returns `separate_session_required`, or for other critiques, open and manage a
+fresh judgment session as described above.
+
 For `cloud`, use the separate cloud report returned by `visual_critic`. For other
 critiques, call `cloud_critique` with authorized, bounded evidence. If the configured
 cloud provider fails or cannot see the required evidence, use a separate host session.

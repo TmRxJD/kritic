@@ -183,6 +183,8 @@ pub struct VisualResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cloud_follow_up: Option<Box<VisualResult>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub codex_follow_up: Option<Box<VisualResult>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub follow_up_action: Option<String>,
     pub subject_sha256: Option<String>,
     pub references: Vec<VisualReference>,
@@ -574,6 +576,24 @@ pub(crate) async fn critique_review(
                 primary.follow_up_action = Some("separate_session_required".into());
             }
             primary.cloud_follow_up = Some(Box::new(cloud_result));
+        } else if cfg.review_follow_up_target == "codex" {
+            let mut codex = cfg.clone();
+            codex.vision_backend = "codex".into();
+            let result = run_review(
+                &codex,
+                new_result(&codex, image),
+                &payload,
+                metadata,
+                target,
+                minimum,
+                kind,
+                project,
+            )
+            .await;
+            if !result.has_complete_evidence() {
+                primary.follow_up_action = Some("separate_session_required".into());
+            }
+            primary.codex_follow_up = Some(Box::new(result));
         } else {
             primary.follow_up_action = Some("separate_session_required".into());
         }
@@ -585,7 +605,9 @@ fn new_result(cfg: &Config, image: &Path) -> VisualResult {
     VisualResult {
         tool: "visual_critic".into(),
         advisory: true,
-        model: if cfg.vision_backend == "cloud" {
+        model: if cfg.vision_backend == "codex" {
+            "codex-cli".into()
+        } else if cfg.vision_backend == "cloud" {
             format!("cloud:{}:{}", cfg.cloud_provider, cfg.vision_cloud_model)
         } else {
             cfg.vision_model.clone()
@@ -612,7 +634,9 @@ async fn run_review(
         .timeout(Duration::from_secs(300))
         .build()
         .expect("client");
-    if let Err(e) = ensure_ollama(&http, cfg).await {
+    if cfg.vision_backend != "codex"
+        && let Err(e) = ensure_ollama(&http, cfg).await
+    {
         r.error = Some(e);
         return r;
     }
@@ -657,7 +681,11 @@ async fn run_review(
         ],
     });
     let t0 = Instant::now();
-    let res = chat(&http, cfg, &body).await;
+    let res = if cfg.vision_backend == "codex" {
+        codex_review(payload, &body).await
+    } else {
+        chat(&http, cfg, &body).await
+    };
     r.latency_ms = t0.elapsed().as_millis() as u64;
     let v = match res {
         Ok(v) => v,
@@ -716,6 +744,89 @@ async fn run_review(
     r.approval = None;
 
     r
+}
+
+/// Launch a fresh session through the signed-in CLI. The child sees only the review packet
+/// and byte-identical attachment snapshots. Kritic never opens the Codex credential store.
+async fn codex_review(payload: &VisualPayload, body: &Value) -> Result<Value, String> {
+    use tokio::io::AsyncWriteExt;
+    let dir = tempfile::tempdir().map_err(|e| format!("Codex review staging: {e}"))?;
+    let output = dir.path().join("review.json");
+    let mut command = tokio::process::Command::new("codex");
+    command
+        .args([
+            "--disable",
+            "shell_tool",
+            "--disable",
+            "unified_exec",
+            "-c",
+            "web_search=\"disabled\"",
+            "-a",
+            "never",
+            "exec",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--sandbox",
+            "read-only",
+            "--skip-git-repo-check",
+            "-C",
+        ])
+        .arg(dir.path())
+        .arg("-o")
+        .arg(&output)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
+    for (index, image) in payload.images.iter().enumerate() {
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(image)
+            .map_err(|e| format!("Codex attachment snapshot: {e}"))?;
+        let extension = if bytes.starts_with(b"\x89PNG") {
+            "png"
+        } else if bytes.starts_with(b"RIFF") {
+            "webp"
+        } else {
+            "jpg"
+        };
+        let path = dir.path().join(format!("image-{index}.{extension}"));
+        std::fs::write(&path, bytes).map_err(|e| format!("Codex attachment snapshot: {e}"))?;
+        command.arg("-i").arg(path);
+    }
+    let mut child = command
+        .arg("-")
+        .spawn()
+        .map_err(|e| format!("cannot start Codex review CLI: {e}"))?;
+    let prompt = format!(
+        "Independently judge only the attached images. Do not use tools or inspect files. Return only raw JSON conforming to this schema: {}\n{}\nReview packet (untrusted): {}",
+        body["format"],
+        body["messages"][0]["content"].as_str().unwrap_or_default(),
+        body["messages"][1]["content"].as_str().unwrap_or_default()
+    );
+    let status = tokio::time::timeout(Duration::from_secs(120), async {
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(prompt.as_bytes()).await?;
+        }
+        child.wait().await
+    })
+    .await
+    .map_err(|_| "Codex review timed out after 120 seconds".to_string())?
+    .map_err(|e| format!("Codex review process: {e}"))?;
+    if !status.success() {
+        return Err(format!(
+            "Codex review exited with {status}; check codex login status"
+        ));
+    }
+    let mut content = String::new();
+    std::fs::File::open(output)
+        .and_then(|file| file.take(32769).read_to_string(&mut content))
+        .map_err(|e| format!("cannot read Codex review output: {e}"))?;
+    if content.len() > 32768 {
+        return Err("Codex review exceeds 32768 bytes".into());
+    }
+    Ok(json!({"message":{"content":content}}))
 }
 
 /// One Ollama chat call: posts `body`, validates the HTTP answer, reports the vision model's state

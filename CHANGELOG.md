@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0-test.9 — test release
+
+- Add an optional Codex CLI follow-up for visual critiques. Kritic opens a fresh
+  judgment session using the CLI login and retains its report beside the primary
+  result with the same original image hashes.
+
 ## 0.5.0-test.8 — test release
 
 - Add weighted visual rubrics with project criteria, ordered references and

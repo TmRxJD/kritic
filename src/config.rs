@@ -630,7 +630,7 @@ impl Config {
             review_follow_up_target: choice_setting(
                 &s,
                 "review.follow_up_target",
-                &["session", "cloud"],
+                &["session", "cloud", "codex"],
                 "session",
                 &mut config_errors,
             ),

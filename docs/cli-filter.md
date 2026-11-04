@@ -7,7 +7,7 @@ whether the command succeeded. Filtering works without a GPU, model or MCP conne
 
 ## Install and run
 
-The Windows test.8 ZIP includes `bin/kev.exe` and `bin/kev-filter.exe` alongside Kritic.
+The Windows test.9 ZIP includes `bin/kev.exe` and `bin/kev-filter.exe` alongside Kritic.
 The Apple Silicon `kritic-cli-macos-arm64-test.tar.gz` includes `bin/kev` and
 `bin/kev-filter` plus matching source/docs. **That Mac archive contains CLI binaries
 only; the Kritic MCP server still requires a source build.** Intel Mac/Linux users

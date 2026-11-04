@@ -1,6 +1,6 @@
 # Configuration
 
-The standalone test.8 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
+The standalone test.9 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
 of `kritic.toml`. No capability toggle or MCP restart is needed. `--kev` opts into
 an existing local ranker per invocation; it never starts/downloads a model. The server
 configuration owns 0.8B/4B weight selection. [Flags, defaults and limits](cli-filter.md).
@@ -87,6 +87,7 @@ The independent review policy is shared across critiques:
 - `review.follow_up = "always"` (default) requests a second review even after a successful local critique.
 - `"fallback"` requests a second review when the primary model is unavailable, the response is invalid, or the evidence is incomplete. `"off"` disables the policy.
 - `review.follow_up_target = "session"` (default) directs the host agent to open a separate session with an available model. Use an image-capable model for visual work.
+- `"codex"` runs a fresh, ephemeral Codex CLI session for visual reviews using the CLI's existing login. Install `codex` on PATH and sign in with `codex login`. Choosing this target authorizes attaching the original images to that session. The result appears under `codex_follow_up` alongside the primary review. If the CLI or its review is unavailable, Kritic asks the host to start a separate review. For other critiques, the host manages that session.
 - `"cloud"` uses the configured provider and model. Selecting it authorizes sending the supplied review inputs to that provider. Visual review automatically keeps the cloud report alongside the local report. For other critiques, the host sends a bounded evidence packet through `cloud_critique`. A cloud failure still requires a separate host session when one is available.
 
 The host opens its own independent sessions. Kritic exposes the policy through `status` and does not acquire access to a coding client's model subscription. Keep the primary result, second opinion, and deterministic findings distinct.

@@ -87,7 +87,7 @@
 
 [review]
 # follow_up = "always"                        # KRITIC_REVIEW_FOLLOW_UP: always | fallback | off
-# follow_up_target = "session"                # KRITIC_REVIEW_FOLLOW_UP_TARGET: session | cloud
+# follow_up_target = "session"                # KRITIC_REVIEW_FOLLOW_UP_TARGET: session | cloud | codex
 # backend = "off"                              # KRITIC_BACKEND: off | local | cloud | auto (local discovery only)
 # Fresh installs use deterministic checks, no inference and no model downloads.
 # max_revisions = 2                             # KRITIC_MAX_REVISIONS: revise-and-rescore rounds the agent may take
