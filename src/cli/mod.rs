@@ -12,6 +12,7 @@ pub mod register;
 pub mod repository;
 pub mod setup;
 pub mod staleness;
+pub mod timeline;
 pub mod ui;
 
 use clap::{Args, Parser, Subcommand};
@@ -59,6 +60,8 @@ pub enum Cmd {
     Framing(framing::FramingArgs),
     /// Audit test currency/canonical ownership, or explicitly synchronize JSON fixtures.
     Staleness(staleness::StalenessArgs),
+    /// Compare video frames and correlate synchronized performance evidence.
+    Timeline(timeline::TimelineArgs),
 }
 
 #[derive(Args, Debug)]

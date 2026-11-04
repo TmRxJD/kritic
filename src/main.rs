@@ -55,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Cmd::Debt(a)) => exit_on(kritic::cli::debt::run(a).await),
         Some(Cmd::Framing(a)) => exit_on(kritic::cli::framing::run(a).await),
         Some(Cmd::Staleness(a)) => exit_on(kritic::cli::staleness::run(a)),
+        Some(Cmd::Timeline(a)) => exit_on(kritic::cli::timeline::run(a).await),
         Some(Cmd::Repository(a)) => match kritic::cli::repository::run(a) {
             Ok(true) => std::process::exit(0),
             Ok(false) => std::process::exit(1),
