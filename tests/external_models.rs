@@ -10,11 +10,23 @@ use tokio::{
 async fn server(
     responses: Vec<(u16, Value)>,
 ) -> (String, tokio::task::JoinHandle<Vec<(String, Value)>>) {
+    raw_server(
+        responses
+            .into_iter()
+            .map(|(status, value)| (status, "application/json", value.to_string()))
+            .collect(),
+    )
+    .await
+}
+
+async fn raw_server(
+    responses: Vec<(u16, &'static str, String)>,
+) -> (String, tokio::task::JoinHandle<Vec<(String, Value)>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let task = tokio::spawn(async move {
         let mut requests = vec![];
-        for (status, value) in responses {
+        for (status, content_type, body) in responses {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut bytes = vec![];
             let mut buffer = [0u8; 1024];
@@ -50,12 +62,54 @@ async fn server(
                     serde_json::from_slice(&bytes[offset..offset + length]).unwrap()
                 },
             ));
-            let body = value.to_string();
-            socket.write_all(format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            socket.write_all(format!("HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
         }
         requests
     });
     (url, task)
+}
+
+#[tokio::test]
+async fn vision_preserves_http_rejections_and_explains_capture_limits() {
+    let directory = tempfile::tempdir().unwrap();
+    let image = directory.path().join("fixture.png");
+    // This test exercises HTTP handling. The loopback peer never decodes the image.
+    std::fs::write(&image, b"\x89PNG\r\n\x1a\nfixture").unwrap();
+    let mut cfg = config(directory.path());
+    let cases = [
+        (413, "text/plain", "Failed to buffer the request body: length limit exceeded".into(),
+            "Ollama HTTP 413", "smaller JPEG attachments"),
+        (503, "application/json", json!({"error":"request (5797 tokens) exceeds the available context size (4096 tokens)"}).to_string(),
+            "Ollama HTTP 503", "lower-resolution images"),
+        (200, "text/plain", "invalid success body".into(), "Ollama returned non-JSON", "error decoding response body"),
+    ];
+    for (status, content_type, body, headline, detail) in cases {
+        let (url, requests) = raw_server(vec![
+            (
+                200,
+                "application/json",
+                json!({"version":"fixture"}).to_string(),
+            ),
+            (status, content_type, body),
+        ])
+        .await;
+        cfg.ollama_url = url;
+        let result = kritic::vision::critique(&cfg, &image, "fixture").await;
+        assert!(!result.model_ok);
+        let error = result.error.unwrap();
+        assert!(
+            error.contains(headline) && error.contains(detail),
+            "{error}"
+        );
+        if status == 413 {
+            assert!(error.contains("length limit exceeded"), "{error}");
+        }
+        if status == 503 {
+            assert!(error.contains("5797 tokens"), "{error}");
+        }
+        let requests = requests.await.unwrap();
+        assert!(requests[1].0.starts_with("POST /api/chat"));
+    }
 }
 
 fn config(directory: &std::path::Path) -> Config {

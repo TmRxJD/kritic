@@ -1,5 +1,13 @@
 # Troubleshooting
 
+For local vision, `Ollama HTTP 413` means the endpoint rejected the encoded request
+size. Base64 increases image bytes by about one third and every reference adds to
+the same request. Use JPEG copies or fewer references to reduce transfer size.
+If the provider reports that the request exceeds its context size, reduce the
+image dimensions or the number of references. JPEG compression alone keeps the
+pixel dimensions, so a smaller file can still exceed the model's context budget.
+Keep the original capture for any detail you need to inspect at full resolution.
+
 Start with `status(start=false)`. Models are disabled by default; that is expected.
 Use start=true only after explicitly selecting local inference. It shows whether laya is up, every resolved path (and whether it
 exists), the config file read, any `config_errors`, and the ready states.
