@@ -18,6 +18,8 @@ pub struct Config {
     /// Who answers Kev questions: `auto` (local Kev when installed, else cloud Jev when a key is
     /// configured), `local`, `cloud`, or `off` (deterministic tools only).
     pub backend: String,
+    pub review_follow_up: String,
+    pub review_follow_up_target: String,
     /// Explicit CPU-only Kev service: never acquire its GPU lease or stop its process.
     pub kev_cpu_only: bool,
     /// A separately supervised laya service: never spawn or stop it.
@@ -116,6 +118,8 @@ pub struct Config {
 /// overrides it. `examples/kritic.toml` documents each one; `tests/unit.rs` keeps them in sync.
 pub const KEYS: &[(&str, &str)] = &[
     ("review.backend", "KRITIC_BACKEND"),
+    ("review.follow_up", "KRITIC_REVIEW_FOLLOW_UP"),
+    ("review.follow_up_target", "KRITIC_REVIEW_FOLLOW_UP_TARGET"),
     ("kev.backend", "KRITIC_KEV_BACKEND"),
     ("kev.cpu_only", "KRITIC_KEV_CPU_ONLY"),
     ("kev.externally_managed", "KRITIC_KEV_EXTERNALLY_MANAGED"),
@@ -223,6 +227,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "critic_score",
     "decide",
     "visual_critic",
+    "cloud_critique",
     "ui_test",
     "ux_critic",
     "security_critic",
@@ -615,6 +620,20 @@ impl Config {
             },
         );
         let mut cfg = Config {
+            review_follow_up: choice_setting(
+                &s,
+                "review.follow_up",
+                &["always", "fallback", "off"],
+                "always",
+                &mut config_errors,
+            ),
+            review_follow_up_target: choice_setting(
+                &s,
+                "review.follow_up_target",
+                &["session", "cloud"],
+                "session",
+                &mut config_errors,
+            ),
             cloud_key_file_explicit: s.get("cloud.key_file").is_some(),
             capabilities,
             vision_backend,
@@ -869,7 +888,10 @@ impl Config {
         }
         match name {
             "critic_score" | "decide" => self.backend != "off",
-            "visual_critic" => self.vision_backend != "off",
+            "visual_critic" => self.vision_backend != "off" || self.review_follow_up != "off",
+            "cloud_critique" => {
+                self.review_follow_up != "off" && self.review_follow_up_target == "cloud"
+            }
             "ui_test" => self.capability("web"),
             "ux_critic" => self.capability("ux"),
             "security_critic" => self.capability("security"),

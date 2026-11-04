@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-test.8 — test release
+
+- Add weighted visual rubrics with project criteria, ordered references and
+  evidence requirements for concept and photorealistic comparison.
+- Add a shared independent review policy. Hosts can use separate sessions, or
+  configured cloud providers can review visual inputs and bounded critique packets.
+- Validate independent host visual responses against the original image hashes
+  and rubric before computing a weighted score.
+
 ## 0.5.0-test.7 — test release
 
 - Compare baseline and candidate captures on a shared timeline with frame times, FPS, worker activity and resource samples.

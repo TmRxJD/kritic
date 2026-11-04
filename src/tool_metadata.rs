@@ -2,7 +2,7 @@
 use serde_json::{Map, Value};
 
 // Some clients repeat these instructions beside every tool. Keep workflow detail in the skill.
-pub(crate) const INSTRUCTIONS: &str = "TEST RELEASE: independently validate findings; fix reproducible Kritic defects with regressions and PRs. Advisory only. Setup failures: status(base_dir). Deterministic first; models optional. Never fabricate scores or execution evidence.";
+pub(crate) const INSTRUCTIONS: &str = "TEST RELEASE: independently validate findings; fix reproducible Kritic defects with regressions and PRs. Advisory only. Setup failures: status(base_dir). Deterministic first. Apply the follow-up policy from status to every critique. Never fabricate scores or execution evidence.";
 
 pub(crate) fn description(name: &str) -> Option<&'static str> {
     Some(match name {
@@ -40,7 +40,10 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
             "Optional typed model decision with uncertainty. Escalation means decide independently; probabilities are not proof."
         }
         "visual_critic" => {
-            "Optional screenshot craft assessment. Verify observations against actual UI; the rubric is uncalibrated and approval is always null."
+            "Optional screenshot or render review with built-in or weighted project criteria. Verify evidence independently; approval is always null."
+        }
+        "cloud_critique" => {
+            "Send an authorized evidence packet for an independent configured cloud review. Advisory only."
         }
         "ui_test" => {
             "Browser interaction, persistence, error and accessibility checks. Destructive-looking controls require opt-in. Functional success does not prove visual quality."

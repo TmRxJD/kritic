@@ -98,3 +98,58 @@ and human ratings, plus difficult competent-but-generic cases. Compare multiple 
 those ratings and hold out some examples before enabling any automatic quality gate. Current
 offline tests establish parsing, evidence requirements, image binding and provisional verdict
 semantics. They do not prove that a vision model now shares the user's taste.
+
+
+## Judge against your project's art direction
+
+Pass `project_rubric` to `visual_critic` when you have explicit visual goals.
+It replaces the built-in rubric and its score floor. Omit it to use the built-in
+UI or scene review. Keep a copy of the rubric in your project and pass the
+same criteria when comparing revisions.
+
+```json
+{
+  "image_path": "captures/level-render.png",
+  "reference_images": ["art/level-concept.jpg"],
+  "project_rubric": {
+    "material": "concept_match",
+    "criteria": [
+      {
+        "id": "landmark_silhouette",
+        "expectation": "The three tower peaks match the concept from the entrance. Allow stylized masonry.",
+        "weight": 70,
+        "reference": 1
+      },
+      {
+        "id": "route_readability",
+        "expectation": "The amber gate stands out as the route forward from the entrance, as in the concept.",
+        "weight": 30,
+        "reference": 1
+      }
+    ]
+  }
+}
+```
+
+- Use `general` (the default) for standalone reviews such as a stylized HUD. Images are optional.
+- Use `concept_match` for renders judged against concept art and `photorealism` for visible fidelity against authorized photos. Both require at least one image. Choose comparable views and lighting, and describe acceptable differences in each criterion.
+- Supply one to eight criteria with unique snake_case IDs and weights from 1 to 100. Weights are relative. Omit criteria outside the review scope. `reference` is an optional one-based image index and is required when you want a criterion tied to a specific image.
+- The report shows each criterion and its evidence. Kritic calculates the weighted mean only when every criterion has visible evidence. Partial coverage leaves the weighted score unset. All model observations remain advisory.
+- Include resolution, realism, or any other quality expectation only when it matters to your project. Verify exact pixel dimensions separately. For cloud review, authorize sending the subject and each reference to the configured provider.
+
+
+With the default independent review policy, the host opens a separate vision-capable
+session. Give that session the original images, criterion IDs, expectations and reference
+order. Ask for a JSON object with a `craft` map keyed by criterion ID. Each entry has
+`score`, `coverage` (`visible`, `partial`, or `not_visible`), `evidence`,
+`improvement`, and `comparison_reference` (one-based, or 0 for no comparison).
+Use one evidence object with `element` and `observation` for visible or partial
+coverage, and an empty evidence array for `not_visible`.
+
+Submit that result back to `visual_critic` with the same `image_path`,
+`reference_images` and `project_rubric`, plus a `host_review` object containing
+`model`, `subject_sha256`, `reference_sha256` (ordered array) and `response`
+(the JSON object). Kritic matches the hashes to the supplied originals, validates
+the response, and calculates the weighted score. The model name is host-reported,
+and the host still needs to verify the observations. This validation works with
+`vision.backend = "off"`.

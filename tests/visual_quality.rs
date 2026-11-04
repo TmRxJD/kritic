@@ -230,3 +230,26 @@ fn reference_payload_rejects_excess_count_size_and_unsupported_content() {
         .contains("finite")
     );
 }
+
+#[test]
+fn project_visual_rubric_weights_visible_evidence_and_requires_reference_coverage() {
+    let rubric: kritic::visual_quality::ProjectRubric = serde_json::from_value(serde_json::json!({
+        "material": "concept_match",
+        "criteria": [
+            {"id": "silhouette", "expectation": "Match the three ridges in the concept", "weight": 3, "reference": 1},
+            {"id": "palette", "expectation": "Keep amber accents on the gates", "weight": 1}
+        ]
+    })).unwrap();
+    assert!(rubric.validate(0).is_err());
+    let mut output = serde_json::json!({"craft": {
+        "silhouette": {"comparison_reference":1, "score":8, "coverage":"visible", "improvement":"",
+            "evidence":[{"element":"ridges","observation":"Three ridges in both the render and reference_1."}]},
+        "palette": {"comparison_reference":1, "score":4, "coverage":"visible", "improvement":"Use amber on the outer gate.",
+            "evidence":[{"element":"outer gate","observation":"Blue gate in the render, amber in reference_1."}]}
+    }});
+    assert_eq!(rubric.assess(&output, 1).unwrap().weighted_score, Some(7.0));
+    output["craft"]["palette"]["coverage"] = serde_json::json!("partial");
+    assert_eq!(rubric.assess(&output, 1).unwrap().weighted_score, None);
+    output["craft"]["silhouette"]["comparison_reference"] = serde_json::json!(2);
+    assert!(rubric.assess(&output, 1).is_err());
+}

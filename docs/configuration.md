@@ -1,6 +1,6 @@
 # Configuration
 
-The standalone test.7 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
+The standalone test.8 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
 of `kritic.toml`. No capability toggle or MCP restart is needed. `--kev` opts into
 an existing local ranker per invocation; it never starts/downloads a model. The server
 configuration owns 0.8B/4B weight selection. [Flags, defaults and limits](cli-filter.md).
@@ -81,6 +81,15 @@ only; never fall back to cloud). `kev.backend` is a legacy alias; conflicting va
 inference and produce a config diagnostic. Fresh installs default to off. Invalid backend and
 capability values fail closed. Inference refuses configuration errors rather than silently
 sending data through another backend.
+
+The independent review policy is shared across critiques:
+
+- `review.follow_up = "always"` (default) requests a second review even after a successful local critique.
+- `"fallback"` requests a second review when the primary model is unavailable, the response is invalid, or the evidence is incomplete. `"off"` disables the policy.
+- `review.follow_up_target = "session"` (default) directs the host agent to open a separate session with an available model. Use an image-capable model for visual work.
+- `"cloud"` uses the configured provider and model. Selecting it authorizes sending the supplied review inputs to that provider. Visual review automatically keeps the cloud report alongside the local report. For other critiques, the host sends a bounded evidence packet through `cloud_critique`. A cloud failure still requires a separate host session when one is available.
+
+The host opens its own independent sessions. Kritic exposes the policy through `status` and does not acquire access to a coding client's model subscription. Keep the primary result, second opinion, and deterministic findings distinct.
 
 `vision.backend` is independently off/local/cloud. Local uses Ollama. Cloud uses the selected
 cloud transport and `vision.cloud_model` (defaults to cloud.model). The model must accept images;

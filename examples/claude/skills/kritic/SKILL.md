@@ -44,6 +44,28 @@ just to make the tool surface green. Configuration/binary changes need MCP recon
 Reuse that setup plan while project/binary/configuration are unchanged; ordinary status calls
 need no base_dir. Do not fetch every critic's setup matrix before each tool call.
 
+### Independent review sessions
+
+Read `review_follow_up` and `review_follow_up_target` from Kritic status. Apply the policy
+to every critique, including successful deterministic and local critiques. With `always`,
+obtain a separate review before treating the work as reviewed. With `fallback`, use a
+second reviewer when the primary is unavailable, returns invalid output, or leaves
+required evidence incomplete.
+
+For `session`, open a fresh session with an available capable model and give it the
+original task and evidence needed to judge independently. Use a vision-capable model
+and the original authorized images for visual work. Verify evidence before sharing
+primary opinions with the second reviewer. For a project visual rubric, submit its structured
+response to `visual_critic(host_review=...)` with the original image hashes and rubric.
+If the host cannot open a session, report
+the independent review as outstanding.
+
+For `cloud`, use the separate cloud report returned by `visual_critic`. For other
+critiques, call `cloud_critique` with authorized, bounded evidence. If the configured
+cloud provider fails or cannot see the required evidence, use a separate host session.
+Preserve both reports and independently resolve disagreements. A second opinion cannot
+erase a deterministic failure.
+
 ### Narrow mid-debugging framing exception
 
 Test.5 can expose optional `framing_critic` with `capabilities.framing=true` (default

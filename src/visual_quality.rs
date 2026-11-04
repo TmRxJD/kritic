@@ -19,6 +19,178 @@ const SCENE_DIMENSIONS: [&str; 4] = [
     "vegetation_and_surfaces",
 ];
 
+/// Project intent controls when comparison images are mandatory.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VisualMaterial {
+    #[default]
+    General,
+    ConceptMatch,
+    Photorealism,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectCriterion {
+    /// Unique lowercase snake_case identifier.
+    pub id: String,
+    /// Observable target, including what differences are acceptable.
+    pub expectation: String,
+    /// Relative importance, 1–100. Omit a criterion to exclude it.
+    pub weight: u8,
+    /// Optional one-based index into reference_images.
+    pub reference: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectRubric {
+    #[serde(default)]
+    pub material: VisualMaterial,
+    pub criteria: Vec<ProjectCriterion>,
+}
+
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct ProjectAssessment {
+    pub rubric: ProjectRubric,
+    /// Weighted mean on the 0–10 scale. Absent if any criterion lacks visible evidence.
+    pub weighted_score: Option<f64>,
+    pub findings: Vec<ProjectFinding>,
+}
+
+#[derive(Debug, Clone, Serialize, schemars::JsonSchema)]
+pub struct ProjectFinding {
+    pub comparison_reference: Option<usize>,
+    #[serde(flatten)]
+    pub finding: QualityFinding,
+}
+
+impl ProjectRubric {
+    pub fn validate(&self, references: usize) -> Result<(), String> {
+        if !(1..=8).contains(&self.criteria.len()) {
+            return Err("project_rubric requires one to eight criteria".into());
+        }
+        if !matches!(self.material, VisualMaterial::General) && references == 0 {
+            return Err(
+                "concept_match and photorealism require an authorized reference image".into(),
+            );
+        }
+        let mut ids = std::collections::HashSet::new();
+        for criterion in &self.criteria {
+            let id = criterion.id.as_str();
+            if id.len() > 40
+                || !id.starts_with(|c: char| c.is_ascii_lowercase())
+                || !id
+                    .bytes()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_')
+                || !ids.insert(id)
+            {
+                return Err(format!("invalid or duplicate project criterion ID: {id:?}"));
+            }
+            if !bounded(&criterion.expectation, 500, true) || !(1..=100).contains(&criterion.weight)
+            {
+                return Err(format!(
+                    "project criterion {id} requires a visible expectation (1–500 characters) and weight 1–100"
+                ));
+            }
+            if let Some(index) = criterion.reference
+                && !(1..=references).contains(&index)
+            {
+                return Err(format!(
+                    "project criterion {id} refers to unavailable reference_{index}"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn reference_indices(&self, criterion: &ProjectCriterion, references: usize) -> Vec<usize> {
+        match criterion.reference {
+            Some(index) => vec![index],
+            None if matches!(self.material, VisualMaterial::General) => vec![],
+            None => (1..=references).collect(),
+        }
+    }
+
+    pub(crate) fn schema(&self, references: usize) -> Value {
+        let ids: Vec<_> = self
+            .criteria
+            .iter()
+            .map(|criterion| criterion.id.as_str())
+            .collect();
+        let mut craft = dimensions_schema(&ids, 1);
+        for criterion in &self.criteria {
+            let fields = &mut craft["properties"][&criterion.id];
+            let mut allowed = self.reference_indices(criterion, references);
+            allowed.push(0);
+            fields["properties"]["comparison_reference"] = json!({"type":"integer","enum":allowed});
+            if let Some(required) = fields["required"].as_array_mut() {
+                required.push(json!("comparison_reference"));
+            }
+        }
+        json!({"type":"object","additionalProperties":false,
+            "properties":{"craft":craft},"required":["craft"]})
+    }
+
+    pub fn assess(&self, value: &Value, references: usize) -> Result<ProjectAssessment, String> {
+        self.validate(references)?;
+        let object = value
+            .get("craft")
+            .and_then(Value::as_object)
+            .ok_or("project craft must be an object")?;
+        if object.len() != self.criteria.len() {
+            return Err("project craft must contain exactly the requested criteria".into());
+        }
+        let mut findings = Vec::new();
+        let mut weighted_sum = 0.0;
+        let mut total_weight = 0.0;
+        let mut complete = true;
+        for criterion in &self.criteria {
+            let name = &criterion.id;
+            let mut raw = object
+                .get(name)
+                .and_then(Value::as_object)
+                .cloned()
+                .ok_or_else(|| format!("missing or invalid project criterion {name}"))?;
+            let reference = raw
+                .remove("comparison_reference")
+                .and_then(|value| value.as_u64())
+                .and_then(|index| usize::try_from(index).ok())
+                .ok_or_else(|| {
+                    format!("project criterion {name} requires an integer comparison_reference")
+                })?;
+            let assessment = parse_dimension(&Value::Object(raw), name, true, 0.0)?;
+            let allowed = self.reference_indices(criterion, references);
+            let valid = if assessment.coverage == Coverage::NotVisible || allowed.is_empty() {
+                reference == 0
+            } else {
+                allowed.contains(&reference)
+            };
+            if !valid {
+                return Err(format!(
+                    "project criterion {name} cites an invalid comparison reference"
+                ));
+            }
+            complete &= assessment.coverage == Coverage::Visible;
+            let weight = f64::from(criterion.weight);
+            weighted_sum += assessment.score * weight;
+            total_weight += weight;
+            findings.push(ProjectFinding {
+                comparison_reference: (reference != 0).then_some(reference),
+                finding: QualityFinding {
+                    dimension: name.clone(),
+                    assessment,
+                },
+            });
+        }
+        Ok(ProjectAssessment {
+            rubric: self.clone(),
+            weighted_score: complete.then_some(weighted_sum / total_weight),
+            findings,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewKind {
@@ -183,88 +355,12 @@ pub fn parse_quality_for(
         ));
     }
     for &name in dimensions {
-        let dimension: CraftDimension = serde_json::from_value(object[name].clone())
-            .map_err(|error| format!("invalid craft `{name}`: {error}"))?;
-        if !dimension.score.is_finite() || !(0.0..=10.0).contains(&dimension.score) {
-            return Err(format!(
-                "craft `{name}` score must be finite and between 0 and 10"
-            ));
-        }
-        if dimension.evidence.len() > 2
-            || dimension
-                .evidence
-                .iter()
-                .any(|e| !bounded(&e.element, 160, true) || !bounded(&e.observation, 500, true))
-        {
-            return Err(format!(
-                "craft `{name}` evidence exceeds bounds or contains empty descriptions"
-            ));
-        }
-        if kind == ReviewKind::SceneReference {
-            let expected = usize::from(dimension.coverage != Coverage::NotVisible);
-            if dimension.evidence.len() != expected {
-                return Err(format!(
-                    "scene `{name}` requires one observation when visible or partial, and none when not visible"
-                ));
-            }
-        }
-        if dimension.evidence.iter().any(|e| {
-            placeholder(
-                &e.element,
-                &[
-                    "ui",
-                    "screen",
-                    "page",
-                    "app",
-                    "overall",
-                    "everything",
-                    "none",
-                    "unknown",
-                    "n/a",
-                    "placeholder",
-                ],
-            ) || placeholder(
-                &e.observation,
-                &[
-                    "looks good",
-                    "looks great",
-                    "professional",
-                    "modern",
-                    "polished",
-                    "clean",
-                    "nice",
-                    "consistent",
-                    "good",
-                    "fine",
-                    "none",
-                    "unknown",
-                    "n/a",
-                ],
-            )
-        }) {
-            return Err(format!(
-                "craft `{name}` evidence uses a generic placeholder; identify a visible element and concrete observation"
-            ));
-        }
-        if !bounded(
-            &dimension.improvement,
-            500,
-            dimension.score < result.minimum,
-        ) {
-            return Err(format!(
-                "craft `{name}` requires a bounded concrete improvement below target"
-            ));
-        }
-        if dimension.score < result.minimum
-            && placeholder(
-                &dimension.improvement,
-                &["improve", "make it better", "polish", "modernize"],
-            )
-        {
-            return Err(format!(
-                "craft `{name}` improvement is a generic placeholder; name a concrete change"
-            ));
-        }
+        let dimension = parse_dimension(
+            &object[name],
+            name,
+            kind == ReviewKind::SceneReference,
+            result.minimum,
+        )?;
         result.findings.push(QualityFinding {
             dimension: name.into(),
             assessment: dimension,
@@ -294,20 +390,117 @@ pub fn parse_quality_for(
     Ok(result)
 }
 
+fn parse_dimension(
+    raw: &Value,
+    name: &str,
+    single_evidence: bool,
+    minimum: f64,
+) -> Result<CraftDimension, String> {
+    let dimension: CraftDimension = serde_json::from_value(raw.clone())
+        .map_err(|error| format!("invalid craft `{name}`: {error}"))?;
+    if !dimension.score.is_finite() || !(0.0..=10.0).contains(&dimension.score) {
+        return Err(format!(
+            "craft `{name}` score must be finite and between 0 and 10"
+        ));
+    }
+    if dimension.evidence.len() > 2
+        || dimension
+            .evidence
+            .iter()
+            .any(|e| !bounded(&e.element, 160, true) || !bounded(&e.observation, 500, true))
+    {
+        return Err(format!(
+            "craft `{name}` evidence exceeds bounds or contains empty descriptions"
+        ));
+    }
+    if single_evidence {
+        let expected = usize::from(dimension.coverage != Coverage::NotVisible);
+        if dimension.evidence.len() != expected {
+            return Err(format!(
+                "craft `{name}` requires one observation when visible or partial, and none when not visible"
+            ));
+        }
+    }
+    if dimension.evidence.iter().any(|e| {
+        placeholder(
+            &e.element,
+            &[
+                "ui",
+                "screen",
+                "page",
+                "app",
+                "overall",
+                "everything",
+                "none",
+                "unknown",
+                "n/a",
+                "placeholder",
+            ],
+        ) || placeholder(
+            &e.observation,
+            &[
+                "looks good",
+                "looks great",
+                "professional",
+                "modern",
+                "polished",
+                "clean",
+                "nice",
+                "consistent",
+                "good",
+                "fine",
+                "none",
+                "unknown",
+                "n/a",
+            ],
+        )
+    }) {
+        return Err(format!(
+            "craft `{name}` evidence uses a generic placeholder; identify a visible element and concrete observation"
+        ));
+    }
+    if !bounded(&dimension.improvement, 500, dimension.score < minimum) {
+        return Err(format!(
+            "craft `{name}` requires a bounded concrete improvement below target"
+        ));
+    }
+    if dimension.score < minimum
+        && placeholder(
+            &dimension.improvement,
+            &["improve", "make it better", "polish", "modernize"],
+        )
+    {
+        return Err(format!(
+            "craft `{name}` improvement is a generic placeholder; name a concrete change"
+        ));
+    }
+    Ok(dimension)
+}
+
 pub fn craft_schema() -> Value {
     craft_schema_for(ReviewKind::Ui)
 }
 
 pub fn craft_schema_for(kind: ReviewKind) -> Value {
+    dimensions_schema(
+        kind.dimensions(),
+        if kind == ReviewKind::SceneReference {
+            1
+        } else {
+            2
+        },
+    )
+}
+
+fn dimensions_schema(dimensions: &[&str], max_evidence: usize) -> Value {
     let evidence = json!({"type":"object","additionalProperties":false,
         "properties":{"element":{"type":"string","minLength":1,"maxLength":160},
         "observation":{"type":"string","minLength":1,"maxLength":500}},"required":["element","observation"]});
     let dimension = json!({"type":"object","additionalProperties":false,
         "properties":{"score":{"type":"number","minimum":0,"maximum":10},
         "coverage":{"type":"string","enum":["visible","partial","not_visible"]},
-        "evidence":{"type":"array","maxItems":if kind == ReviewKind::SceneReference {1} else {2},"items":evidence},
+        "evidence":{"type":"array","maxItems":max_evidence,"items":evidence},
         "improvement":{"type":"string","maxLength":500}},"required":["score","coverage","evidence","improvement"]});
-    let dimensions = kind.dimensions();
     let properties: serde_json::Map<String, Value> = dimensions
         .iter()
         .map(|name| (name.to_string(), dimension.clone()))

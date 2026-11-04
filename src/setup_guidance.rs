@@ -190,6 +190,13 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "tools.md",
             "Supply exact project roots and owned run information. Inspect with clean=false; do not kill shared services or unrelated processes to clear a finding.",
         ),
+        "cloud_critique" => (
+            None,
+            None,
+            false,
+            "cloud.md",
+            "Select review.follow_up_target=cloud and configure an authorized provider/model. Supply bounded, authorized evidence. Use a separate host reviewer session if the provider is unavailable.",
+        ),
         "plugin_list" | "plugin_run" => (
             Some("plugins"),
             Some(".kritic/plugins"),

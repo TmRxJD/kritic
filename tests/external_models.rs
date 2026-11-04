@@ -191,6 +191,110 @@ async fn scene_review_requires_grounded_partial_evidence_and_omits_ui_scores() {
 }
 
 #[tokio::test]
+async fn project_review_sends_the_requested_rubric_and_reference_through_mcp() {
+    let directory = tempfile::tempdir().unwrap();
+    let subject = directory.path().join("render.png");
+    let reference = directory.path().join("photo.png");
+    std::fs::write(&subject, b"\x89PNG\r\n\x1a\nsubject").unwrap();
+    std::fs::write(&reference, b"\x89PNG\r\n\x1a\nreference").unwrap();
+    let mut cfg = config(directory.path());
+    let output = json!({"craft":{"ridge":{
+        "comparison_reference":1, "score":7, "coverage":"visible", "improvement":"Move the ridge left.",
+        "evidence":[{"element":"ridge","observation":"Ridge is farther left in reference_1."}]
+    }}});
+    let (url, requests) = server(vec![
+        (200, json!({"version":"fixture"})),
+        (200, json!({"message":{"content":output.to_string()}})),
+    ])
+    .await;
+    cfg.ollama_url = url;
+    let mut cloud_output = output;
+    cloud_output["craft"]["ridge"]["score"] = json!(9);
+    let (cloud_url, cloud_requests) = server(vec![(
+        200,
+        json!({
+            "choices":[{"finish_reason":"stop","message":{"content":cloud_output.to_string()}}]
+        }),
+    )])
+    .await;
+    cfg.review_follow_up = "always".into();
+    cfg.review_follow_up_target = "cloud".into();
+    cfg.cloud_provider = "openai-compatible".into();
+    cfg.cloud_model = "fixture-text".into();
+    cfg.vision_cloud_model = "fixture-vision".into();
+    cfg.cloud_url = cloud_url;
+    cfg.cloud_key_env = "KRITIC_TEST_UNUSED_CLOUD_KEY".into();
+    cfg.cloud_key_file = directory.path().join("test-key");
+    cfg.cloud_key_file_explicit = true;
+    std::fs::write(&cfg.cloud_key_file, "fixture").unwrap();
+    let server = kritic::server::Kritic::new(cfg);
+    let params = serde_json::from_value(json!({
+        "image_path":subject, "reference_images":[reference],
+        "project_rubric":{"material":"photorealism","criteria":[
+            {"id":"ridge","expectation":"Align the ridge with the photo.","weight":70,"reference":1}
+        ]}
+    }))
+    .unwrap();
+    let result = server
+        .visual_critic(rmcp::handler::server::wrapper::Parameters(params))
+        .await
+        .unwrap()
+        .0;
+    assert!(result.model_ok, "{:?}", result.error);
+    assert!(result.approval.is_none() && result.quality_assessment.is_none());
+    assert_eq!(result.project_assessment.unwrap().weighted_score, Some(7.0));
+    let cloud = result.cloud_follow_up.unwrap();
+    assert!(cloud.model_ok, "{:?}", cloud.error);
+    assert_eq!(cloud.subject_sha256, result.subject_sha256);
+    assert_eq!(cloud.references[0].sha256, result.references[0].sha256);
+    assert_eq!(cloud.project_assessment.unwrap().weighted_score, Some(9.0));
+    assert!(result.follow_up_action.is_none());
+    let cloud_requests = cloud_requests.await.unwrap();
+    assert_eq!(cloud_requests[0].1["model"], "fixture-vision");
+    let host_params = |hash: &str| {
+        serde_json::from_value(json!({
+        "image_path":subject, "reference_images":[reference],
+        "project_rubric":{"material":"photorealism","criteria":[
+            {"id":"ridge","expectation":"Align the ridge with the photo.","weight":70,"reference":1}
+        ]},
+        "host_review":{"model":"fixture-independent","subject_sha256":hash,
+            "reference_sha256":[result.references[0].sha256],"response":cloud_output}
+    })).unwrap()
+    };
+    let bad = server
+        .visual_critic(rmcp::handler::server::wrapper::Parameters(host_params(
+            "mismatched",
+        )))
+        .await
+        .unwrap()
+        .0;
+    assert!(bad.error.unwrap().contains("image hashes differ"));
+    let host = server
+        .visual_critic(rmcp::handler::server::wrapper::Parameters(host_params(
+            result.subject_sha256.as_deref().unwrap(),
+        )))
+        .await
+        .unwrap()
+        .0;
+    assert!(host.model_ok && host.approval.is_none());
+    assert_eq!(host.model, "host-session:fixture-independent");
+    assert_eq!(host.project_assessment.unwrap().weighted_score, Some(9.0));
+    let requests = requests.await.unwrap();
+    let body = &requests[1].1;
+    assert_eq!(
+        body["format"]["properties"]["craft"]["required"],
+        json!(["ridge"])
+    );
+    assert_eq!(body["messages"][1]["images"].as_array().unwrap().len(), 2);
+    assert!(
+        body["messages"][1]["content"]
+            .as_str()
+            .unwrap()
+            .contains("Align the ridge with the photo.")
+    );
+}
+
+#[tokio::test]
 async fn unavailable_external_services_return_owner_errors_without_launching() {
     let directory = tempfile::tempdir().unwrap();
     let mut cfg = config(directory.path());

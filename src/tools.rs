@@ -503,6 +503,9 @@ pub struct StatusResult {
     pub cloud_provider: String,
     /// Configuration is not a paid connectivity test. Use doctor --online explicitly.
     pub cloud_verification: String,
+    /// Follow-up policy for the host to apply after critique tools.
+    pub review_follow_up: String,
+    pub review_follow_up_target: String,
     pub vision_backend: String,
     /// `kev.backend` as configured (auto, local, cloud, off).
     pub backend_setting: String,
@@ -581,6 +584,8 @@ pub async fn status(k: &KevClient, start: bool) -> StatusResult {
             .collect(),
         cloud_provider: cfg.cloud_provider.clone(),
         cloud_verification: "not_probed (doctor --online makes an API call)".into(),
+        review_follow_up: cfg.review_follow_up.clone(),
+        review_follow_up_target: cfg.review_follow_up_target.clone(),
         vision_backend: cfg.vision_backend.clone(),
         backend_setting: cfg.backend.clone(),
         backend: resolved.as_ref().ok().map(|b| b.label().to_string()),
