@@ -1,5 +1,20 @@
 # Troubleshooting
 
+For a render-to-photo review, call `visual_critic` with
+`review_kind: "scene_reference"` and one or two `reference_images`. This rubric
+compares viewpoint, terrain and shoreline, landmarks, and vegetation and surfaces.
+It requires one visible observation for each visible or partial dimension and keeps
+unobservable dimensions explicit. A scene comparison can be useful with partial
+coverage and still cannot approve a render or establish metric accuracy.
+
+For local vision, `Ollama HTTP 413` means the endpoint rejected the encoded request
+size. Base64 increases image bytes by about one third and every reference adds to
+the same request. Use JPEG copies or fewer references to reduce transfer size.
+If the provider reports that the request exceeds its context size, reduce the
+image dimensions or the number of references. JPEG compression alone keeps the
+pixel dimensions, so a smaller file can still exceed the model's context budget.
+Keep the original capture for any detail you need to inspect at full resolution.
+
 Start with `status(start=false)`. Models are disabled by default; that is expected.
 Use start=true only after explicitly selecting local inference. It shows whether laya is up, every resolved path (and whether it
 exists), the config file read, any `config_errors`, and the ready states.

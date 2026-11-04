@@ -1,5 +1,9 @@
 # Tools — test release
 
+For frame-by-frame baseline and candidate video comparison with synchronized frame
+timing, worker activity and resource samples, use the standalone
+[`kritic timeline` command](timeline.md).
+
 Test.6 also ships `kev run` / `kev show` (alias `kev-filter`), a standalone finite-command
 filter with raw-log retrieval and optional local Kev ranking. It adds **no MCP tools**,
 capability flags or automatic command hooks. [CLI guide](cli-filter.md).
