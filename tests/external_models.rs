@@ -128,6 +128,69 @@ fn config(directory: &std::path::Path) -> Config {
 }
 
 #[tokio::test]
+async fn scene_review_requires_grounded_partial_evidence_and_omits_ui_scores() {
+    use kritic::visual_quality::{QualityTarget, ReviewKind, parse_quality_for};
+    let dimension = json!({"score":7,"coverage":"partial",
+        "evidence":[{"element":"shoreline bend","observation":"The subject bend is left of the road; reference_1 shows it behind the road."}],
+        "improvement":"Align the subject bend with the road."});
+    let valid = json!({"craft":{
+        "viewpoint":dimension,"terrain_and_shoreline":dimension,
+        "landmark_layout":dimension,"vegetation_and_surfaces":dimension
+    }});
+    let mut empty = valid.clone();
+    empty["craft"]["viewpoint"]["evidence"] = json!([]);
+    assert!(
+        parse_quality_for(
+            &empty,
+            QualityTarget::Showcase,
+            9.0,
+            ReviewKind::SceneReference
+        )
+        .unwrap_err()
+        .contains("requires one observation")
+    );
+
+    let directory = tempfile::tempdir().unwrap();
+    let subject = directory.path().join("render.png");
+    let reference = directory.path().join("photo.png");
+    std::fs::write(&subject, b"\x89PNG\r\n\x1a\nsubject").unwrap();
+    std::fs::write(&reference, b"\x89PNG\r\n\x1a\nreference").unwrap();
+    let mut cfg = config(directory.path());
+    let (url, requests) = server(vec![
+        (200, json!({"version":"fixture"})),
+        (200, json!({"message":{"content":valid.to_string()}})),
+    ])
+    .await;
+    cfg.ollama_url = url;
+    let result = kritic::vision::critique_with_kind(
+        &cfg,
+        &subject,
+        "Compare shorelines",
+        QualityTarget::Showcase,
+        9.0,
+        &[reference],
+        ReviewKind::SceneReference,
+    )
+    .await;
+    assert!(result.model_ok, "{:?}", result.error);
+    assert!(result.scores.is_none() && result.approval.is_none());
+    assert_eq!(
+        result.quality_assessment.unwrap().rubric_version,
+        "scene-reference-v1"
+    );
+    let requests = requests.await.unwrap();
+    let body = &requests[1].1;
+    assert!(body["format"]["properties"].get("layout_clarity").is_none());
+    assert_eq!(body["messages"][1]["images"].as_array().unwrap().len(), 2);
+    assert!(
+        body["messages"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("terrain_and_shoreline")
+    );
+}
+
+#[tokio::test]
 async fn unavailable_external_services_return_owner_errors_without_launching() {
     let directory = tempfile::tempdir().unwrap();
     let mut cfg = config(directory.path());

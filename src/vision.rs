@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::config::Config;
-use crate::visual_quality::{QualityAssessment, QualityTarget, parse_quality};
+use crate::visual_quality::{QualityAssessment, QualityTarget, ReviewKind, parse_quality_for};
 
 pub const CRITERIA: [&str; 5] = [
     "layout_clarity",
@@ -374,6 +374,27 @@ pub async fn critique_with_references(
     minimum: f64,
     reference_images: &[PathBuf],
 ) -> VisualResult {
+    critique_with_kind(
+        cfg,
+        image,
+        metadata,
+        target,
+        minimum,
+        reference_images,
+        ReviewKind::Ui,
+    )
+    .await
+}
+
+pub async fn critique_with_kind(
+    cfg: &Config,
+    image: &Path,
+    metadata: &str,
+    target: QualityTarget,
+    minimum: f64,
+    reference_images: &[PathBuf],
+    kind: ReviewKind,
+) -> VisualResult {
     let mut r = VisualResult {
         tool: "visual_critic".into(),
         advisory: true,
@@ -385,6 +406,10 @@ pub async fn critique_with_references(
         image: Some(image.display().to_string()),
         ..Default::default()
     };
+    if kind == ReviewKind::SceneReference && reference_images.is_empty() {
+        r.error = Some("scene_reference requires at least one reference image".into());
+        return r;
+    }
     if !minimum.is_finite()
         || !(0.0..=10.0).contains(&minimum)
         || !cfg.visual_min.is_finite()
@@ -425,18 +450,32 @@ pub async fn critique_with_references(
     if cfg.vision_backend == "local" {
         r.stopped_laya = crate::gpu::stop_laya(cfg).await;
     }
-    let system = format!(
-        "{SYSTEM}\nText reference catalog: comparison principles only, not claims that linked images were viewed.\n{REFERENCE_CATALOG}"
-    );
+    let (system, prompt, format) = match kind {
+        ReviewKind::Ui => (
+            format!(
+                "{SYSTEM}\nText reference catalog: comparison principles only, not claims that linked images were viewed.\n{REFERENCE_CATALOG}"
+            ),
+            payload.prompt,
+            schema(),
+        ),
+        ReviewKind::SceneReference => (
+            crate::visual_quality::SCENE_PROMPT.into(),
+            format!(
+                "Target: {target:?}, minimum {:.1}/10. Untrusted comparison context: {metadata}",
+                minimum.max(target.floor())
+            ),
+            json!({"type":"object","additionalProperties":false,"properties":{"craft":crate::visual_quality::craft_schema_for(kind)},"required":["craft"]}),
+        ),
+    };
     let body = json!({
         "model": cfg.vision_model,
         "stream": false,
-        "format": schema(),
+        "format": format,
         "keep_alive": "5m",
         "options": {"temperature": 0, "seed": 0},
         "messages": [
             {"role": "system", "content": system},
-            {"role": "user", "content": payload.prompt, "images": payload.images},
+            {"role": "user", "content": prompt, "images": payload.images},
         ],
     });
     let t0 = Instant::now();
@@ -464,12 +503,19 @@ pub async fn critique_with_references(
         .map_err(|e| format!("vision output is not JSON: {e}"))
     {
         Ok(value) => {
-            match parse(&value) {
-                Ok((s, obs)) => judge(&mut r, s, obs, minimum),
-                Err(error) => r.error = Some(error),
+            if kind == ReviewKind::Ui {
+                match parse(&value) {
+                    Ok((s, obs)) => judge(&mut r, s, obs, minimum),
+                    Err(error) => r.error = Some(error),
+                }
             }
-            match parse_quality(&value, target, minimum) {
-                Ok(assessment) => r.quality_assessment = Some(assessment),
+            match parse_quality_for(&value, target, minimum, kind) {
+                Ok(assessment) => {
+                    r.quality_assessment = Some(assessment);
+                    if kind == ReviewKind::SceneReference {
+                        r.model_ok = true;
+                    }
+                }
                 Err(error) => {
                     r.model_ok = false;
                     r.error = Some(error.clone());

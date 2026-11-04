@@ -215,6 +215,9 @@ pub struct VisualParams {
     /// Up to two local comparison screenshots, supplied with permission; subject remains image 1.
     #[serde(default)]
     pub reference_images: Vec<String>,
+    /// Use scene_reference for render-to-photo comparison with at least one reference.
+    #[serde(default)]
+    pub review_kind: crate::visual_quality::ReviewKind,
     #[serde(default = "yes")]
     pub full_page: bool,
     #[serde(default)]
@@ -1239,6 +1242,11 @@ impl Kritic {
         if p.reference_images.len() > 2 {
             return Err("at most two reference_images are supported".into());
         }
+        if p.review_kind == crate::visual_quality::ReviewKind::SceneReference
+            && p.reference_images.is_empty()
+        {
+            return Err("scene_reference requires at least one reference image".into());
+        }
         let image = match (&p.image_path, &p.url) {
             (Some(path), _) => std::path::PathBuf::from(path),
             (None, Some(url)) => {
@@ -1255,13 +1263,14 @@ impl Kritic {
             .iter()
             .map(std::path::PathBuf::from)
             .collect::<Vec<_>>();
-        let r = crate::vision::critique_with_references(
+        let r = crate::vision::critique_with_kind(
             cfg,
             &image,
             &p.metadata,
             target,
             minimum,
             &references,
+            p.review_kind,
         )
         .await;
         finished("visual_critic", t0, &r);

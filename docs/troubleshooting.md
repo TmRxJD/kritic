@@ -1,5 +1,12 @@
 # Troubleshooting
 
+For a render-to-photo review, call `visual_critic` with
+`review_kind: "scene_reference"` and one or two `reference_images`. This rubric
+compares viewpoint, terrain and shoreline, landmarks, and vegetation and surfaces.
+It requires one visible observation for each visible or partial dimension and keeps
+unobservable dimensions explicit. A scene comparison can be useful with partial
+coverage and still cannot approve a render or establish metric accuracy.
+
 For local vision, `Ollama HTTP 413` means the endpoint rejected the encoded request
 size. Base64 increases image bytes by about one third and every reference adds to
 the same request. Use JPEG copies or fewer references to reduce transfer size.
