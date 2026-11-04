@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-test.7 — test release
+
+- Compare baseline and candidate captures on a shared timeline with frame times, FPS, worker activity and resource samples.
+- Add optional scene-aware visual review. Reports separate observations from unverified coverage and preserve HTTP error details when a vision provider rejects a request.
+- Reject empty browser reports and distinguish unverified interaction effects from confirmed failures.
+- Preserve finite command exit status and limit resource cleanup to processes authenticated as owned by the run.
+- Add explicit GPU placement for locally managed model services and support Hermes host YAML parsing.
 
 - **Policy runner** (`policy_schema`, `policy_run`, `trajectory_diagnose`): a game-agnostic frame loop over a documented framed-buffer protocol (loopback TCP or stdio), schema-driven state/action decoding, pluggable policies (defer, scripted, external process, Kev at low frequency), `lockstep` and `hold` modes with per-tick latency against the native budget, JSONL telemetry, and trajectory diagnostics: behavior families, stuck states, oscillation, unrecoverable metrics, and a veto of 0%-success families with their coordinate signatures. See [docs/policy-runner.md](docs/policy-runner.md).
 - **Docs**: [other testing uses for Kev](docs/kev-testing-uses.md).

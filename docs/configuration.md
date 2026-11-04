@@ -1,6 +1,6 @@
 # Configuration
 
-The standalone test.6 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
+The standalone test.7 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
 of `kritic.toml`. No capability toggle or MCP restart is needed. `--kev` opts into
 an existing local ranker per invocation; it never starts/downloads a model. The server
 configuration owns 0.8B/4B weight selection. [Flags, defaults and limits](cli-filter.md).

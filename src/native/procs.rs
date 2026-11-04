@@ -301,7 +301,18 @@ impl TrackedTree {
             .collect()
     }
 
+    #[cfg(test)]
     pub fn cleanup(&self) -> Vec<String> {
+        self.cleanup_results()
+            .into_iter()
+            .filter_map(|(identity, result)| {
+                result.err().map(|e| format!("PID {}: {e}", identity.pid))
+            })
+            .collect()
+    }
+
+    /// Cleanup evidence uses the same retained handles/pidfds as termination.
+    pub fn cleanup_results(&self) -> Vec<(Identity, Result<(), String>)> {
         if !self.owned {
             return Vec::new();
         }
@@ -310,11 +321,7 @@ impl TrackedTree {
         processes
             .into_iter()
             .filter(|p| p.alive())
-            .filter_map(|p| {
-                p.terminate()
-                    .err()
-                    .map(|e| format!("PID {}: {e}", p.identity.pid))
-            })
+            .map(|p| (p.identity, p.terminate().map_err(|e| e.to_string())))
             .collect()
     }
 }

@@ -354,10 +354,10 @@ impl Source {
             return Some(v);
         }
         // Compatibility with the dedicated-GPU profile spelling; canonical vision setting wins.
-        if key == "vision.externally_managed" {
-            if let Some(value) = env_var("KRITIC_OLLAMA_EXTERNALLY_MANAGED") {
-                return Some(value);
-            }
+        if key == "vision.externally_managed"
+            && let Some(value) = env_var("KRITIC_OLLAMA_EXTERNALLY_MANAGED")
+        {
+            return Some(value);
         }
         let (section, name) = key.split_once('.').expect("section.key");
         match self.file.get(section)?.get(name)? {

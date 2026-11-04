@@ -196,6 +196,12 @@ fn start(
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        cmd.creation_flags(CREATE_NO_WINDOW.0);
+    }
     let child = cmd
         .spawn()
         .map_err(|e| format!("cannot start command: {e}"))?;
@@ -311,14 +317,49 @@ fn resource_blocking(
     tree_completed |= exit_code.is_some() && remaining.is_empty();
     // Descendants remain owned after the root exits. Cleanup uses retained OS
     // handles/pidfds, never a freshly inferred PPID tree.
-    let mut cleanup_errors = tracked.cleanup();
+    // Capture evidence from the same verified tree that owns cleanup. Attachment
+    // remains observational and never reports our timeout cleanup as a leak.
+    let ports = procs::ports_by_pid();
+    let cleanup_results = tracked.cleanup_results();
+    let mut processes = Vec::new();
+    let mut leaked_ports = Vec::new();
+    for (identity, result) in &cleanup_results {
+        if !remaining.contains(identity)
+            || !((identity.pid != root && exit_code.is_some()) || result.is_err())
+        {
+            continue;
+        }
+        let Some(process) = sys.process(pid(identity.pid)) else {
+            continue;
+        };
+        let process_ports = ports.get(&identity.pid).cloned().unwrap_or_default();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        processes.push(json!({"pid": identity.pid,
+            "ppid": process.parent().map(|p| p.as_u32()),
+            "name": process.name().to_string_lossy(),
+            "cmd": procs::cmdline(process).chars().take(200).collect::<String>(),
+            "age_s": now.saturating_sub(procs::start_time(process)),
+            "ports": process_ports, "killed": result.is_ok()}));
+        for port in process_ports {
+            leaked_ports.push(json!({"port": port, "pid": identity.pid,
+                "name": process.name().to_string_lossy()}));
+        }
+    }
+    let hygiene = json!({"processes": processes, "ports": leaked_ports});
+    let mut cleanup_errors: Vec<_> = cleanup_results
+        .into_iter()
+        .filter_map(|(identity, result)| result.err().map(|e| format!("PID {}: {e}", identity.pid)))
+        .collect();
     if let Some(c) = child.as_mut()
         && let Some(e) = cleanup_child(c)
     {
         cleanup_errors.push(e);
     }
     if sampling_error.is_some() || !cleanup_errors.is_empty() {
-        return json!({"ok": false, "error": sampling_error.unwrap_or_else(|| format!("process cleanup incomplete: {}", cleanup_errors.join("; "))), "cleanup_errors": cleanup_errors, "exit_code": exit_code, "samples": samples.len()});
+        return json!({"ok": false, "error": sampling_error.unwrap_or_else(|| format!("process cleanup incomplete: {}", cleanup_errors.join("; "))), "cleanup_errors": cleanup_errors, "hygiene": hygiene, "exit_code": exit_code, "samples": samples.len()});
     }
     if samples.is_empty() {
         return json!({"ok": false, "error": "no samples (process exited immediately?)", "exit_code": exit_code});
@@ -330,7 +371,7 @@ fn resource_blocking(
         .step_by(step)
         .map(|s| json!({"t": s.t, "cpu": round(s.cpu, 1), "rss_mb": round(s.rss / mb, 1)}))
         .collect();
-    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code, tree_completed), "timeline": timeline, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
+    json!({"ok": true, "stats": summarize(&samples, &gpu, exit_code, tree_completed), "timeline": timeline, "hygiene": hygiene, "gpu_note": "whole-GPU (nvidia-smi), not per-process"})
 }
 
 fn cleanup_child(child: &mut std::process::Child) -> Option<String> {

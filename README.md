@@ -18,7 +18,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 
 [Get started](#quickstart-install-the-minimum-then-choose-extras) ·
 [Choose capabilities](#choose-your-capabilities) · [Hardware](#what-your-hardware-can-run) ·
-[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.6)
+[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.7)
 
 ## What Kritic governs
 
@@ -66,7 +66,7 @@ flowchart LR
 
 **Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter only; the Mac MCP server requires a source build. Start without models and add only relevant tools.
 
-1. Download the Windows ZIP from [v0.5.0-test.6](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.6),
+1. Download the Windows ZIP from [v0.5.0-test.7](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.7),
    verify it against the release's `SHA256SUMS`, and extract it into a persistent location.
    The ZIP includes `kritic.exe`, `kev.exe`, `kev-filter.exe`, the skill, examples, documentation and optional desktop harness.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
