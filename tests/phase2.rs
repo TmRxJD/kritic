@@ -350,3 +350,176 @@ fn invalid_visual_threshold_cannot_create_vacuous_approval() {
         assert!(!r.model_ok);
     }
 }
+#[test]
+fn ui_flows_decode_mcp_strings_and_reject_empty_or_malformed_scripts() {
+    let flow =
+        json!({"name": "visible player", "steps": [{"do": "expect_visible", "target": "#player"}]});
+    assert_eq!(
+        kritic::ui::normalize_flows(&json!([flow.to_string()])).unwrap(),
+        vec![flow.clone()]
+    );
+    assert_eq!(
+        kritic::ui::normalize_flows(&json!([flow.clone()])).unwrap(),
+        vec![flow]
+    );
+    for invalid in [
+        json!(["not JSON"]),
+        json!(["[]"]),
+        json!([{}]),
+        json!([{"steps": []}]),
+        json!([{"steps": [{}]}]),
+        json!([{"steps": ["click"]}]),
+        json!([{"steps": [{"do": "click", "target": 42}]}]),
+        json!([{"steps": [{"do": "click"}], "stepz": []}]),
+        json!({}),
+    ] {
+        assert!(kritic::ui::normalize_flows(&invalid).is_err(), "{invalid}");
+    }
+    for steps in [
+        json!([]),
+        json!([{"result": "skipped"}]),
+        json!([{"result": "ok"}, {"result": "fail"}]),
+    ] {
+        assert_eq!(
+            kritic::ui::judge_flows(&[json!({"name": "vacuous", "passed": true, "steps": steps})])
+                .len(),
+            1
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_ui_rejects_empty_flow_before_browser_launch() {
+    let result = kritic::native::web::ui_test(
+        &Config::load(),
+        &json!({"url": "http://127.0.0.1:1", "explore": false,
+            "flows": ["{\"name\":\"empty\",\"steps\":[]}"]}),
+    )
+    .await;
+    assert_eq!(result["ok"], false);
+    assert_eq!(result["error"], "flow 1: steps must be a non-empty array");
+    assert!(result["flows"].is_null());
+}
+
+#[test]
+fn flow_only_summary_counts_executed_steps_and_opened_pages() {
+    let steps: Vec<_> = (1..=10)
+        .map(|i| json!({"i": i, "do": "click", "result": "ok"}))
+        .collect();
+    let (s, b, approval, _) = judge(
+        report(json!({"ok": true, "flows": [
+            {"name": "real workflow", "passed": true, "url": "http://localhost/", "steps": steps}
+        ]})),
+        &opts(),
+    );
+    assert_eq!(approval, Some(true), "{b:?}");
+    assert_eq!((s.pages, s.interactions, s.ok), (1, 10, 10));
+}
+
+#[test]
+fn empty_or_all_skipped_flows_never_approve() {
+    for steps in [
+        json!([]),
+        json!([{"i": 1, "do": "click", "result": "skipped"}]),
+    ] {
+        let (_, b, approval, _) = judge(
+            report(json!({"ok": true, "flows": [
+                {"name": "vacuous", "passed": true, "steps": steps}
+            ]})),
+            &opts(),
+        );
+        assert_eq!(approval, Some(false), "{b:?}");
+        assert!(
+            b.iter()
+                .any(|message| message.contains("no executed steps")),
+            "{b:?}"
+        );
+    }
+}
+
+#[test]
+fn ui_flow_schema_exposes_objects_and_nonempty_steps() {
+    let schema = serde_json::to_value(schemars::schema_for!(kritic::server::UiParams)).unwrap();
+    let item = &schema["properties"]["flows"]["items"];
+    assert_eq!(item["$ref"], "#/$defs/UiFlow");
+    let flow = &schema["$defs"]["UiFlow"];
+    assert_eq!(flow["type"], "object");
+    assert_eq!(flow["properties"]["steps"]["minItems"], 1);
+    assert!(
+        flow["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("steps"))
+    );
+    assert_eq!(
+        schema["$defs"]["UiFlowStep"]["properties"]["do"]["type"],
+        "string"
+    );
+}
+
+#[test]
+fn flow_summary_retains_failures_and_skips_without_counting_launch_failure_as_a_page() {
+    let (s, b, approval, _) = judge(
+        report(json!({"ok": true,
+        "pages": [{"url": "http://localhost/", "status": 200}],
+        "flows": [
+            {"name": "mixed", "page_opened": true, "passed": false, "steps": [
+                {"i": 1, "do": "click", "result": "ok"},
+                {"i": 2, "do": "expect_text", "result": "fail", "error": "missing"},
+                {"i": 3, "do": "click", "result": "skipped"}]},
+            {"name": "launch", "page_opened": false, "passed": false,
+             "steps": [{"i": 0, "do": "open", "result": "fail", "error": "cannot launch"}]}
+        ]})),
+        &opts(),
+    );
+    assert_eq!(approval, Some(false), "{b:?}");
+    assert_eq!(
+        (s.pages, s.interactions, s.ok, s.errors, s.skipped),
+        (2, 3, 1, 2, 1)
+    );
+}
+
+#[test]
+fn no_browser_evidence_never_approves() {
+    let (_, b, approval, _) = judge(report(json!({"ok": true})), &opts());
+    assert_eq!(approval, Some(false));
+    assert!(b[0].contains("no browser pages"));
+}
+
+#[tokio::test]
+#[ignore = "requires installed Chromium; runs only a local fixture and no models"]
+async fn native_flow_counts_real_assertions_and_preserves_failure() {
+    let dir = tempfile::tempdir_in(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let fixture = dir.path().join("flow.html");
+    std::fs::write(
+        &fixture,
+        "<!doctype html><title>Flow fixture</title><button id='ok'>Ready</button>",
+    )
+    .unwrap();
+    let url = reqwest::Url::from_file_path(&fixture).unwrap();
+    let steps: Vec<_> = (0..10)
+        .map(|_| json!({"do": "expect_visible", "target": "#ok"}))
+        .collect();
+    let output = kritic::native::web::ui_test(
+        &Config::load(),
+        &json!({
+            "url": url.as_str(), "out_dir": dir.path().join("evidence"), "explore": false, "axe": false,
+            "flows": [
+                json!({"name": "ten assertions", "steps": steps}).to_string(),
+                {"name": "negative control", "steps": [
+                    {"do": "expect_visible", "target": "#missing", "timeout_ms": 50},
+                    {"do": "click", "target": "#ok"}]}
+            ]
+        }),
+    )
+    .await;
+    assert_eq!(output["ok"], true, "{output}");
+    let (s, b, approval, _) = judge(report(output), &opts());
+    assert_eq!(
+        (s.pages, s.interactions, s.ok, s.errors, s.skipped),
+        (2, 12, 10, 1, 1)
+    );
+    assert_eq!(approval, Some(false), "{b:?}");
+    assert_eq!(b.len(), 1, "{b:?}");
+    assert!(b[0].contains("negative control"), "{b:?}");
+}

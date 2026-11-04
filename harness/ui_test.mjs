@@ -160,6 +160,14 @@ async function screenshot(input) {
 }
 
 async function uiTest(input) {
+  if (input.flows != null && !Array.isArray(input.flows)) throw new Error("flows must be an array");
+  input.flows = (input.flows || []).map((raw, i) => {
+    const flow = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!flow || typeof flow !== "object" || Array.isArray(flow)) throw new Error(`flow ${i + 1}: must be an object`);
+    if (!Array.isArray(flow.steps) || flow.steps.length === 0) throw new Error(`flow ${i + 1}: steps must be a non-empty array`);
+    if (flow.steps.some(s => !s || typeof s !== "object" || typeof s.do !== "string" || !s.do.length)) throw new Error(`flow ${i + 1}: each step must be an object with a non-empty do action`);
+    return flow;
+  });
   const start = new URL(input.url);
   if (!input.allow_remote && !isLocal(start)) throw new Error(`refusing non-local URL ${start.origin} (set allow_remote)`);
   const maxPages = input.max_pages ?? 5;
@@ -398,7 +406,9 @@ async function uiTest(input) {
     r.storage_keys_written = keys.filter((k) => !storageBefore.has(k));
   } catch { /* ignore */ }
   await browser.close();
-  progress("done", { pages: r.pages.length, interactions: r.interactions.length });
+  const flowPages = (r.flows || []).filter(f => f.page_opened).length;
+  const flowSteps = (r.flows || []).flatMap(f => f.steps).filter(s => s.do !== "open").length;
+  progress("done", { pages: r.pages.length + flowPages, interactions: r.interactions.length + flowSteps });
   // One entry per URL; an HTTP status beats the ERR_ABORTED that follows navigating away.
   const byUrl = new Map();
   for (const f of r.failed_requests) {
@@ -471,7 +481,8 @@ async function runFlows(context, flows, start, outDir, r) {
     page.on("pageerror", (e) => errs.push(`page error: ${String(e.message).slice(0, 300)}`));
     page.on("console", (m) => { if (m.type() === "error") errs.push(`console: ${m.text().slice(0, 300)}`); });
     page.on("dialog", async (d) => { errs.push(`dialog ${d.type()}: ${d.message().slice(0, 200)}`); await d.dismiss().catch(() => {}); });
-    const fr = { name: flow.name || `flow ${fi + 1}`, passed: true, steps: [] };
+    const fr = { name: flow.name || `flow ${fi + 1}`, passed: true, steps: [], page_opened: true,
+      url: new URL(flow.url || start.href, start).href };
     progress("flow", { name: fr.name, steps: (flow.steps || []).length });
     try {
       await page.goto(new URL(flow.url || start.href, start).href, { waitUntil: "load" });
