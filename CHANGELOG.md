@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0-test.10 — test release
+
+- Judge weighted visual coverage against each criterion's stated scope.
+  Coarse or positional comparisons use the visible evidence in each frame.
+  Partial evidence still withholds the weighted score.
+
 ## 0.5.0-test.9 — test release
 
 - Add an optional Codex CLI follow-up for visual critiques. Kritic opens a fresh

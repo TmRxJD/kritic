@@ -1,6 +1,6 @@
 # Getting started — test release
 
-For **command-output filtering only**, test.9 includes `kev` / `kev-filter`: no MCP,
+For **command-output filtering only**, test.10 includes `kev` / `kev-filter`: no MCP,
 model or GPU setup needed. The Windows ZIP includes all three executables. The Apple
 Silicon CLI archive includes only the two filter aliases plus source/docs; build the
 Kritic MCP server separately. Start with [the CLI guide](cli-filter.md).
