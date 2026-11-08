@@ -392,7 +392,8 @@ async function uiTest(input) {
 //   do: navigate(value=url) | click | dblclick | fill | select | check | uncheck | press(value=key)
 //       | hover | wait_for (target visible) | wait(value=ms) | expect_text(value substring)
 //       | expect_visible | expect_hidden | expect_url(value substring) | screenshot
-//   target: any Playwright selector (css, "text=Save", "role=button[name='Save']", ...)
+//   target: portable selector (CSS, "text=Save", "role=button[name='Save']", or "xpath=...")
+//           Playwright-only extensions such as :has-text() are not supported by the native backend.
 async function runStep(page, step, base, outDir, shotName) {
   const t = step.timeout_ms ?? 5000;
   const loc = step.target ? page.locator(step.target).first() : null;

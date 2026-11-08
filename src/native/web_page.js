@@ -82,8 +82,9 @@
   };
 
   // ---- selectors for flows and persistence checks
-  // css (default), "text=Save" (smallest visible element whose text contains it, case-insensitive),
-  // "role=button[name='Save']" (role by ARIA or tag, accessible name contains it), "xpath=//...".
+  // Portable selectors: css (default), "text=Save" (smallest visible element whose text contains it,
+  // case-insensitive), "role=button[name='Save']" (role by ARIA or tag, name contains it),
+  // and "xpath=//...". Playwright-only extensions such as :has-text() are unsupported here.
   const ROLE_TAGS = { button: "button,input[type=button],input[type=submit],input[type=reset],summary", link: "a[href]",
     textbox: "input:not([type]),input[type=text],input[type=email],input[type=search],input[type=url],input[type=tel],input[type=password],input[type=number],textarea",
     checkbox: "input[type=checkbox]", radio: "input[type=radio]", combobox: "select", heading: "h1,h2,h3,h4,h5,h6", tab: "", switch: "" };
@@ -119,7 +120,16 @@
       const cands = [...document.querySelectorAll(`[role=${r}]${tags ? "," + tags : ""}`)].filter(visible);
       return cands.find((el) => name === undefined || accName(el).toLowerCase().includes(name.toLowerCase())) || null;
     }
-    return document.querySelector(sel);
+    try {
+      return document.querySelector(sel);
+    } catch (error) {
+      if (error?.name === "SyntaxError") {
+        throw new Error(
+          `Invalid or unsupported native UI selector "${sel}". Native flows accept CSS, text=, role=, and xpath= selectors; Playwright-only extensions such as :has-text() are not supported.`,
+        );
+      }
+      throw error;
+    }
   };
   // Tag the resolved element so the driver can act on it; returns what it is.
   K.mark = (sel) => {

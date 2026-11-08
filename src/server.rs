@@ -319,7 +319,8 @@ pub struct UiParams {
     /// [{name, url?, continue_on_error?, steps: [{do, target?, value?, timeout_ms?}]}].
     /// do: navigate | click | dblclick | fill | select | check | uncheck | press | hover | wait_for
     /// | wait | expect_text | expect_visible | expect_hidden | expect_url | screenshot.
-    /// target: Playwright selector ("#id", "text=Save", "role=button[name='Save']").
+    /// target: portable selector: CSS, text=..., role=..., or xpath=.... Playwright-only
+    /// selector extensions such as :has-text() are not supported by the native UI backend.
     #[serde(default)]
     pub flows: Vec<serde_json::Value>,
     /// Crawl and exercise every control (default true). false = run only `flows`.
