@@ -8,7 +8,7 @@ const pageHelpers = fs.readFileSync(
   "utf8",
 );
 
-function nativePage() {
+function nativePage(extraElements = []) {
   const button = {
     tagName: "BUTTON",
     type: "button",
@@ -21,7 +21,7 @@ function nativePage() {
     removeAttribute(name) { this.attributes.delete(name); },
   };
   const document = {
-    body: { querySelectorAll: () => [button] },
+    body: { querySelectorAll: () => [...extraElements, button] },
     querySelector(selector) {
       if (selector.includes(":has-text(")) {
         const error = new Error("invalid selector");
@@ -31,7 +31,7 @@ function nativePage() {
       return selector === ".domain-list button" ? button : null;
     },
     querySelectorAll(selector) {
-      if (selector.startsWith("[role=button]")) return [button];
+      if (selector.startsWith("[role=button]")) return [...extraElements, button];
       return [];
     },
   };
@@ -60,4 +60,34 @@ test("native flow gives actionable guidance for Playwright-only selectors", () =
     () => kritic.mark(".domain-list button:has-text('Cards')"),
     /Invalid or unsupported native UI selector .*Native flows accept CSS, text=, role=, and xpath= selectors; Playwright-only extensions such as :has-text\(\) are not supported\./,
   );
+});
+
+test("text selectors survive visible numeric and SVG values before a matching control", () => {
+  const visibleValue = (value) => ({
+    value,
+    innerText: "",
+    getBoundingClientRect: () => ({ width: 80, height: 24 }),
+  });
+  const kritic = nativePage([
+    visibleValue(706),
+    visibleValue({ baseVal: "" }),
+  ]);
+
+  assert.equal(kritic.mark("text=Cards").tag, "button");
+  assert.equal(kritic.resolve("text=No Such Control"), null);
+});
+
+test("role names normalize numeric values and ignore animated SVG objects", () => {
+  const valueControl = (value) => ({
+    value,
+    innerText: "",
+    getAttribute: () => null,
+    getBoundingClientRect: () => ({ width: 80, height: 24 }),
+  });
+  const numeric = valueControl(706);
+  const animated = valueControl({ baseVal: "Cards" });
+  const kritic = nativePage([numeric, animated]);
+
+  assert.equal(kritic.resolve("role=button[name='706']"), numeric);
+  assert.equal(kritic.mark("role=button[name='Cards']").tag, "button");
 });

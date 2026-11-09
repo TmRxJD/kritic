@@ -93,8 +93,14 @@
     const s = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none";
   };
+  // Some visible elements expose numeric values (progress/meter), while SVG values
+  // can be animated objects. Neither is guaranteed to implement String.trim().
+  const elementText = (el) => {
+    const value = el.innerText || el.value || "";
+    return typeof value === "string" || typeof value === "number" ? String(value) : "";
+  };
   const accName = (el) => (el.getAttribute("aria-label") || (el.labels && el.labels[0] && el.labels[0].innerText) ||
-    el.innerText || el.value || el.getAttribute("title") || el.getAttribute("placeholder") || "").trim();
+    elementText(el) || el.getAttribute("title") || el.getAttribute("placeholder") || "").trim();
   K.resolve = (sel) => {
     if (sel.startsWith("xpath=")) {
       return document.evaluate(sel.slice(6), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -107,7 +113,7 @@
       let best = null;
       for (const el of document.body.querySelectorAll("*")) {
         if (!visible(el)) continue;
-        const t = (el.innerText || el.value || "").trim();
+        const t = elementText(el).trim();
         const hit = exact ? t === want : t.toLowerCase().includes(lower);
         if (hit && (!best || best.contains(el))) best = el;
       }
