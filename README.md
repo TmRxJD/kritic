@@ -194,6 +194,12 @@ max_output_tokens = 4096
 Cloud judgments are advisory; self-reported confidence does not inherit local calibration.
 Screenshots go to a cloud reviewer only when cloud vision is explicitly enabled.
 [Cloud setup](docs/cloud.md) · [Local model installation](docs/getting-started.md#optional-local-models).
+Compatible native Kev servers default to adaptive `auto` memory mode; explicit `low-commit`
+and `high-commit` profiles select streamed or resident GPU weights. Before local vision or
+`ui_test` work, Kritic can request a temporary, acknowledged memory yield from that server,
+then release it before Kev triage. Older servers and off/cloud backends need no changes.
+These controls require the optional native server capability; they do not change the OS
+pagefile or guarantee a workload will fit. [Memory profiles and reservations](docs/model-memory.md).
 Model context helpers need `context=true` plus a text backend. Hermes archive/recall is a separate
 opt-in; absolute budget caps preserve the real model context length and account for supplied
 whole-request overhead rather than treating message-only savings as the whole budget.

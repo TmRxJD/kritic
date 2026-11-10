@@ -4,11 +4,26 @@
 
 ### Added
 
-- Add the cooperative model-memory reservation client with cancellation, expiry and deadline regressions.
-- Package native reservation endpoints, streaming eligibility and patch-series build instructions.
-- Package native auto-profile policy and memory-pressure regression coverage.
-- Package the bounded Vulkan weight streaming source patch.
-- Package the native mapped GGUF loading source and regression patch.
+- Adaptive native Kev memory profiles: `auto` by default, with explicit `low-commit`
+  and resident `high-commit` overrides. Usage averages, measured commit/VRAM headroom,
+  hysteresis and idle unload guide profile selection.
+- Cooperative memory reservations before local vision and UI testing. Kev unloads
+  before acknowledging a lease and rejects inference while any reservation is active.
+  Cleanup, cancellation, expiry and workload deadlines bound the reservation lifecycle.
+- Reproducible native-server source patch and memory-profile/protocol documentation.
+
+### Changed
+
+- Extract cloud vision transport and UI review lifecycle handling into dedicated modules.
+  Preserve a single no-growth ceiling for the legacy MCP registry at its pre-task
+  size, reduced from 2314 to 2281 lines; freeze the reduced ceiling and keep the
+  remaining organization debt visible.
+- Declare the repository's default focused commit budgets and organization checks
+  explicitly; require exact staged scope plans without installing Git hooks.
+- Stream large Hermes JSON logs instead of parsing the complete source; preserve
+  existing extraction decisions while bounding intermediate allocations.
+- Require a changelog entry for every update, with unreleased work kept separate
+  from published versions.
 
 ### Fixed
 
@@ -17,13 +32,11 @@
   during debug compilation and 0xc0000005 (STATUS_ACCESS_VIOLATION) during release
   compilation. The same-source single-CGU library diagnostic passed; the underlying
   compiler fault remains unconfirmed. Preserve release optimization level 3 and ThinLTO.
+- Keep unsupported devices/graphs, including F16/Q4-only models, out of automatic
+  Q8 streaming. Isolate lifecycle tests from live local model services.
 - Update rmcp to 3.9.0 to address RUSTSEC-2026-0457, RUSTSEC-2026-0461 and
   RUSTSEC-2026-0462; no dependency findings are suppressed.
-
-### Changed
-
-- Declare the repository's default focused commit budgets and organization checks
-  explicitly; require exact staged scope plans without installing Git hooks.
+- Move portable CI off the retired macOS 14 runner.
 
 ## 0.5.0-test.10 — test release
 

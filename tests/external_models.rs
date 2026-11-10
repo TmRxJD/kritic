@@ -116,6 +116,9 @@ fn config(directory: &std::path::Path) -> Config {
     let mut cfg = Config::load();
     cfg.config_errors.clear();
     cfg.backend = "local".into();
+    // Vision memory-capability discovery must never contact the user's live Kev.
+    // Individual tests can replace this with their own loopback fixture.
+    cfg.laya_url = "http://127.0.0.1:9".into();
     cfg.vision_backend = "local".into();
     cfg.kev_externally_managed = true;
     cfg.vision_externally_managed = true;

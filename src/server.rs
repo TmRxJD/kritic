@@ -21,8 +21,10 @@ use crate::tools::{
     RouteResult, StatusResult, TrimResult, ValidateInput, ValidateResult, artifact_validate, audit,
     context_trim, git_diff, load_files, route, route_codex, status,
 };
-use crate::ui::{UiOptions, UiResult};
+use crate::ui::UiResult;
 use crate::vision::VisualResult;
+
+mod ui_review;
 
 #[derive(Clone)]
 pub struct Kritic {
@@ -1571,42 +1573,7 @@ impl Kritic {
         &self,
         Parameters(p): Parameters<UiParams>,
     ) -> Result<Json<UiResult>, String> {
-        let t0 = started("ui_test");
-        let cfg = &self.kev.cfg;
-        let persist: Vec<serde_json::Value> = p
-            .persist
-            .iter()
-            .map(|c| serde_json::json!({"selector": c.selector, "url": c.url}))
-            .collect();
-        let mut r = crate::ui::ui_test(
-            cfg,
-            &p.url,
-            &p.routes,
-            &persist,
-            p.max_pages,
-            p.max_actions,
-            p.allow_destructive,
-            p.allow_remote,
-            p.headed,
-            p.axe,
-            &p.flows,
-            p.explore,
-            UiOptions {
-                axe_blocking: p.axe_blocking,
-                ignore: p.ignore,
-            },
-        )
-        .await;
-        r.full_result = crate::tools::save_full(cfg, "ui_test", &r);
-        r.report
-            .interactions
-            .retain(|i| !matches!(i.result.as_str(), "ok" | "navigated"));
-        r.report.interactions.truncate(crate::tools::MAX_ITEMS);
-        r.report.console_errors.truncate(crate::tools::MAX_ITEMS);
-        r.report.failed_requests.truncate(crate::tools::MAX_ITEMS);
-        finished("ui_test", t0, &r);
-        audit(cfg, "ui_test", &r);
-        Ok(Json(r))
+        self.execute_ui_test(p).await
     }
 
     /// Security critic: runs gitleaks (secrets), osv-scanner (vulnerable dependencies, any
