@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Declare the repository's default focused commit budgets and organization checks
+  explicitly; require exact staged scope plans without installing Git hooks.
+
 ## 0.5.0-test.10 — test release
 
 - Judge weighted visual coverage against each criterion's stated scope.
