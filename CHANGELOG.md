@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Package the native mapped GGUF loading source and regression patch.
+
 ### Fixed
 
 - Update rmcp to 3.9.0 to address RUSTSEC-2026-0457, RUSTSEC-2026-0461 and
