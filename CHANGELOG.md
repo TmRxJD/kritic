@@ -4,6 +4,7 @@
 
 ### Added
 
+- Package the bounded Vulkan weight streaming source patch.
 - Package the native mapped GGUF loading source and regression patch.
 
 ### Fixed
