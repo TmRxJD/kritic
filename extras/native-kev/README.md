@@ -21,8 +21,10 @@ ctest --test-dir build --output-on-failure
 
 Use a supported C++/CMake toolchain and Vulkan SDK for your platform. On the tested
 Windows setup this used MSVC and Ninja; add `-G Ninja` in an initialized MSVC shell.
-The upstream repository retains its MIT license. The patches include source/tests,
-not model weights, build outputs or machine-specific launcher configuration.
+Upstream declares MIT in its package metadata and README, but the referenced
+top-level LICENSE file is absent at the pinned revision. This release bundles
+only source patches, with no native server binary or model weights. The patches
+include source/tests, not build outputs or machine-specific launcher configuration.
 
 Start the resulting server with your GGUF and appropriate device mapping:
 

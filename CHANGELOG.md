@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0-test.11 — test release (2026-11-10)
+
 ### Added
 
 - Adaptive native Kev memory profiles: `auto` by default, with explicit `low-commit`
@@ -14,6 +16,9 @@
 
 ### Changed
 
+- Distribute the optional native Kev adaptation as source patches only. Upstream
+  declares MIT, but its referenced top-level license file is absent at the pinned
+  revision; no native server binary is bundled in this test release.
 - Extract cloud vision transport and UI review lifecycle handling into dedicated modules.
   Preserve a single no-growth ceiling for the legacy MCP registry at its pre-task
   size, reduced from 2314 to 2281 lines; freeze the reduced ceiling and keep the
