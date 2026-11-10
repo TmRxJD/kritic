@@ -1,0 +1,528 @@
+diff --git a/runtime/include/ggmlc/executor.h b/runtime/include/ggmlc/executor.h
+index 8b9b589..898aa4b 100644
+--- a/runtime/include/ggmlc/executor.h
++++ b/runtime/include/ggmlc/executor.h
+@@ -37,8 +37,14 @@ public:
+ 
+     // Current configured execution device
+     const std::string& device() const { return device_; }
++    // Read the selected device's current memory budget; false means unknown.
++    bool device_memory(size_t& free_bytes, size_t& total_bytes) const;
+     const SerializedModelGraph& model_graph() const { return model_graph_; }
+ 
++    // Experimental Vulkan-only Q8 weight streaming. Configure before prepare();
++    // unsupported devices/graphs throw rather than silently using another mode.
++    void set_weight_streaming(bool enable);
++
+     // Prepare execution context for given dynamic symbol values and optional memory arena reuse
+     void prepare(const std::unordered_map<std::string, int64_t>& symbol_env = {}, bool enable_arena_reuse = true);
+ 
+@@ -131,6 +137,14 @@ public:
+ 
+ private:
+     void init_weights();
++    struct WeightSlice {
++        int begin;
++        int end;
++        struct ggml_tensor* weight;
++    };
++    struct ggml_tensor* streamed_root(struct ggml_tensor* tensor) const;
++    std::vector<WeightSlice> weight_slices() const;
++    void run_weight_streaming();
+     void init_states(const std::unordered_map<std::string, int64_t>& symbol_env);
+     bool has_state_tensors() const;
+ 
+@@ -143,6 +157,9 @@ private:
+ 
+     // Weights: static parameters & constants (allocated & initialized once)
+     ggml_backend_buffer_t weight_buffer_ = nullptr;
++    bool weight_streaming_ = false;
++    ggml_backend_buffer_t streaming_buffer_ = nullptr;
++    std::unordered_map<struct ggml_tensor*, uint32_t> streamed_weights_;
+     struct ggml_context* ctx_w_ = nullptr;
+     bool weights_loaded_ = false;
+     std::unordered_map<uint32_t, struct ggml_tensor*> weight_tensors_;
+diff --git a/runtime/src/executor.cpp b/runtime/src/executor.cpp
+index bb7ca2a..dc87b29 100644
+--- a/runtime/src/executor.cpp
++++ b/runtime/src/executor.cpp
+@@ -319,6 +319,10 @@ ModelExecutor::~ModelExecutor() {
+         ggml_backend_buffer_free(weight_buffer_);
+         weight_buffer_ = nullptr;
+     }
++    if (streaming_buffer_) {
++        ggml_backend_buffer_free(streaming_buffer_);
++        streaming_buffer_ = nullptr;
++    }
+     if (ctx_w_) {
+         ggml_free(ctx_w_);
+         ctx_w_ = nullptr;
+@@ -347,7 +351,33 @@ bool ModelExecutor::has_state_tensors() const {
+     return false;
+ }
+ 
+-void ModelExecutor::init_weights() {
++bool ModelExecutor::device_memory(size_t& free_bytes, size_t& total_bytes) const {
++    free_bytes = 0;
++    total_bytes = 0;
++    if (!backend_) return false;
++    const auto device = ggml_backend_get_device(backend_);
++    if (!device) return false;
++    ggml_backend_dev_memory(device, &free_bytes, &total_bytes);
++    // Vulkan reports total heap size as "free" without memory-budget support.
++    // Treat that indistinguishable fallback as unknown, never as promotion room.
++    if (device_.rfind("vulkan:", 0) == 0 && free_bytes == total_bytes) return false;
++    return total_bytes > 0 && free_bytes <= total_bytes;
++}
++
++void ModelExecutor::set_weight_streaming(bool enable) {
++    if (weights_loaded_ || ctx_w_ || ctx_) {
++        throw std::logic_error("Weight streaming must be configured before prepare()");
++    }
++    if (enable && device_.rfind("vulkan:", 0) != 0) {
++        throw std::invalid_argument("Weight streaming requires a Vulkan backend");
++    }
++    if (enable && (enable_cuda_graph_ || enable_cuda_graph_buckets_)) {
++        throw std::invalid_argument("Weight streaming is incompatible with CUDA graph capture");
++    }
++    weight_streaming_ = enable;
++}
++
++void ModelExecutor::init_weights() try {
+     if (weights_loaded_) return;
+ 
+     size_t n_weights = 0;
+@@ -411,8 +441,44 @@ void ModelExecutor::init_weights() {
+         }
+         weight_buffer_ = nullptr;
+     } else {
++        size_t resident_count = weight_tensors_.size();
++        if (weight_streaming_) {
++            const auto buft = ggml_backend_get_default_buffer_type(backend_);
++            const size_t alignment = ggml_backend_buft_get_alignment(buft);
++            size_t slot_bytes = 0;
++            for (const auto& pair : weight_tensors_) {
++                const auto& t = model_graph_.tensors.at(pair.first);
++                auto* tensor = pair.second;
++                if (t.storage != StorageClass::PARAMETER || tensor->type != GGML_TYPE_Q8_0 ||
++                    tensor->ne[1] <= 1 || ggml_nbytes(tensor) < 1024 * 1024) continue;
++                if (!t.data_ptr || t.data_size < ggml_nbytes(tensor)) {
++                    throw std::runtime_error("Streaming weight data missing or truncated: " + t.name);
++                }
++                const size_t bytes = ggml_backend_buft_get_alloc_size(buft, tensor);
++                slot_bytes = std::max(slot_bytes, GGML_PAD(bytes, alignment));
++                streamed_weights_.emplace(tensor, pair.first);
++            }
++            if (streamed_weights_.empty()) {
++                throw std::runtime_error("Weight streaming found no Q8_0 parameter matrices of at least 1 MiB");
++            }
++            if (slot_bytes > ggml_backend_buft_get_max_size(buft)) {
++                throw std::runtime_error("Streaming weight slot exceeds backend maximum buffer size");
++            }
++            streaming_buffer_ = ggml_backend_buft_alloc_buffer(buft, slot_bytes);
++            if (!streaming_buffer_) throw std::runtime_error("Failed to allocate streaming weight slot");
++            ggml_backend_buffer_set_usage(streaming_buffer_, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
++            // Fixed aliased addresses keep views and prepared graph buckets valid.
++            // Only one of these immutable weights may be consumed by a slice.
++            for (const auto& pair : streamed_weights_) {
++                if (ggml_backend_tensor_alloc(streaming_buffer_, pair.first,
++                        ggml_backend_buffer_get_base(streaming_buffer_)) != GGML_STATUS_SUCCESS) {
++                    throw std::runtime_error("Failed to bind streaming weight slot");
++                }
++            }
++            resident_count -= streamed_weights_.size();
++        }
+         weight_buffer_ = ggml_backend_alloc_ctx_tensors(ctx_w_, backend_);
+-        if (!weight_buffer_) {
++        if (!weight_buffer_ && resident_count != 0) {
+             throw std::runtime_error("Failed to allocate weight buffer on backend (" + device_ + ")");
+         }
+ 
+@@ -422,14 +488,60 @@ void ModelExecutor::init_weights() {
+             if ((t.storage == StorageClass::PARAMETER || t.storage == StorageClass::CONSTANT) && t.is_static() && t.data_ptr && t.data_size > 0) {
+                 auto it = weight_tensors_.find(tid);
+                 if (it != weight_tensors_.end()) {
+-                    size_t sz = std::min<size_t>(t.data_size, ggml_nbytes(it->second));
+-                    ggml_backend_tensor_set(it->second, t.data_ptr, 0, sz);
++                    if (streamed_weights_.count(it->second)) continue;
++                    const size_t sz = std::min<size_t>(t.data_size, ggml_nbytes(it->second));
++                    // Vulkan retains its largest synchronous staging allocation.
++                    // Bound initial uploads so a large embedding tensor does not
++                    // leave a model-sized host transfer buffer resident.
++                    constexpr size_t upload_chunk_bytes = 16 * 1024 * 1024;
++                    for (size_t offset = 0; offset < sz; ) {
++                        const size_t count = std::min(upload_chunk_bytes, sz - offset);
++                        ggml_backend_tensor_set(it->second, t.data_ptr + offset, offset, count);
++                        offset += count;
++                    }
+                 }
+             }
+         }
++        if (!weight_streaming_ && !ggml_backend_is_cpu(backend_) && model_graph_.data_storage) {
++            // Run once at initial static upload, never per prepare/request.
++            // Finish all backend transfers before releasing clean host pages;
++            // graph storage stays alive for subsequent dynamic constants.
++            ggml_backend_synchronize(backend_);
++            model_graph_.data_storage->release_residency();
++        }
++        if (weight_streaming_) {
++            fprintf(stderr, "[weight-streaming] tensors=%zu slot_bytes=%zu resident_weight_bytes=%zu staging_chunk_bytes=%u\n",
++                streamed_weights_.size(), ggml_backend_buffer_get_size(streaming_buffer_),
++                weight_buffer_ ? ggml_backend_buffer_get_size(weight_buffer_) : 0, 16u * 1024u * 1024u);
++        }
+     }
+ 
+     weights_loaded_ = true;
++} catch (...) {
++    // Initialization is transactional: callers may correct configuration and
++    // retry after validation/allocation errors without retaining partial state.
++    if (weight_buffer_) {
++        ggml_backend_buffer_free(weight_buffer_);
++        weight_buffer_ = nullptr;
++    }
++    if (streaming_buffer_) {
++        ggml_backend_buffer_free(streaming_buffer_);
++        streaming_buffer_ = nullptr;
++    }
++    if (ctx_w_) {
++        ggml_free(ctx_w_);
++        ctx_w_ = nullptr;
++    }
++    weight_tensors_.clear();
++    streamed_weights_.clear();
++    for (const auto& pair : model_graph_.tensors) {
++        const auto& tensor = pair.second;
++        if ((tensor.storage == StorageClass::PARAMETER || tensor.storage == StorageClass::CONSTANT) && tensor.is_static()) {
++            concrete_shapes_.erase(pair.first);
++        }
++    }
++    weights_loaded_ = false;
++    throw;
+ }
+ 
+ void ModelExecutor::init_states(const std::unordered_map<std::string, int64_t>& symbol_env) {
+@@ -2828,6 +2940,12 @@ void ModelExecutor::prepare(const std::unordered_map<std::string, int64_t>& symb
+     // those buffers while GET_ROWS / FA / later layers still need them.
+     pin_live_graph_tensors();
+ 
++    if (weight_streaming_) {
++        // Validate before allocating activations or executing any state updates.
++        // run() repeats this for the active cached graph as well.
++        (void) weight_slices();
++    }
++
+     // 4. Allocate tensor storage for compute activations on backend (CPU or CUDA)
+     if (enable_arena_reuse) {
+         galloc_ = ggml_gallocr_new(ggml_backend_get_default_buffer_type(backend_));
+@@ -2954,6 +3072,9 @@ void ModelExecutor::set_input_by_name(const std::string& name, const void* data,
+ }
+ 
+ void ModelExecutor::set_enable_cuda_graph(bool enable) {
++    if (enable && weight_streaming_) {
++        throw std::invalid_argument("Weight streaming is incompatible with CUDA graph capture");
++    }
+     enable_cuda_graph_ = enable;
+     if (enable && is_cuda_ && !cuda_graph_mgr_) {
+         cuda_graph_mgr_ = std::make_unique<CUDAGraphManager>();
+@@ -2968,6 +3089,9 @@ bool ModelExecutor::is_cuda_graph_captured() const {
+ }
+ 
+ void ModelExecutor::set_enable_cuda_graph_buckets(bool enable) {
++    if (enable && weight_streaming_) {
++        throw std::invalid_argument("Weight streaming is incompatible with CUDA graph capture");
++    }
+     enable_cuda_graph_buckets_ = enable;
+     if (enable && is_cuda_ && !cuda_graph_mgr_) {
+         cuda_graph_mgr_ = std::make_unique<CUDAGraphManager>();
+@@ -2981,11 +3105,92 @@ bool ModelExecutor::is_cuda_graph_bucket_captured(int batch_size) const {
+     return cuda_graph_mgr_ && cuda_graph_mgr_->is_bucket_captured(batch_size);
+ }
+ 
++struct ggml_tensor* ModelExecutor::streamed_root(struct ggml_tensor* tensor) const {
++    while (tensor && tensor->view_src) tensor = tensor->view_src;
++    return streamed_weights_.count(tensor) ? tensor : nullptr;
++}
++
++std::vector<ModelExecutor::WeightSlice> ModelExecutor::weight_slices() const {
++    for (uint32_t id : model_graph_.outputs) {
++        auto it = ggml_tensors_.find(id);
++        if (it != ggml_tensors_.end() && streamed_root(it->second)) {
++            throw std::runtime_error("Weight streaming cannot expose an output alias of a streamed weight");
++        }
++    }
++    std::vector<WeightSlice> slices;
++    WeightSlice active{0, 0, nullptr};
++    for (int i = 0; i < ggml_graph_n_nodes(cgraph_); ++i) {
++        auto* node = ggml_graph_node(cgraph_, i);
++        const bool metadata_only = node->op == GGML_OP_NONE || node->op == GGML_OP_VIEW ||
++            node->op == GGML_OP_RESHAPE || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_TRANSPOSE;
++        if (!metadata_only) {
++            if (streamed_root(node)) {
++                throw std::runtime_error("Weight streaming cannot write a streamed weight: " + std::string(node->name));
++            }
++            // CPY writes src[1], including when its result view is not yet initialized.
++            if (node->op == GGML_OP_CPY && streamed_root(node->src[1])) {
++                throw std::runtime_error("Weight streaming cannot copy into a streamed weight: " + std::string(node->name));
++            }
++            struct ggml_tensor* required = nullptr;
++            for (auto* src : node->src) {
++                auto* root = streamed_root(src);
++                if (!root) continue;
++                if (required && required != root) {
++                    throw std::runtime_error("Weight streaming node requires multiple streamed weights: " + std::string(node->name));
++                }
++                required = root;
++            }
++            if (required && active.weight && required != active.weight) {
++                active.end = i;
++                slices.push_back(active);
++                active = {i, i, required};
++            } else if (required) {
++                active.weight = required;
++            }
++        }
++        active.end = i + 1;
++    }
++    if (active.end > active.begin) slices.push_back(active);
++    return slices;
++}
++
++void ModelExecutor::run_weight_streaming() {
++    // Allocate against the full graph, execute ordered views of that allocation.
++    // Never allocate per slice: residuals, KV/state writes and activation reuse
++    // must retain the original graph's complete dependency/liveness ordering.
++    const auto slices = weight_slices();
++    size_t transferred = 0;
++    for (const auto& slice : slices) {
++        if (slice.weight) {
++            const auto& source = model_graph_.tensors.at(streamed_weights_.at(slice.weight));
++            const size_t bytes = ggml_nbytes(slice.weight);
++            constexpr size_t chunk_bytes = 16 * 1024 * 1024;
++            for (size_t offset = 0; offset < bytes; ) {
++                const size_t count = std::min(chunk_bytes, bytes - offset);
++                ggml_backend_tensor_set(slice.weight, source.data_ptr + offset, offset, count);
++                offset += count;
++            }
++            transferred += bytes;
++        }
++        auto view = ggml_graph_view(cgraph_, slice.begin, slice.end);
++        // This synchronous API completes all consumers before overwriting the slot.
++        const auto status = ggml_backend_graph_compute(backend_, &view);
++        if (status != GGML_STATUS_SUCCESS) {
++            throw std::runtime_error("Streaming GGML graph compute failed with status: " + std::to_string(status));
++        }
++    }
++    fprintf(stderr, "[weight-streaming] slices=%zu uploaded_bytes=%zu\n", slices.size(), transferred);
++}
++
+ void ModelExecutor::run(int n_threads) {
+     ScopedTimer timer(enable_profile_, profile_.run_ms, &profile_.n_run);
+     if (!ctx_ || !cgraph_ || !backend_) {
+         throw std::runtime_error("Executor not prepared. Call prepare() first.");
+     }
++    if (weight_streaming_) {
++        run_weight_streaming();
++        return;
++    }
+     if (ggml_backend_is_cpu(backend_)) {
+         if (n_threads < 1 || n_threads > GGML_MAX_N_THREADS) {
+             throw std::invalid_argument("CPU thread count must be between 1 and " + std::to_string(GGML_MAX_N_THREADS));
+diff --git a/tests/runtime/test_executor_cpu.cpp b/tests/runtime/test_executor_cpu.cpp
+index 624f084..b41d4f3 100644
+--- a/tests/runtime/test_executor_cpu.cpp
++++ b/tests/runtime/test_executor_cpu.cpp
+@@ -81,6 +81,17 @@ int main(int argc, char** argv) {
+     MLP model(benchmark ? 1024 : 32);
+     for (int repeat = 0; repeat < (benchmark ? 1 : 3); ++repeat) {
+         ggmlc::ModelExecutor executor(model.graph, "cpu");
++        if (!benchmark) {
++            executor.set_weight_streaming(false);
++            bool rejected = false;
++            try {
++                executor.set_weight_streaming(true);
++            } catch (const std::invalid_argument& error) {
++                rejected = std::string(error.what()) == "Weight streaming requires a Vulkan backend";
++            }
++            require(rejected, "CPU weight streaming was not rejected before prepare");
++            // Subsequent normal inference below proves the rejection did not mutate mode.
++        }
+         for (int rows : {1, 64, 1}) {
+             for (int threads : {1, 4, 2, 1}) {
+                 auto input = make_input(rows, model.dim, threads + repeat);
+@@ -103,6 +114,13 @@ int main(int argc, char** argv) {
+             }
+         }
+         if (!benchmark) {
++            bool late_streaming_rejected = false;
++            try {
++                executor.set_weight_streaming(false);
++            } catch (const std::logic_error&) {
++                late_streaming_rejected = true;
++            }
++            require(late_streaming_rejected, "Weight streaming configuration changed after prepare");
+             for (int invalid_threads : {0, -1, GGML_MAX_N_THREADS + 1}) {
+                 bool rejected = false;
+                 try {
+@@ -119,6 +137,16 @@ int main(int argc, char** argv) {
+             model.check(input, static_cast<const float*>(executor.get_output_data(4)));
+         }
+     }
++    if (!benchmark) {
++        // Cross the bounded upload boundary with a partial final chunk.
++        MLP large_model(2056);
++        ggmlc::ModelExecutor executor(large_model.graph, "cpu");
++        auto input = make_input(1, large_model.dim, 7);
++        executor.prepare({{"rows", 1}});
++        executor.set_input(0, input.data(), input.size() * sizeof(float));
++        executor.run(2);
++        large_model.check(input, static_cast<const float*>(executor.get_output_data(4)));
++    }
+     std::cout << "CPU inference checks passed; AVX2=" << ggml_cpu_has_avx2()
+               << " AVX512=" << ggml_cpu_has_avx512() << '\n';
+ }
+diff --git a/runtime/include/ggmlc/weight_streaming.h b/runtime/include/ggmlc/weight_streaming.h
+new file mode 100644
+index 0000000..47595dd
+--- /dev/null
++++ b/runtime/include/ggmlc/weight_streaming.h
+@@ -0,0 +1,75 @@
++#pragma once
++
++#include "ggmlc/types.h"
++#include <limits>
++#include <unordered_map>
++#include <unordered_set>
++
++namespace ggmlc {
++
++// Conservative pre-allocation admission for auto mode. Runtime weight_slices()
++// remains authoritative after lowering: this does not promise every dynamic
++// shape/backend operation will succeed. Unknown streamed consumers stay resident.
++inline bool weight_streaming_graph_eligible(const SerializedModelGraph& graph) {
++    std::unordered_map<uint32_t, uint32_t> roots;
++    std::unordered_set<uint32_t> available;
++    for (const auto& pair : graph.tensors) {
++        const auto& t = pair.second;
++        if (t.storage != StorageClass::ACTIVATION && t.storage != StorageClass::OUTPUT) available.insert(pair.first);
++        if (t.storage != StorageClass::PARAMETER || t.type != GGML_TYPE_Q8_0) continue;
++        // Literal dimensions avoid evaluating malformed/overflowing expression
++        // trees in an eligibility probe. Nonliteral weights stay resident.
++        for (const auto& dim : t.ne) {
++            if (!dim || dim->type != DimType::STATIC || dim->val <= 0) return false;
++        }
++        if (t.ne[1]->val <= 1) continue;
++        if (t.ne[0]->val % ggml_blck_size(t.type) != 0) return false;
++        size_t bytes = ggml_row_size(t.type, t.ne[0]->val);
++        for (int d = 1; d < 4; ++d) {
++            if (static_cast<uint64_t>(t.ne[d]->val) > std::numeric_limits<size_t>::max() / bytes) return false;
++            bytes *= static_cast<size_t>(t.ne[d]->val);
++        }
++        if (bytes >= 1024 * 1024) {
++            if (!t.data_ptr || t.data_size < bytes) return false;
++            roots.emplace(pair.first, pair.first);
++        }
++    }
++    if (roots.empty()) return false;
++    for (const auto& op : graph.ops) {
++        bool has_root = false;
++        uint32_t root = 0;
++        for (uint32_t input : op.inputs) {
++            if (!available.count(input)) return false;
++            const auto found = roots.find(input);
++            if (found == roots.end()) continue;
++            if (has_root && root != found->second) return false;
++            has_root = true;
++            root = found->second;
++        }
++        for (uint32_t output : op.outputs) {
++            if (roots.count(output)) return false; // immutable parameter/view write
++        }
++        const bool view = op.opcode == GGML_OP_VIEW || op.opcode == GGML_OP_RESHAPE ||
++            op.opcode == GGML_OP_PERMUTE || op.opcode == GGML_OP_TRANSPOSE;
++        if (has_root) {
++            // These known lowerings read weights or create metadata/copies.
++            // SET/ACC/SET_ROWS/custom consumers require explicit future review.
++            if (!view && op.opcode != GGML_OP_MUL_MAT && op.opcode != GGML_OP_GET_ROWS &&
++                op.opcode != GGML_OP_CONT && op.opcode != GGML_OP_DUP && op.opcode != GGML_OP_CPY) return false;
++            if (op.opcode == GGML_OP_CPY && op.inputs.size() > 1 && roots.count(op.inputs[1])) return false;
++            const auto inplace = op.attributes.find("inplace");
++            if (inplace != op.attributes.end() && inplace->second != 0) return false;
++            if (view) {
++                if (op.inputs.empty() || !roots.count(op.inputs[0])) return false;
++                for (uint32_t output : op.outputs) roots.emplace(output, root);
++            }
++        }
++        for (uint32_t output : op.outputs) available.insert(output);
++    }
++    for (uint32_t output : graph.outputs) {
++        if (roots.count(output)) return false;
++    }
++    return true;
++}
++
++} // namespace ggmlc
+diff --git a/tests/runtime/test_weight_streaming_eligibility.cpp b/tests/runtime/test_weight_streaming_eligibility.cpp
+new file mode 100644
+index 0000000..9f16dbb
+--- /dev/null
++++ b/tests/runtime/test_weight_streaming_eligibility.cpp
+@@ -0,0 +1,59 @@
++#include "ggmlc/weight_streaming.h"
++#include <iostream>
++#include <stdexcept>
++
++static void require(bool value, const char* error) {
++    if (!value) throw std::runtime_error(error);
++}
++
++static ggmlc::SerializedModelGraph model(ggml_type type = GGML_TYPE_Q8_0, int width = 1024) {
++    ggmlc::SerializedModelGraph graph;
++    static const uint8_t data = 0; // probe inspects metadata only, never dereferences bytes
++    for (uint32_t id = 0; id < 5; ++id) {
++        ggmlc::SerializedTensor tensor{};
++        tensor.id = id;
++        tensor.type = id == 1 || id == 2 ? type : GGML_TYPE_F32;
++        tensor.storage = id == 0 ? ggmlc::StorageClass::INPUT : id <= 2 ? ggmlc::StorageClass::PARAMETER : ggmlc::StorageClass::ACTIVATION;
++        for (int d = 0; d < 4; ++d) {
++            tensor.ne[d] = std::make_shared<ggmlc::DimExpr>();
++            tensor.ne[d]->type = ggmlc::DimType::STATIC;
++            tensor.ne[d]->val = d < 2 ? width : 1;
++        }
++        tensor.data_ptr = &data;
++        tensor.data_size = ggml_row_size(type, width) * width;
++        graph.tensors[id] = tensor;
++    }
++    graph.inputs = {0};
++    graph.outputs = {4};
++    graph.ops = {{0, GGML_OP_MUL_MAT, "first", {1, 0}, {3}, {}, {}},
++                 {1, GGML_OP_MUL_MAT, "second", {2, 3}, {4}, {}, {}}};
++    return graph;
++}
++
++int main() {
++    using ggmlc::weight_streaming_graph_eligible;
++    require(weight_streaming_graph_eligible(model()), "ordinary Q8 matrices rejected");
++    require(!weight_streaming_graph_eligible(model(GGML_TYPE_Q4_0)), "Q4-only model admitted");
++    require(!weight_streaming_graph_eligible(model(GGML_TYPE_F16)), "F16-only model admitted");
++    require(!weight_streaming_graph_eligible(model(GGML_TYPE_Q8_0, 32)), "small Q8 weights admitted");
++    auto graph = model();
++    graph.ops[0].inputs = {1, 2};
++    require(!weight_streaming_graph_eligible(graph), "two streamed roots admitted");
++    graph = model();
++    graph.ops[0] = {0, GGML_OP_RESHAPE, "alias", {1}, {3}, {}, {}};
++    require(!weight_streaming_graph_eligible(graph), "view hid a second streamed root");
++    graph.ops[1].inputs = {3, 0};
++    require(weight_streaming_graph_eligible(graph), "one view root rejected");
++    graph.outputs = {3};
++    require(!weight_streaming_graph_eligible(graph), "output alias admitted");
++    graph = model();
++    graph.ops[0].outputs = {1};
++    require(!weight_streaming_graph_eligible(graph), "weight write admitted");
++    graph = model();
++    graph.ops[0].opcode = GGML_OP_SET_ROWS;
++    require(!weight_streaming_graph_eligible(graph), "unknown writable weight consumer admitted");
++    graph = model();
++    graph.tensors[1].data_size = 1;
++    require(!weight_streaming_graph_eligible(graph), "truncated weight admitted");
++    std::cout << "Weight streaming eligibility checks passed\n";
++}

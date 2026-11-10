@@ -1,0 +1,593 @@
+diff --git a/examples/laya/CMakeLists.txt b/examples/laya/CMakeLists.txt
+index 86068b3..6447f3f 100644
+--- a/examples/laya/CMakeLists.txt
++++ b/examples/laya/CMakeLists.txt
+@@ -11,6 +11,7 @@ set(LAYA_SOURCES
+     src/presets.cpp
+     src/language.cpp
+     src/router.cpp
++    src/memory_policy.cpp
+     src/engine.cpp
+     src/server.cpp
+     src/main.cpp
+@@ -29,3 +30,22 @@ target_link_libraries(laya PRIVATE ggmlc_runtime)
+ if (WIN32)
+     target_link_libraries(laya PRIVATE ws2_32)
+ endif()
++
++if (GGMLC_BUILD_TESTS)
++    add_executable(test-memory-reservations ../../tests/runtime/test_memory_reservations.cpp)
++    target_include_directories(test-memory-reservations PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
++    add_test(NAME memory-reservations COMMAND test-memory-reservations)
++    add_executable(test-memory-policy ../../tests/runtime/test_memory_policy.cpp src/memory_policy.cpp)
++    target_include_directories(test-memory-policy PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
++    add_test(NAME memory-policy COMMAND test-memory-policy)
++    add_executable(laya-heap-benchmark ${LAYA_SOURCES})
++    target_include_directories(laya-heap-benchmark PRIVATE
++        ${CMAKE_CURRENT_SOURCE_DIR}/include
++        ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/include
++        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ggml/include
++        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ggml/src)
++    target_link_libraries(laya-heap-benchmark PRIVATE ggmlc_heap_loader_benchmark)
++    if (WIN32)
++        target_link_libraries(laya-heap-benchmark PRIVATE ws2_32)
++    endif()
++endif()
+diff --git a/examples/laya/README.md b/examples/laya/README.md
+index 5723ebf..5e1af5e 100644
+--- a/examples/laya/README.md
++++ b/examples/laya/README.md
+@@ -301,3 +301,63 @@ Linux / macOS (same tree as the other examples):
+ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGMLC_ENABLE_CUDA=ON   # or -DGGMLC_ENABLE_METAL=ON
+ cmake --build build --target laya -j8
+ ```
++## Adaptive memory profiles
++
++`--memory-profile auto` is the default. Supported Vulkan/Q8_0 graphs start with
++bounded weight streaming; after four successful observations the server can use
++resident weights for frequent or large requests when measured commit and VRAM
++headroom permit it. Unknown headroom prevents promotion. Other devices or
++unsupported graphs retain resident execution. Use explicit overrides when needed:
++
++```sh
++laya serve model.gguf --device vulkan:0 --max-batch 1 --memory-profile auto
++laya serve model.gguf --device vulkan:0 --max-batch 1 --memory-profile low-commit
++laya serve model.gguf --device vulkan:0 --max-batch 1 --memory-profile high-commit
++```
++
++`resident` and `balanced` alias `high-commit`; the legacy `--stream-weights`
++selects `low-commit`. Explicit low-commit rejects unsupported devices/graphs.
++Streaming Q8_0 matrices of at least 1 MiB share a fixed device slot, while small
++weights/constants stay resident. The full activation graph still needs memory.
++Source mappings can occupy reclaimable physical RAM; commit, RSS and VRAM are
++different measurements. Streaming increases transfer latency. CUDA capture is
++incompatible. Measure decision agreement and performance for the actual model.
++
++Auto uses exponentially weighted successful input tokens, forwards, sequence
++buckets and request-start intervals. The initial Q8_0/RTX2070 defaults are four
++observations, recent intervals <=30s or average tokens>=1024/forwards>=4/bucket>=512,
++with >=16 GiB available commit and >=4.75 GiB free device memory for promotion.
++Commit<=12 GiB, free VRAM<=0.75 GiB or unknown telemetry demotes immediately.
++Other switches observe a 60-second cooldown. These are starting thresholds, not
++universal admission guarantees. Available commit is sampled on Windows; other
++platforms currently report unknown commit and remain conservative in auto mode.
++
++The HTTP server unloads idle engines after 60 seconds by default. Override with
++`--idle-seconds N` (0 disables). Only model use refreshes that timer; health and
++catalog reads never reload models or train the adaptive policy. Idle unload
++resets usage history. The next decision pays a reload delay.
++
++### Cooperative vision/UI memory reservations
++
++`GET /health` reports `loaded`, `state` and `memory_management` including protocol
++version 1, reservation support, requested/effective profile, reason and usage
++averages. Compatible clients can yield all server engines before starting a
++heavy vision/browser job, including when high-commit was explicitly selected:
++
++```
++POST /v1/memory/reserve {"id":"job-unique-id","owner":"kritic-vision","ttl_seconds":360}
++POST /v1/memory/release {"id":"job-unique-id","owner":"kritic-vision"}
++```
++
++Control endpoints require a loopback peer without an Origin header and honor
++configured API authentication. IDs use ASCII letters/digits/-_. (max128), owners
++max64, TTL1..3600 seconds. A successful reserve acknowledges engine destruction;
++clients must wait for `reserved:true` before heavy work. New decisions return
++503 `memory_reserved` while any lease is active. Independent callers use unique
++IDs; releasing one cannot release another. Releasing is idempotent, expires on
++client failure, and retains a 60-second cancellation tombstone to reject late
++reserve requests. At most256 active/tombstoned IDs are retained. Release never
++warms a model. A client must complete/cancel its work before lease expiry.
++
++This cooperation releases Kev allocations only. It cannot create memory,
++change OS pagefiles or prevent unrelated processes from consuming headroom.
+diff --git a/examples/laya/include/engine.h b/examples/laya/include/engine.h
+index 7adc463..47f7bf0 100644
+--- a/examples/laya/include/engine.h
++++ b/examples/laya/include/engine.h
+@@ -9,6 +9,7 @@
+ #include "recipe.h"
+ #include "ggmlc/loader.h"
+ #include "ggmlc/executor.h"
++#include "ggmlc/weight_streaming.h"
+ #include "ggmlc/pipeline/tokenizer.h"
+ 
+ namespace laya {
+@@ -18,6 +19,7 @@ struct EngineOptions {
+     int n_threads = 4;
+     bool cuda_graph = false;
+     int max_batch = 0;  // 0 = GGUF metadata / default 8
++    bool stream_weights = false;  // Vulkan prototype: bound device weight residency.
+ };
+ 
+ class DecisionEngine {
+@@ -28,6 +30,11 @@ public:
+     bool load_model(const std::string& gguf_path, const EngineOptions& opt);
+     bool is_loaded() const { return loaded_; }
+     const std::string& device() const { return device_; }
++    bool supports_weight_streaming() const {
++        return device_.rfind("vulkan", 0) == 0 && ggmlc::weight_streaming_graph_eligible(graph_);
++    }
++    void set_weight_streaming(bool enabled) { executor_->set_weight_streaming(enabled); }
++    bool device_memory(size_t& free, size_t& total) const { return executor_ && executor_->device_memory(free, total); }
+     const std::string& family() const { return family_; }
+     const std::string& model_name() const { return model_name_; }
+     const SequenceConfig& seq_config() const { return seq_; }
+diff --git a/examples/laya/include/router.h b/examples/laya/include/router.h
+index 819446c..aff32bc 100644
+--- a/examples/laya/include/router.h
++++ b/examples/laya/include/router.h
+@@ -1,10 +1,13 @@
+ #pragma once
+ 
+ #include <memory>
++#include <chrono>
+ #include <string>
+ #include <unordered_map>
+ #include <vector>
+ #include "engine.h"
++#include "memory_policy.h"
++#include "memory_reservations.h"
+ #include "language.h"
+ 
+ namespace laya {
+@@ -18,6 +21,9 @@ struct RouteInfo {
+ class DecisionRouter {
+ public:
+     void set_options(const EngineOptions& opt) { opt_ = opt; }
++    void set_memory_profile(const std::string& profile) { memory_profile_ = profile; }
++    bool memory_reserved() const;
++    JsonValue memory_control(const JsonValue& request, bool reserve);
+     void set_forced_family(const std::string& family) { forced_family_ = family; }
+ 
+     bool load_file(const std::string& gguf_path);
+@@ -38,13 +44,21 @@ public:
+ 
+     void print_info();
+     JsonValue health_json() const;
++    // Called by the serial HTTP loop between requests. Health/catalog reads do
++    // not update the inference timer or reload an unloaded engine.
++    bool unload_if_idle(std::chrono::seconds timeout);
+ 
+ private:
+     EngineOptions opt_;
++    std::string memory_profile_ = "auto";
++    MemoryPolicy memory_policy_;
++    MemoryReservations reservations_;
++    void select_memory_profile(const std::string& family);
+     std::string forced_family_ = "auto";
+     std::unordered_map<std::string, std::string> paths_;
+     std::unordered_map<std::string, std::unique_ptr<DecisionEngine>> engines_;
+     RouteInfo last_;
++    std::chrono::steady_clock::time_point last_used_ = std::chrono::steady_clock::now();
+ 
+     bool consider_gguf(const std::string& path);
+     DecisionEngine& ensure(const std::string& family);
+diff --git a/examples/laya/include/server.h b/examples/laya/include/server.h
+index f94fea6..68d4153 100644
+--- a/examples/laya/include/server.h
++++ b/examples/laya/include/server.h
+@@ -12,7 +12,7 @@ class DecisionRouter;
+ class Server {
+ public:
+     Server(DecisionEngine& engine, int port = 8080);
+-    Server(DecisionRouter& router, int port = 8080);
++    Server(DecisionRouter& router, int port = 8080, int idle_seconds = 0);
+     ~Server();
+     bool start();
+     void stop();
+@@ -22,9 +22,10 @@ private:
+     DecisionRouter* router_ = nullptr;
+     int port_ = 8080;
+     bool running_ = false;
++    int idle_seconds_ = 0;
+     std::string api_key_;
+     std::string handle_request(const std::string& method, const std::string& path,
+-                               const std::string& body, const std::string& authorization);
++                               const std::string& body, const std::string& authorization, bool loopback, bool has_origin);
+     std::string device() const;
+     DecideResult decide(const JsonValue& state, const std::vector<Question>& qs,
+                         const std::string& model);
+diff --git a/examples/laya/src/engine.cpp b/examples/laya/src/engine.cpp
+index caf539d..0305227 100644
+--- a/examples/laya/src/engine.cpp
++++ b/examples/laya/src/engine.cpp
+@@ -52,6 +52,7 @@ bool DecisionEngine::load_model(const std::string& gguf_path, const EngineOption
+             }
+         }
+         device_ = executor_->device();
++        executor_->set_weight_streaming(opt.stream_weights);
+     } catch (const std::exception& e) {
+         std::cerr << "[laya] load failed: " << e.what() << std::endl;
+         return false;
+diff --git a/examples/laya/src/main.cpp b/examples/laya/src/main.cpp
+index 1d3447f..56f26de 100644
+--- a/examples/laya/src/main.cpp
++++ b/examples/laya/src/main.cpp
+@@ -141,6 +141,9 @@ static void print_help(const char* argv0) {
+         << "  --models-dir <DIR>      Directory of Laya GGUFs\n"
+         << "  --family <NAME>         auto | english | multilingual | typed-decisions  (default: auto)\n"
+         << "  --port <PORT>           HTTP port  (default: 8080)\n"
++        << "  --idle-seconds <N>      Unload idle engines; health stays available (0 disables)\n"
++        << "  --memory-profile <P>   auto (default), low-commit or high-commit\n"
++        << "  --stream-weights       Vulkan experimental bounded weight streaming\n"
+         << "  --device <NAME>         auto | cpu | cuda | metal | vulkan | vulkan:0  (default: auto)\n"
+         << "  --threads <N>           CPU workers  (default: 4)\n"
+         << "  --cuda-graph            Capture a CUDA graph for the live (B, S) shape\n"
+@@ -280,6 +283,11 @@ int main(int argc, char** argv) {
+     int port = 8080;
+     int runs = 5;
+     int warmup = 2;
++    int idle_seconds = 60;
++    bool idle_explicit = false;
++    bool stream_weights = false;
++    std::string memory_profile = "auto";
++    bool profile_explicit = false;
+     bool cuda_graph = false;
+     bool as_json = false;
+     int max_batch = 0;
+@@ -312,6 +320,30 @@ int main(int argc, char** argv) {
+             device = need("--device");
+         } else if (a == "--threads") {
+             n_threads = std::atoi(need("--threads"));
++        } else if (a == "--memory-profile") {
++            memory_profile = need("--memory-profile");
++            if (memory_profile == "resident" || memory_profile == "balanced") memory_profile = "high-commit";
++            if (memory_profile != "auto" && memory_profile != "low-commit" && memory_profile != "high-commit") {
++                std::cerr << "--memory-profile must be auto, low-commit or high-commit\n";
++                return 1;
++            }
++            profile_explicit = true;
++        } else if (a == "--idle-seconds") {
++            idle_explicit = true;
++            const std::string value = need("--idle-seconds");
++            size_t consumed = 0;
++            try {
++                idle_seconds = std::stoi(value, &consumed);
++            } catch (const std::exception&) {
++                std::cerr << "--idle-seconds must be an integer from 0 to 86400\n";
++                return 1;
++            }
++            if (consumed != value.size() || idle_seconds < 0 || idle_seconds > 86400) {
++                std::cerr << "--idle-seconds must be an integer from 0 to 86400\n";
++                return 1;
++            }
++        } else if (a == "--stream-weights") {
++            stream_weights = true;
+         } else if (a == "--port") {
+             port = std::atoi(need("--port"));
+         } else if (a == "--preset") {
+@@ -412,13 +444,24 @@ int main(int argc, char** argv) {
+     }
+ 
+     laya::EngineOptions opt;
++    if (stream_weights && profile_explicit && memory_profile != "low-commit") {
++        std::cerr << "--stream-weights conflicts with --memory-profile\n";
++        return 1;
++    }
++    if (stream_weights) memory_profile = "low-commit";
++    if (idle_explicit && command != "serve") {
++        std::cerr << "--idle-seconds applies to serve only\n";
++        return 1;
++    }
+     opt.device = device;
+     opt.n_threads = n_threads;
+     opt.cuda_graph = cuda_graph;
+     opt.max_batch = max_batch;
++    opt.stream_weights = memory_profile == "low-commit";
+ 
+     laya::DecisionRouter router;
+     router.set_options(opt);
++    router.set_memory_profile(memory_profile);
+     router.set_forced_family(family);
+     try {
+         if (!models_dir.empty()) {
+@@ -436,7 +479,7 @@ int main(int argc, char** argv) {
+         router.print_info();
+         return 0;
+     }
+-    if (command == "serve" || command == "daemon") {
++    if ((command == "serve" && idle_seconds == 0) || command == "daemon") {
+         try {
+             router.pick(laya::JsonValue::string("hello"), {});
+         } catch (const std::exception& e) {
+@@ -445,7 +488,7 @@ int main(int argc, char** argv) {
+         }
+     }
+     if (command == "serve") {
+-        laya::Server server(router, port);
++        laya::Server server(router, port, idle_seconds);
+         return server.start() ? 0 : 1;
+     }
+     if (command == "daemon") return run_daemon(router);
+diff --git a/examples/laya/src/router.cpp b/examples/laya/src/router.cpp
+index a92e3de..3245c5e 100644
+--- a/examples/laya/src/router.cpp
++++ b/examples/laya/src/router.cpp
+@@ -6,9 +6,67 @@
+ #include <filesystem>
+ #include <iostream>
+ #include <stdexcept>
++#include <fstream>
++#ifdef _WIN32
++#define NOMINMAX
++#include <windows.h>
++#endif
+ 
+ namespace laya {
+ namespace fs = std::filesystem;
++static double monotonic_seconds() {
++    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
++}
++static std::optional<uint64_t> available_commit() {
++#ifdef _WIN32
++    MEMORYSTATUSEX status{};
++    status.dwLength = sizeof(status);
++    if (GlobalMemoryStatusEx(&status)) return status.ullAvailPageFile;
++#endif
++    // Unknown pressure never authorizes an automatic promotion.
++    return std::nullopt;
++}
++
++bool DecisionRouter::memory_reserved() const { return reservations_.active(monotonic_seconds()) != 0; }
++JsonValue DecisionRouter::memory_control(const JsonValue& request, bool reserve) {
++    const auto* id = request.get("id");
++    const auto* owner = request.get("owner");
++    if (!id || !id->is_string() || !owner || !owner->is_string())
++        throw std::invalid_argument("id and owner strings are required");
++    bool changed;
++    if (reserve) {
++        const auto* ttl = request.get("ttl_seconds");
++        if (!ttl || !ttl->is_number() || !std::isfinite(ttl->n) || ttl->n < 1 ||
++            ttl->n > 3600 || std::floor(ttl->n) != ttl->n)
++            throw std::invalid_argument("ttl_seconds must be an integer from 1 to 3600");
++        changed = reservations_.reserve(id->s, owner->s, static_cast<int>(ttl->n), monotonic_seconds());
++        if (changed) { engines_.clear(); memory_policy_.reset_idle(); }
++    } else changed = reservations_.release(id->s, owner->s, monotonic_seconds());
++    JsonValue out = JsonValue::object();
++    out.set("id", JsonValue::string(id->s));
++    out.set(reserve ? "reserved" : "released", JsonValue::boolean(changed));
++    return out;
++}
++
++void DecisionRouter::select_memory_profile(const std::string& family) {
++    if (memory_profile_ != "auto") return;
++    auto& engine = ensure(family);
++    if (memory_policy_.streaming_supported() != engine.supports_weight_streaming())
++        memory_policy_ = MemoryPolicy(engine.supports_weight_streaming());
++    size_t free = 0, total = 0;
++    MemoryHeadroom headroom;
++    headroom.available_commit_bytes = available_commit();
++    if (engine.device_memory(free, total)) headroom.free_vram_bytes = free;
++    const auto choice = memory_policy_.select(monotonic_seconds(), headroom);
++    const bool streaming = choice.profile == MemoryProfile::Streaming;
++    if (choice.changed) {
++        engines_.clear();
++        std::cerr << "[laya] memory profile -> " << (streaming ? "low-commit" : "high-commit")
++                  << " (" << choice.reason << ")\n";
++    }
++    opt_.stream_weights = streaming;
++}
++
+ 
+ static const char* kTypedIds[][5] = {
+     {"action", "needs_review", "outcome", "risk", "urgency"},
+@@ -113,6 +171,7 @@ std::string DecisionRouter::device() const {
+ }
+ 
+ DecisionEngine& DecisionRouter::ensure(const std::string& family) {
++    last_used_ = std::chrono::steady_clock::now();
+     auto eit = engines_.find(family);
+     if (eit != engines_.end()) return *eit->second;
+     auto pit = paths_.find(family);
+@@ -120,9 +179,16 @@ DecisionEngine& DecisionRouter::ensure(const std::string& family) {
+         throw std::runtime_error("no GGUF catalogued for family '" + family + "'");
+     }
+     auto eng = std::make_unique<DecisionEngine>();
+-    if (!eng->load_model(pit->second, opt_)) {
++    auto load_options = opt_;
++    if (memory_profile_ == "auto") load_options.stream_weights = false;
++    if (!eng->load_model(pit->second, load_options)) {
+         throw std::runtime_error("failed to load " + pit->second);
+     }
++    if (memory_profile_ == "auto") {
++        if (memory_policy_.streaming_supported() != eng->supports_weight_streaming())
++            memory_policy_ = MemoryPolicy(eng->supports_weight_streaming());
++        eng->set_weight_streaming(memory_policy_.snapshot().profile == MemoryProfile::Streaming);
++    }
+     DecisionEngine& ref = *eng;
+     engines_[family] = std::move(eng);
+     return ref;
+@@ -182,8 +248,22 @@ DecisionEngine& DecisionRouter::pick(const JsonValue& state, const std::vector<Q
+ 
+ DecideResult DecisionRouter::decide(const JsonValue& state, const std::vector<Question>& questions,
+                                     const std::string& model) {
++    if (memory_reserved()) throw std::runtime_error("memory_reserved: Kev yielded memory to a vision/UI job");
++    const auto family = choose_family(state, questions, model);
++    if (!paths_.count(family)) throw std::runtime_error("no model for requested family");
++    select_memory_profile(family);
++    const double started = monotonic_seconds();
+     DecisionEngine& eng = pick(state, questions, model);
+-    DecideResult r = eng.decide(state, questions);
++    DecideResult r;
++    try {
++        r = eng.decide(state, questions);
++    } catch (...) {
++        last_used_ = std::chrono::steady_clock::now();
++        throw;
++    }
++    last_used_ = std::chrono::steady_clock::now();
++    if (memory_profile_ == "auto")
++        memory_policy_.observe_success(started, MemoryUsage{r.input_tokens, r.n_forwards, r.seq_bucket});
+     r.route_family = last_.family;
+     r.route_reason = last_.reason;
+     if (r.model.empty()) r.model = last_.family;
+@@ -211,10 +291,28 @@ void DecisionRouter::print_info() {
+ JsonValue DecisionRouter::health_json() const {
+     JsonValue o = JsonValue::object();
+     o.set("status", JsonValue::string("ok"));
++    o.set("loaded", JsonValue::boolean(!engines_.empty()));
++    o.set("state", JsonValue::string(engines_.empty() ? "sleeping" : "ready"));
+     o.set("device", JsonValue::string(device()));
+     JsonValue fams = JsonValue::array();
+     for (const auto& f : discovered_families()) fams.arr.push_back(JsonValue::string(f));
+     o.set("families", fams);
++    const auto policy = memory_policy_.snapshot();
++    JsonValue memory = JsonValue::object();
++    memory.set("version", JsonValue::number(1));
++    memory.set("reservations", JsonValue::boolean(true));
++    memory.set("active_reservations", JsonValue::number(reservations_.active(monotonic_seconds())));
++    memory.set("requested_profile", JsonValue::string(memory_profile_));
++    const std::string effective = memory_profile_ == "auto" ?
++        (policy.profile == MemoryProfile::Streaming ? "low-commit" : "high-commit") : memory_profile_;
++    memory.set("effective_profile", JsonValue::string(effective));
++    memory.set("reason", JsonValue::string(memory_profile_ == "auto" ? policy.reason : "explicit"));
++    memory.set("successful_samples", JsonValue::number(policy.successful_samples));
++    memory.set("avg_input_tokens", JsonValue::number(policy.avg_input_tokens));
++    memory.set("avg_forwards", JsonValue::number(policy.avg_forwards));
++    memory.set("avg_seq_bucket", JsonValue::number(policy.avg_seq_bucket));
++    if (policy.avg_interval_seconds) memory.set("avg_interval_seconds", JsonValue::number(*policy.avg_interval_seconds));
++    o.set("memory_management", memory);
+     o.set("family", JsonValue::string(forced_family_));
+     std::string model = "laya";
+     if (!engines_.empty()) model = engines_.begin()->second->model_name();
+@@ -228,4 +326,15 @@ JsonValue DecisionRouter::health_json() const {
+     return o;
+ }
+ 
++bool DecisionRouter::unload_if_idle(std::chrono::seconds timeout) {
++    if (timeout.count() <= 0 || engines_.empty() ||
++        std::chrono::steady_clock::now() - last_used_ < timeout) {
++        return false;
++    }
++    engines_.clear();
++    memory_policy_.reset_idle();
++    std::cerr << "[laya] unloaded idle model engines\n";
++    return true;
++}
++
+ }  // namespace laya
+diff --git a/examples/laya/src/server.cpp b/examples/laya/src/server.cpp
+index f9d616b..85cd058 100644
+--- a/examples/laya/src/server.cpp
++++ b/examples/laya/src/server.cpp
+@@ -27,6 +27,7 @@
+ typedef int socklen_t;
+ #define SHUT_SEND SD_SEND
+ #else
++#include <sys/select.h>
+ #include <sys/socket.h>
+ #include <netinet/in.h>
+ #include <unistd.h>
+@@ -176,8 +177,10 @@ static std::string family_description(const std::string& family) {
+ 
+ Server::Server(DecisionEngine& engine, int port)
+     : engine_(&engine), port_(port), running_(false), api_key_(env_api_key()) {}
+-Server::Server(DecisionRouter& router, int port)
+-    : router_(&router), port_(port), running_(false), api_key_(env_api_key()) {}
++Server::Server(DecisionRouter& router, int port, int idle_seconds)
++    : router_(&router), port_(port), running_(false), idle_seconds_(idle_seconds), api_key_(env_api_key()) {
++    if (idle_seconds < 0) throw std::invalid_argument("idle timeout cannot be negative");
++}
+ Server::~Server() { stop(); }
+ void Server::stop() { running_ = false; }
+ 
+@@ -293,7 +296,7 @@ static bool parse_system_one(const JsonValue& req, JsonValue& state, std::vector
+ }
+ 
+ std::string Server::handle_request(const std::string& method, const std::string& path,
+-                                   const std::string& body, const std::string& authorization) {
++                                   const std::string& body, const std::string& authorization, bool loopback, bool has_origin) {
+     std::string p = path;
+     auto qpos = p.find('?');
+     if (qpos != std::string::npos) p = p.substr(0, qpos);
+@@ -348,9 +351,21 @@ std::string Server::handle_request(const std::string& method, const std::string&
+         return http_json(200, json_dumps_pretty(arr) + "\n");
+     }
+ 
++    if (method == "POST" && (p == "/v1/memory/reserve" || p == "/v1/memory/release")) {
++        if (!loopback || has_origin) return http_error(403, "forbidden", "Memory control requires loopback without Origin");
++        if (!router_) return http_error(404, "unsupported", "Memory reservations require a router");
++        try {
++            const auto request = JsonParser::parse_string(body);
++            return http_json(200, json_dumps(router_->memory_control(request, p == "/v1/memory/reserve")) + "\n");
++        } catch (const std::invalid_argument& e) { return http_error(400, "invalid_request_error", e.what()); }
++          catch (const std::exception& e) { return http_error(409, "reservation_error", e.what()); }
++    }
++
+     const bool system_one = method == "POST" && (p == "/v1/systemone" || p == "/v1/decide");
+     const bool batch = method == "POST" && p == "/v1/decide/batch";
+     if (system_one || batch) {
++        if (router_ && router_->memory_reserved())
++            return http_error(503, "memory_reserved", "Kev has yielded memory to vision/UI testing; retry after its reservation ends.");
+         JsonValue req;
+         try {
+             req = JsonParser::parse_string(body.empty() ? "{}" : body);
+@@ -513,7 +528,27 @@ bool Server::start() {
+     }
+     std::cout << "======================================================================\n\n" << std::flush;
+ 
++    bool success = true;
+     while (running_) {
++        if (router_ && idle_seconds_ > 0) {
++            router_->unload_if_idle(std::chrono::seconds(idle_seconds_));
++            fd_set readable;
++            FD_ZERO(&readable);
++            FD_SET(server_fd, &readable);
++            timeval wait{1, 0};
++#ifdef _WIN32
++            const int nfds = 0; // Winsock ignores this argument.
++#else
++            const int nfds = server_fd + 1;
++#endif
++            const int available = select(nfds, &readable, nullptr, nullptr, &wait);
++            if (available == 0) continue;
++            if (available < 0) {
++                std::cerr << "Idle listener wait failed\n";
++                success = false;
++                break;
++            }
++        }
+         sockaddr_in client_addr{};
+         socklen_t client_len = sizeof(client_addr);
+         SOCKET client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+@@ -586,7 +621,9 @@ bool Server::start() {
+             std::cout << "[laya] " << method << " " << path;
+             if (!body.empty()) std::cout << " (" << body.size() << " bytes)";
+             std::cout << std::endl;
+-            std::string response = handle_request(method, path, body, authorization);
++            std::string response = handle_request(method, path, body, authorization,
++                (ntohl(client_addr.sin_addr.s_addr) >> 24) == 127,
++                !http_header(headers, "Origin").empty());
+             send_all(client_fd, response);
+             shutdown(client_fd, SHUT_SEND);
+         }
+@@ -596,7 +633,7 @@ bool Server::start() {
+ #ifdef _WIN32
+     WSACleanup();
+ #endif
+-    return true;
++    return success;
+ }
+ 
+ }  // namespace laya

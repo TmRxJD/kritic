@@ -23,6 +23,7 @@ pub mod kev;
 pub mod kev_native;
 pub mod map;
 pub mod metrics;
+pub mod model_memory;
 pub mod native;
 pub mod organization;
 pub mod phase3;

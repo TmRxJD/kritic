@@ -1,0 +1,18 @@
+# Explicit focused scope checks; legacy server size is bounded without source exclusions.
+version = 1
+
+[commit]
+level = "focused"
+require_scope_plan = true
+
+[organization]
+max_file_lines = 500
+hard_file_lines = 1000
+max_folder_files = 40
+max_depth = 8
+long_function_lines = 60
+complex_function_branches = 8
+
+[organization.baselines."src/server.rs"]
+max_lines = 2281
+justification = "Legacy MCP tool registry was 2314 lines at f5d00d12eedaf6e3dad1d65479f39a61c7a24d6f. This update extracts UI review lifecycle handling and reduces the registry by 33 lines to 2281. Freeze that reduced ceiling; remaining registry debt stays visible and reclaimed lines may not regrow."

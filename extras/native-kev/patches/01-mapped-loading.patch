@@ -1,0 +1,591 @@
+diff --git a/runtime/CMakeLists.txt b/runtime/CMakeLists.txt
+index 2d14dd9..319c4d2 100644
+--- a/runtime/CMakeLists.txt
++++ b/runtime/CMakeLists.txt
+@@ -21,6 +21,7 @@ endif()
+ 
+ add_library(ggmlc_runtime STATIC
+     src/loader.cpp
++    src/model_data.cpp
+     src/executor.cpp
+     src/radix_tree.cpp
+     src/batch_scheduler.cpp
+@@ -34,6 +35,14 @@ target_link_libraries(ggmlc_runtime PUBLIC
+     ${GGML_BACKEND_LIBS}
+ )
+ 
++# Paired baseline: only the file-loader object differs; all executor/backend
++# objects and compiler settings are identical. Never selected at runtime.
++if (GGMLC_BUILD_TESTS)
++    add_library(ggmlc_heap_loader_benchmark STATIC src/loader.cpp)
++    target_compile_definitions(ggmlc_heap_loader_benchmark PRIVATE GGMLC_HEAP_LOADER_BENCHMARK)
++    target_link_libraries(ggmlc_heap_loader_benchmark PUBLIC ggmlc_runtime)
++endif()
++
+ # CLI Tool
+ add_executable(ggmlc-run
+     tools/ggmlc_run.cpp
+@@ -62,13 +71,24 @@ target_link_libraries(ggml-bench PRIVATE
+ 
+ if (GGMLC_BUILD_TESTS)
+     add_executable(test-executor-cpu ../tests/runtime/test_executor_cpu.cpp)
++    add_executable(test-weight-streaming-eligibility ../tests/runtime/test_weight_streaming_eligibility.cpp)
++    target_link_libraries(test-weight-streaming-eligibility PRIVATE ggmlc_runtime)
++    add_test(NAME weight-streaming-eligibility COMMAND test-weight-streaming-eligibility)
+     target_link_libraries(test-executor-cpu PRIVATE ggmlc_runtime)
+     add_test(NAME executor-cpu COMMAND test-executor-cpu)
++    add_executable(test-loader ../tests/runtime/test_loader.cpp)
++    target_link_libraries(test-loader PRIVATE ggmlc_runtime)
++    add_test(NAME loader COMMAND test-loader)
++    add_executable(test-loader-heap-benchmark ../tests/runtime/test_loader.cpp)
++    target_compile_definitions(test-loader-heap-benchmark PRIVATE GGMLC_HEAP_LOADER_BENCHMARK)
++    target_link_libraries(test-loader-heap-benchmark PRIVATE ggmlc_heap_loader_benchmark)
++    add_test(NAME loader-heap-benchmark COMMAND test-loader-heap-benchmark)
+ endif()
+ 
+ # Shared library for C-FFI
+ add_library(ggmlc_runtime_shared SHARED
+     src/loader.cpp
++    src/model_data.cpp
+     src/executor.cpp
+     src/radix_tree.cpp
+     src/batch_scheduler.cpp
+@@ -103,6 +123,7 @@ if (Python_FOUND)
+         nanobind_add_module(_runtime
+             bindings/python_bindings.cpp
+             src/loader.cpp
++            src/model_data.cpp
+             src/executor.cpp
+             src/radix_tree.cpp
+             src/batch_scheduler.cpp
+diff --git a/runtime/bindings/python_bindings.cpp b/runtime/bindings/python_bindings.cpp
+index a67de8a..d907816 100644
+--- a/runtime/bindings/python_bindings.cpp
++++ b/runtime/bindings/python_bindings.cpp
+@@ -109,24 +109,7 @@ NB_MODULE(_runtime, m) {
+         .def_static("load_from_bytes", [](nb::bytes bytes_obj) {
+             const uint8_t* ptr = reinterpret_cast<const uint8_t*>(bytes_obj.c_str());
+             size_t size = bytes_obj.size();
+-            auto graph = ggmlc::ModelLoader::load_from_memory(ptr, size);
+-            graph.data_buffer.assign(ptr, ptr + size);
+-
+-            // Re-bind data_ptr relative to graph.data_buffer
+-            struct gguf_init_params params = { true, nullptr };
+-            struct gguf_context* ctx = gguf_init_from_buffer(graph.data_buffer.data(), graph.data_buffer.size(), params);
+-            if (ctx) {
+-                size_t data_offset = gguf_get_data_offset(ctx);
+-                const uint8_t* base_data = graph.data_buffer.data() + data_offset;
+-                for (auto& pair : graph.tensors) {
+-                    int64_t t_id = gguf_find_tensor(ctx, pair.second.name.c_str());
+-                    if (t_id >= 0) {
+-                        pair.second.data_ptr = base_data + gguf_get_tensor_offset(ctx, t_id);
+-                    }
+-                }
+-                gguf_free(ctx);
+-            }
+-            return graph;
++            return ggmlc::ModelLoader::load_from_memory(ptr, size);
+         }, "data"_a);
+ 
+     // Query available devices
+diff --git a/runtime/include/ggmlc/loader.h b/runtime/include/ggmlc/loader.h
+index 8099b18..8df3afc 100644
+--- a/runtime/include/ggmlc/loader.h
++++ b/runtime/include/ggmlc/loader.h
+@@ -8,6 +8,7 @@
+ namespace ggmlc {
+ 
+ class ModelLoader {
++    static SerializedModelGraph parse_storage(std::shared_ptr<ModelData> storage);
+ public:
+     static SerializedModelGraph load_from_file(const std::string& filepath);
+     static SerializedModelGraph load_from_memory(const uint8_t* data, size_t size);
+diff --git a/runtime/include/ggmlc/types.h b/runtime/include/ggmlc/types.h
+index 08246ee..9442897 100644
+--- a/runtime/include/ggmlc/types.h
++++ b/runtime/include/ggmlc/types.h
+@@ -8,6 +8,7 @@
+ #include <unordered_map>
+ #include <stdexcept>
+ #include "ggml.h"
++#include "ggmlc/model_data.h"
+ 
+ namespace ggmlc {
+ 
+@@ -120,7 +121,7 @@ struct SerializedModelGraph {
+     std::unordered_map<uint32_t, SerializedTensor> tensors;
+     std::vector<SerializedOp> ops;
+     std::vector<uint8_t> data_buffer;
+-    std::shared_ptr<std::vector<uint8_t>> data_storage;
++    std::shared_ptr<ModelData> data_storage;
+     uint64_t data_offset = 0;
+ 
+     // Metadata key-values
+@@ -151,10 +152,10 @@ struct SerializedModelGraph {
+         const uint8_t* dst_base = data_storage ? data_storage->data()
+             : (!data_buffer.empty() ? data_buffer.data() : nullptr);
+         if (src_base && dst_base && dst_base != src_base) {
+-            ptrdiff_t diff = dst_base - src_base;
+             for (auto& pair : tensors) {
+                 if (pair.second.data_ptr) {
+-                    pair.second.data_ptr += diff;
++                    const auto offset = pair.second.data_ptr - src_base;
++                    pair.second.data_ptr = dst_base + offset;
+                 }
+             }
+         }
+@@ -184,10 +185,10 @@ struct SerializedModelGraph {
+         const uint8_t* dst_base = data_storage ? data_storage->data()
+             : (!data_buffer.empty() ? data_buffer.data() : nullptr);
+         if (src_base && dst_base && dst_base != src_base) {
+-            ptrdiff_t diff = dst_base - src_base;
+             for (auto& pair : tensors) {
+                 if (pair.second.data_ptr) {
+-                    pair.second.data_ptr += diff;
++                    const auto offset = pair.second.data_ptr - src_base;
++                    pair.second.data_ptr = dst_base + offset;
+                 }
+             }
+         }
+diff --git a/runtime/src/loader.cpp b/runtime/src/loader.cpp
+index a641448..16859d7 100644
+--- a/runtime/src/loader.cpp
++++ b/runtime/src/loader.cpp
+@@ -255,41 +255,30 @@ std::shared_ptr<DimExpr> parse_dim_expr(const JsonValue& jdim, const std::unorde
+ } // namespace
+ 
+ SerializedModelGraph ModelLoader::load_from_file(const std::string& filepath) {
+-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+-    if (!file.is_open()) {
+-        throw std::runtime_error("Failed to open GGUF file: " + filepath);
+-    }
+-    std::streamsize size = file.tellg();
+-    file.seekg(0, std::ios::beg);
+-
+-    auto storage = std::make_shared<std::vector<uint8_t>>(size);
+-    if (!file.read(reinterpret_cast<char*>(storage->data()), size)) {
+-        throw std::runtime_error("Failed to read GGUF file: " + filepath);
+-    }
+-
+-    auto graph = load_from_memory(storage->data(), storage->size());
+-    graph.data_storage = std::move(storage);
+-
+-    const uint8_t* base = graph.data_storage->data() + graph.data_offset;
+-    for (auto& pair : graph.tensors) {
+-        SerializedTensor& t = pair.second;
+-        if (t.data_size > 0) {
+-            t.data_ptr = base + t.data_offset;
+-        } else {
+-            t.data_ptr = nullptr;
+-        }
+-    }
+-
+-    return graph;
++#ifdef GGMLC_HEAP_LOADER_BENCHMARK
++    // Explicit compile-time control build for paired memory benchmarks only.
++    return parse_storage(ModelData::read_file(filepath));
++#else
++    return parse_storage(ModelData::map_file(filepath));
++#endif
+ }
+ 
+ SerializedModelGraph ModelLoader::load_from_memory(const uint8_t* data, size_t size) {
++    return parse_storage(ModelData::copy(data, size));
++}
++
++SerializedModelGraph ModelLoader::parse_storage(std::shared_ptr<ModelData> storage) {
++    const auto* data = storage->data();
++    const auto size = storage->size();
++    if (size < 24) throw std::runtime_error("GGUF header is truncated");
+     struct gguf_init_params params = { true, nullptr };
+     struct gguf_context* ctx = gguf_init_from_buffer(data, size, params);
+     if (!ctx) {
+         throw std::runtime_error("Failed to parse GGUF binary format");
+     }
+ 
++    const std::unique_ptr<gguf_context, decltype(&gguf_free)> owner(ctx, &gguf_free);
++
+     // 1. Verify general.architecture
+     int64_t key_arch = gguf_find_key(ctx, "general.architecture");
+     if (key_arch >= 0) {
+@@ -300,7 +289,6 @@ SerializedModelGraph ModelLoader::load_from_memory(const uint8_t* data, size_t s
+     // 2. Extract ggmlc.graph_spec
+     int64_t key_spec = gguf_find_key(ctx, "ggmlc.graph_spec");
+     if (key_spec < 0) {
+-        gguf_free(ctx);
+         throw std::runtime_error("Missing 'ggmlc.graph_spec' metadata in GGUF file");
+     }
+ 
+@@ -309,6 +297,7 @@ SerializedModelGraph ModelLoader::load_from_memory(const uint8_t* data, size_t s
+     JsonValue root = parser.parse_value();
+ 
+     SerializedModelGraph g;
++    g.data_storage = std::move(storage);
+     g.name = root["name"].get_str("main");
+ 
+     // Populate GGUF key-value metadata
+@@ -377,6 +366,15 @@ SerializedModelGraph ModelLoader::load_from_memory(const uint8_t* data, size_t s
+     // Tensors
+     g.data_offset = gguf_get_data_offset(ctx);
+     size_t data_offset = g.data_offset;
++    if (data_offset > size) throw std::runtime_error("GGUF tensor data offset exceeds file size");
++    // Validate every tensor, including GGUF tensors absent from the graph JSON.
++    for (int64_t i = 0; i < gguf_get_n_tensors(ctx); ++i) {
++        const auto offset = gguf_get_tensor_offset(ctx, i);
++        const auto length = gguf_get_tensor_size(ctx, i);
++        if (offset > size - data_offset || length > size - data_offset - offset)
++            throw std::runtime_error("GGUF tensor data is truncated or out of bounds: " +
++                                     std::string(gguf_get_tensor_name(ctx, i)));
++    }
+     const uint8_t* tensor_data_base = data + data_offset;
+ 
+     for (const auto& pair : root["tensors"].obj_val) {
+@@ -438,7 +436,6 @@ SerializedModelGraph ModelLoader::load_from_memory(const uint8_t* data, size_t s
+         g.ops.push_back(op);
+     }
+ 
+-    gguf_free(ctx);
+     return g;
+ }
+ 
+diff --git a/runtime/include/ggmlc/model_data.h b/runtime/include/ggmlc/model_data.h
+new file mode 100644
+index 0000000..b77a497
+--- /dev/null
++++ b/runtime/include/ggmlc/model_data.h
+@@ -0,0 +1,26 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <memory>
++#include <string>
++#include <vector>
++
++namespace ggmlc {
++
++// Shared ownership keeps tensor pointers valid across graph and executor copies.
++// File mappings are read-only and remain mapped for the last graph's lifetime.
++class ModelData {
++public:
++    virtual ~ModelData() = default;
++    virtual const uint8_t* data() const noexcept = 0;
++    virtual size_t size() const noexcept = 0;
++    // Best-effort release of clean file pages after GPU upload. The mapping and
++    // tensor pointers stay valid; owned buffers intentionally do nothing.
++    virtual void release_residency() const noexcept {}
++    static std::shared_ptr<ModelData> map_file(const std::string& filepath);
++    static std::shared_ptr<ModelData> copy(const uint8_t* data, size_t size);
++    static std::shared_ptr<ModelData> read_file(const std::string& filepath);
++};
++
++} // namespace ggmlc
+diff --git a/runtime/src/model_data.cpp b/runtime/src/model_data.cpp
+new file mode 100644
+index 0000000..e613ce0
+--- /dev/null
++++ b/runtime/src/model_data.cpp
+@@ -0,0 +1,128 @@
++#include "ggmlc/model_data.h"
++
++#include <cerrno>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <limits>
++#include <stdexcept>
++#include <system_error>
++
++#ifdef _WIN32
++#define NOMINMAX
++#include <windows.h>
++#else
++#include <fcntl.h>
++#include <sys/mman.h>
++#include <sys/stat.h>
++#include <unistd.h>
++#endif
++
++namespace ggmlc {
++namespace {
++class OwnedModelData final : public ModelData {
++public:
++    std::vector<uint8_t> bytes;
++    const uint8_t* data() const noexcept override { return bytes.data(); }
++    size_t size() const noexcept override { return bytes.size(); }
++};
++
++class MappedModelData final : public ModelData {
++public:
++    const uint8_t* address = nullptr;
++    size_t length = 0;
++#ifdef _WIN32
++    HANDLE file = INVALID_HANDLE_VALUE;
++    HANDLE mapping = nullptr;
++    ~MappedModelData() override {
++        if (address) UnmapViewOfFile(address);
++        if (mapping) CloseHandle(mapping);
++        if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
++    }
++#else
++    int file = -1;
++    ~MappedModelData() override {
++        if (address) munmap(const_cast<uint8_t*>(address), length);
++        if (file >= 0) close(file);
++    }
++#endif
++    const uint8_t* data() const noexcept override { return address; }
++    size_t size() const noexcept override { return length; }
++    void release_residency() const noexcept override {
++#ifdef _WIN32
++        // On already-unlocked pages VirtualUnlock removes only this range from
++        // our working set and returns FALSE/ERROR_NOT_LOCKED. Contents remain
++        // mapped, read-only, and available for later dynamic constants.
++        // https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualunlock
++        (void)VirtualUnlock(const_cast<uint8_t*>(address), length);
++#else
++        // This is a read-only MAP_PRIVATE file mapping, so all pages are clean:
++        // a later access faults the original file bytes back in, never zeros.
++        (void)madvise(const_cast<uint8_t*>(address), length, MADV_DONTNEED);
++#endif
++    }
++};
++
++[[noreturn]] void mapping_error(const std::string& path, const char* operation) {
++#ifdef _WIN32
++    const std::error_code error(GetLastError(), std::system_category());
++#else
++    const std::error_code error(errno, std::generic_category());
++#endif
++    throw std::runtime_error("Failed to map GGUF file '" + path + "' (" + operation + "): " + error.message());
++}
++} // namespace
++
++std::shared_ptr<ModelData> ModelData::map_file(const std::string& filepath) {
++    auto storage = std::make_shared<MappedModelData>();
++#ifdef _WIN32
++    // Deny writers/deletion while tensors reference this immutable mapping.
++    storage->file = CreateFileW(std::filesystem::u8path(filepath).c_str(), GENERIC_READ,
++                               FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
++    if (storage->file == INVALID_HANDLE_VALUE) mapping_error(filepath, "CreateFileW");
++    LARGE_INTEGER size;
++    if (!GetFileSizeEx(storage->file, &size)) mapping_error(filepath, "GetFileSizeEx");
++    if (size.QuadPart <= 0 || static_cast<uint64_t>(size.QuadPart) > std::numeric_limits<size_t>::max())
++        throw std::runtime_error("Cannot map empty or oversized GGUF file: " + filepath);
++    storage->length = static_cast<size_t>(size.QuadPart);
++    storage->mapping = CreateFileMappingW(storage->file, nullptr, PAGE_READONLY, 0, 0, nullptr);
++    if (!storage->mapping) mapping_error(filepath, "CreateFileMappingW");
++    storage->address = static_cast<const uint8_t*>(MapViewOfFile(storage->mapping, FILE_MAP_READ, 0, 0, 0));
++    if (!storage->address) mapping_error(filepath, "MapViewOfFile");
++#else
++    storage->file = open(filepath.c_str(), O_RDONLY | O_CLOEXEC);
++    if (storage->file < 0) mapping_error(filepath, "open");
++    struct stat info;
++    if (fstat(storage->file, &info) != 0) mapping_error(filepath, "fstat");
++    if (!S_ISREG(info.st_mode) || info.st_size <= 0 ||
++        static_cast<uint64_t>(info.st_size) > std::numeric_limits<size_t>::max())
++        throw std::runtime_error("Cannot map empty, nonregular, or oversized GGUF file: " + filepath);
++    storage->length = static_cast<size_t>(info.st_size);
++    void* address = mmap(nullptr, storage->length, PROT_READ, MAP_PRIVATE, storage->file, 0);
++    if (address == MAP_FAILED) mapping_error(filepath, "mmap");
++    storage->address = static_cast<const uint8_t*>(address);
++#endif
++    return storage;
++}
++
++std::shared_ptr<ModelData> ModelData::copy(const uint8_t* data, size_t size) {
++    if (!data || size == 0) throw std::runtime_error("Cannot load empty GGUF buffer");
++    auto storage = std::make_shared<OwnedModelData>();
++    storage->bytes.assign(data, data + size);
++    return storage;
++}
++
++std::shared_ptr<ModelData> ModelData::read_file(const std::string& filepath) {
++    std::ifstream file(std::filesystem::u8path(filepath), std::ios::binary | std::ios::ate);
++    if (!file) throw std::runtime_error("Failed to open GGUF file: " + filepath);
++    const auto size = file.tellg();
++    if (size <= 0 || static_cast<uint64_t>(size) > std::numeric_limits<size_t>::max())
++        throw std::runtime_error("Cannot read empty or oversized GGUF file: " + filepath);
++    auto storage = std::make_shared<OwnedModelData>();
++    storage->bytes.resize(static_cast<size_t>(size));
++    file.seekg(0);
++    if (!file.read(reinterpret_cast<char*>(storage->bytes.data()), size))
++        throw std::runtime_error("Failed to read GGUF file: " + filepath);
++    return storage;
++}
++} // namespace ggmlc
+diff --git a/tests/runtime/test_loader.cpp b/tests/runtime/test_loader.cpp
+new file mode 100644
+index 0000000..951dc82
+--- /dev/null
++++ b/tests/runtime/test_loader.cpp
+@@ -0,0 +1,169 @@
++#include "ggmlc/loader.h"
++#include "ggmlc/executor.h"
++#include "gguf.h"
++#include <algorithm>
++#include <cmath>
++#include <cstring>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <iterator>
++#include <stdexcept>
++#ifdef _WIN32
++#define NOMINMAX
++#include <windows.h>
++#endif
++
++static void require(bool condition, const char* message) {
++    if (!condition) throw std::runtime_error(message);
++}
++template<class F> static void fails(F fn, const char* message) {
++    try { fn(); } catch (const std::runtime_error&) { return; }
++    throw std::runtime_error(message);
++}
++
++int main() {
++    const auto path = std::filesystem::current_path() / "loader-fixture.gguf";
++    const std::string spec = R"({"name":"loader_test","inputs":[0],"outputs":[2],"parameters":[1],"tensors":{
++      "0":{"id":0,"name":"input","type":0,"storage":0,"ne":[{"val":2}]},
++      "1":{"id":1,"name":"weight","type":0,"storage":1,"ne":[{"val":2},{"val":2}]},
++      "2":{"id":2,"name":"output","type":0,"storage":5,"ne":[{"val":2}]}},"nodes":[)" +
++      std::string("{\"id\":0,\"opcode\":") + std::to_string(GGML_OP_MUL_MAT) +
++      R"(,"name":"linear","inputs":[1,0],"outputs":[2]}]})";
++    auto* ctx = ggml_init({4096, nullptr, false});
++    require(ctx != nullptr, "fixture context allocation");
++    auto* tensor = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 2, 2);
++    ggml_set_name(tensor, "weight");
++    const float values[] = {1, 2, 3, 4};
++    std::memcpy(tensor->data, values, sizeof(values));
++    auto* gguf = gguf_init_empty();
++    gguf_set_val_str(gguf, "general.architecture", "ggmlc");
++    gguf_set_val_str(gguf, "ggmlc.graph_spec", spec.c_str());
++    gguf_add_tensor(gguf, tensor);
++    auto* hidden = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, 4);
++    ggml_set_name(hidden, "unreferenced");
++    std::memcpy(hidden->data, values, sizeof(values));
++    gguf_add_tensor(gguf, hidden);
++    const auto hidden_offset = gguf_get_tensor_offset(gguf, 1);
++    require(gguf_write_to_file(gguf, path.string().c_str(), false), "write fixture");
++    gguf_free(gguf);
++    ggml_free(ctx);
++
++    std::ifstream file(path, std::ios::binary);
++    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
++    file.close();
++    auto mapped = ggmlc::ModelLoader::load_from_file(path.string());
++    require(mapped.data_storage && mapped.data_buffer.empty(), "shared file storage");
++#ifdef _WIN32
++    MEMORY_BASIC_INFORMATION region{};
++    require(VirtualQuery(mapped.data_storage->data(), &region, sizeof(region)) != 0,
++            "query mapped file memory");
++#ifdef GGMLC_HEAP_LOADER_BENCHMARK
++    require(region.Type == MEM_PRIVATE, "baseline loader must use private heap memory");
++#else
++    require(region.Type == MEM_MAPPED && region.Protect == PAGE_READONLY,
++            "file loader must use a read-only mapping, not a heap copy");
++#endif
++#endif
++    require(std::memcmp(mapped.tensors.at(1).data_ptr, values, sizeof(values)) == 0, "mapped tensor bytes");
++    auto copied = mapped;
++    ggmlc::SerializedModelGraph assigned;
++    assigned = mapped;
++    const auto owner = std::weak_ptr<ggmlc::ModelData>(mapped.data_storage);
++    mapped = {};
++    require(!owner.expired(), "mapping survives source graph destruction");
++    require(copied.tensors.at(1).data_ptr == assigned.tensors.at(1).data_ptr, "copies share mapping");
++    for (int repeat = 0; repeat < 3; ++repeat) {
++        copied.data_storage->release_residency();
++        require(std::memcmp(copied.tensors.at(1).data_ptr, values, sizeof(values)) == 0,
++                "residency hint must preserve mapped bytes and graph pointers");
++    }
++
++    auto owned = ggmlc::ModelLoader::load_from_memory(bytes.data(), bytes.size());
++    auto owned_copy = owned;
++    std::fill(bytes.begin(), bytes.end(), 0);
++    owned = {};
++    require(std::memcmp(owned_copy.tensors.at(1).data_ptr, values, sizeof(values)) == 0,
++            "memory load owns bytes independently of caller and source graph");
++    auto moved = std::move(owned_copy);
++    owned_copy = moved;
++    moved = {};
++    require(std::memcmp(owned_copy.tensors.at(1).data_ptr, values, sizeof(values)) == 0,
++            "moved graph retains owned tensor storage");
++    owned_copy.data_storage->release_residency();
++    require(std::memcmp(owned_copy.tensors.at(1).data_ptr, values, sizeof(values)) == 0,
++            "owned memory residency hint is a harmless no-op");
++    {
++        ggmlc::SerializedModelGraph legacy;
++        legacy.data_buffer = {1, 2, 3, 4};
++        ggmlc::SerializedTensor view{};
++        view.data_ptr = legacy.data_buffer.data() + 2;
++        legacy.tensors[0] = view;
++        auto legacy_copy = legacy;
++        ggmlc::SerializedModelGraph legacy_assigned;
++        legacy_assigned = legacy;
++        legacy = {};
++        require(*legacy_copy.tensors.at(0).data_ptr == 3 &&
++                *legacy_assigned.tensors.at(0).data_ptr == 3,
++                "legacy data_buffer pointers rebase within their source array");
++    }
++    {
++        auto truncated = copied;
++        truncated.tensors.at(1).data_size = 1;
++        ggmlc::ModelExecutor rejected(truncated, "cpu");
++        for (int repeat = 0; repeat < 8; ++repeat) {
++            fails([&] { rejected.prepare({}); }, "truncated weight must fail initialization");
++            // Configuration is permitted only before initialization allocates
++            // anything. Acceptance here proves the failed attempt rolled back.
++            rejected.set_weight_streaming(false);
++        }
++    }
++    // Executor keeps a graph copy alive, including after repeated prepare/run.
++    {
++        ggmlc::ModelExecutor executor(copied, "cpu");
++        copied = {};
++        assigned = {};
++        require(!owner.expired(), "executor retains mapping");
++        const float input[] = {2, 3};
++        for (int repeat = 0; repeat < 3; ++repeat) {
++            const auto storage = owner.lock();
++            require(storage != nullptr, "mapped storage remains owned by executor");
++            storage->release_residency();
++            executor.prepare({});
++            executor.set_input(0, input, sizeof(input));
++            executor.run(1);
++            const auto* out = static_cast<const float*>(executor.get_output_data(2));
++            require(std::abs(out[0] - 8) < 1e-5f && std::abs(out[1] - 18) < 1e-5f,
++                    "mapped CPU inference mismatch");
++        }
++    }
++    require(owner.expired(), "last graph/executor releases mapping");
++    // Failed parses must release their mapping too: Windows permits deletion only afterwards.
++    const auto bad = path.string() + ".truncated";
++    std::ifstream fresh(path, std::ios::binary);
++    bytes.assign(std::istreambuf_iterator<char>(fresh), {});
++    fresh.close();
++    const auto truncated_size = static_cast<size_t>(owned_copy.data_offset + hidden_offset) + sizeof(values) - 1;
++    for (size_t length : {size_t(0), size_t(8), truncated_size}) {
++        std::ofstream truncated(bad, std::ios::binary | std::ios::trunc);
++        truncated.write(reinterpret_cast<const char*>(bytes.data()), length);
++        truncated.close();
++        fails([&] { ggmlc::ModelLoader::load_from_file(bad); }, "truncated file accepted");
++        require(std::filesystem::remove(bad), "failed parse leaked file mapping");
++    }
++    fails([&] { ggmlc::ModelLoader::load_from_memory(nullptr, 0); }, "empty memory accepted");
++    fails([&] { ggmlc::ModelLoader::load_from_memory(bytes.data(), truncated_size); }, "truncated memory accepted");
++    fails([&] { ggmlc::ModelLoader::load_from_file(path.string() + ".missing"); }, "missing file accepted");
++    const auto json_start = std::search(bytes.begin(), bytes.end(), spec.begin(), spec.end());
++    require(json_start != bytes.end(), "locate graph metadata");
++    *json_start = '!';
++    {
++        std::ofstream invalid(bad, std::ios::binary);
++        invalid.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
++    }
++    fails([&] { ggmlc::ModelLoader::load_from_file(bad); }, "invalid graph JSON accepted");
++    require(std::filesystem::remove(bad), "JSON exception leaked mapping");
++    owned_copy = {};
++    require(std::filesystem::remove(path), "mapping handle remained open");
++    std::cout << "loader: mapped/owned bytes, graph copies, executor lifetime, CPU inference, truncation pass\n";
++}

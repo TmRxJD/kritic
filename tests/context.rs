@@ -548,3 +548,43 @@ fn hermes_usage_summarises_the_latest_session() {
     );
     assert!(kritic::usage::hermes_usage_from(&log, Some("none")).is_none());
 }
+
+#[test]
+fn hermes_usage_preserves_interleaved_totals_and_recent_trend() {
+    let dir = tempfile::tempdir().unwrap();
+    let log = dir.path().join("hermes-usage.jsonl");
+    let mut lines = Vec::new();
+    for i in 0..30u64 {
+        lines.push(format!(
+            r#"{{"session_id":"s","prompt_tokens":{},"cache_read_tokens":2,"completion_tokens":3,"context_length":1000}}"#,
+            i * i
+        ));
+        lines.push(r#"{"session_id":"other","prompt_tokens":99}"#.to_string());
+    }
+    lines.push("incomplete json".to_string());
+    std::fs::write(&log, lines.join("\n")).unwrap();
+    let selected = kritic::usage::hermes_usage_from(&log, Some("s")).unwrap();
+    assert_eq!(selected.api_calls, 30);
+    assert_eq!(selected.context_now, 841);
+    assert_eq!(selected.context_peak, 841);
+    assert_eq!(selected.processed_input_tokens, 8555);
+    assert_eq!(selected.cache_read_tokens, 60);
+    assert_eq!(selected.output_tokens, 90);
+    assert_eq!(selected.context_growth_per_call, 38.0);
+    assert_eq!(selected.context_utilization_pct, 84.1);
+    let latest = kritic::usage::hermes_usage_from(&log, None).unwrap();
+    assert_eq!(latest.session_id, "other");
+    assert_eq!(latest.api_calls, 30);
+    assert_eq!(latest.context_growth_per_call, 0.0);
+
+    // A parsed trailing record without a session id has no implicit latest session.
+    lines.push(r#"{"prompt_tokens":10}"#.to_string());
+    std::fs::write(&log, lines.join("\n")).unwrap();
+    assert!(kritic::usage::hermes_usage_from(&log, None).is_none());
+    assert_eq!(
+        kritic::usage::hermes_usage_from(&log, Some("s"))
+            .unwrap()
+            .processed_input_tokens,
+        8555
+    );
+}

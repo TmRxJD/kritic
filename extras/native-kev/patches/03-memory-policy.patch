@@ -1,0 +1,423 @@
+diff --git a/examples/laya/include/memory_policy.h b/examples/laya/include/memory_policy.h
+new file mode 100644
+index 0000000..8901b06
+--- /dev/null
++++ b/examples/laya/include/memory_policy.h
+@@ -0,0 +1,73 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++#include <optional>
++#include <string>
++
++namespace laya {
++
++enum class MemoryProfile { Streaming, Resident };
++
++struct MemoryHeadroom {
++    std::optional<uint64_t> available_commit_bytes;
++    std::optional<uint64_t> free_vram_bytes;
++};
++
++struct MemoryUsage {
++    int input_tokens = 0;
++    int n_forwards = 0;
++    int seq_bucket = 0;
++};
++
++// Safety starting defaults, not learned resource limits. Hysteresis exceeds
++// the measured ~3.6 GiB resident/streaming footprint difference.
++struct MemoryPolicyConfig {
++    uint64_t promote_commit_bytes = 16ULL * 1024 * 1024 * 1024;
++    uint64_t demote_commit_bytes = 12ULL * 1024 * 1024 * 1024;
++    uint64_t promote_vram_bytes = 19ULL * 1024 * 1024 * 1024 / 4;
++    uint64_t demote_vram_bytes = 3ULL * 1024 * 1024 * 1024 / 4;
++    size_t min_successful_samples = 4;
++    double cooldown_seconds = 60;
++    double busy_interval_seconds = 30;
++    double large_input_tokens = 1024;
++    double large_forwards = 4;
++    double large_seq_bucket = 512;
++    double ewma_alpha = 0.25;
++};
++
++struct MemoryDecision {
++    MemoryProfile profile = MemoryProfile::Streaming;
++    bool changed = false;
++    std::string reason = "cold_start";
++    size_t successful_samples = 0;
++    double avg_input_tokens = 0;
++    double avg_forwards = 0;
++    double avg_seq_bucket = 0;
++    std::optional<double> avg_interval_seconds;
++};
++
++// No OS calls, model loading, timers or health-poll observations. The caller
++// serializes access, supplies monotonic seconds and measured headroom, and
++// clears/reloads engines when select().changed is true. Only successful work
++// trains the policy; pass the request's START time to observe_success().
++class MemoryPolicy {
++public:
++    explicit MemoryPolicy(bool streaming_supported = true, MemoryPolicyConfig config = {});
++    bool streaming_supported() const { return streaming_supported_; }
++    MemoryDecision select(double now_seconds, const MemoryHeadroom& headroom);
++    void observe_success(double request_start_seconds, const MemoryUsage& usage);
++    // After engines are unloaded, discard old workload history and cold-start.
++    void reset_idle();
++    MemoryDecision snapshot() const;
++
++private:
++    bool streaming_supported_;
++    MemoryPolicyConfig config_;
++    MemoryDecision state_;
++    std::optional<double> last_request_seconds_;
++    std::optional<double> last_selection_seconds_;
++    std::optional<double> last_transition_seconds_;
++};
++
++} // namespace laya
+diff --git a/examples/laya/src/memory_policy.cpp b/examples/laya/src/memory_policy.cpp
+new file mode 100644
+index 0000000..c987400
+--- /dev/null
++++ b/examples/laya/src/memory_policy.cpp
+@@ -0,0 +1,114 @@
++#include "memory_policy.h"
++
++#include <cmath>
++#include <stdexcept>
++
++namespace laya {
++
++MemoryPolicy::MemoryPolicy(bool streaming_supported, MemoryPolicyConfig config)
++    : streaming_supported_(streaming_supported), config_(config) {
++    if (config_.promote_commit_bytes <= config_.demote_commit_bytes ||
++        config_.promote_vram_bytes <= config_.demote_vram_bytes ||
++        config_.min_successful_samples < 4 ||
++        !std::isfinite(config_.ewma_alpha) || config_.ewma_alpha <= 0 || config_.ewma_alpha > 1 ||
++        !std::isfinite(config_.cooldown_seconds) || config_.cooldown_seconds < 0 ||
++        !std::isfinite(config_.busy_interval_seconds) || config_.busy_interval_seconds <= 0 ||
++        !std::isfinite(config_.large_input_tokens) || config_.large_input_tokens <= 0 ||
++        !std::isfinite(config_.large_forwards) || config_.large_forwards <= 0 ||
++        !std::isfinite(config_.large_seq_bucket) || config_.large_seq_bucket <= 0) {
++        throw std::invalid_argument("Invalid adaptive memory policy configuration");
++    }
++    reset_idle();
++}
++
++void MemoryPolicy::reset_idle() {
++    state_ = {};
++    state_.profile = streaming_supported_ ? MemoryProfile::Streaming : MemoryProfile::Resident;
++    state_.reason = streaming_supported_ ? "cold_start" : "streaming_unsupported";
++    last_request_seconds_.reset();
++    last_selection_seconds_.reset();
++    last_transition_seconds_.reset();
++}
++
++MemoryDecision MemoryPolicy::snapshot() const {
++    auto result = state_;
++    // A health read is never an instruction to reload the model.
++    result.changed = false;
++    return result;
++}
++
++void MemoryPolicy::observe_success(double request_start_seconds, const MemoryUsage& usage) {
++    if (!std::isfinite(request_start_seconds) || request_start_seconds < 0 ||
++        (last_request_seconds_ && request_start_seconds < *last_request_seconds_) ||
++        usage.input_tokens < 0 || usage.n_forwards < 0 || usage.seq_bucket < 0) {
++        throw std::invalid_argument("Invalid adaptive memory usage observation");
++    }
++    // Successful cache/no-work responses are not inference demand observations.
++    if (usage.n_forwards == 0) return;
++    const auto update = [&](double previous, double value) {
++        return previous + config_.ewma_alpha * (value - previous);
++    };
++    const bool first = state_.successful_samples == 0;
++    state_.avg_input_tokens = first ? usage.input_tokens : update(state_.avg_input_tokens, usage.input_tokens);
++    state_.avg_forwards = first ? usage.n_forwards : update(state_.avg_forwards, usage.n_forwards);
++    state_.avg_seq_bucket = first ? usage.seq_bucket : update(state_.avg_seq_bucket, usage.seq_bucket);
++    if (last_request_seconds_) {
++        const double interval = request_start_seconds - *last_request_seconds_;
++        state_.avg_interval_seconds = state_.avg_interval_seconds
++            ? update(*state_.avg_interval_seconds, interval) : interval;
++    }
++    last_request_seconds_ = request_start_seconds;
++    ++state_.successful_samples;
++}
++
++MemoryDecision MemoryPolicy::select(double now_seconds, const MemoryHeadroom& headroom) {
++    if (!std::isfinite(now_seconds) || now_seconds < 0 ||
++        (last_selection_seconds_ && now_seconds < *last_selection_seconds_) ||
++        (last_request_seconds_ && now_seconds < *last_request_seconds_)) {
++        throw std::invalid_argument("Adaptive memory policy requires a monotonic clock");
++    }
++    last_selection_seconds_ = now_seconds;
++    state_.changed = false;
++    const auto decide = [&](MemoryProfile profile, const char* reason) {
++        state_.changed = profile != state_.profile;
++        if (state_.changed) last_transition_seconds_ = now_seconds;
++        state_.profile = profile;
++        state_.reason = reason;
++        return state_;
++    };
++    if (!streaming_supported_) return decide(MemoryProfile::Resident, "streaming_unsupported");
++    if (!headroom.available_commit_bytes || !headroom.free_vram_bytes) {
++        return decide(MemoryProfile::Streaming, "headroom_unknown");
++    }
++    // Pressure and unknown telemetry bypass cooldown, including immediately
++    // after promotion. Do not infer free memory from configured pagefile sizes.
++    if (*headroom.available_commit_bytes <= config_.demote_commit_bytes ||
++        *headroom.free_vram_bytes <= config_.demote_vram_bytes) {
++        return decide(MemoryProfile::Streaming, "memory_pressure");
++    }
++    if (state_.successful_samples < config_.min_successful_samples) {
++        return decide(MemoryProfile::Streaming, "collecting_usage");
++    }
++    const bool recent_busy = state_.avg_interval_seconds && last_request_seconds_ &&
++        *state_.avg_interval_seconds <= config_.busy_interval_seconds &&
++        now_seconds - *last_request_seconds_ <= config_.busy_interval_seconds;
++    const bool large = state_.avg_input_tokens >= config_.large_input_tokens ||
++        state_.avg_forwards >= config_.large_forwards || state_.avg_seq_bucket >= config_.large_seq_bucket;
++    const bool needs_resident = recent_busy || large;
++    const bool cooldown = last_transition_seconds_ &&
++        now_seconds - *last_transition_seconds_ < config_.cooldown_seconds;
++    if (state_.profile == MemoryProfile::Resident) {
++        if (needs_resident) return decide(MemoryProfile::Resident, recent_busy ? "busy_usage" : "large_tasks");
++        if (cooldown) return decide(MemoryProfile::Resident, "transition_cooldown");
++        return decide(MemoryProfile::Streaming, "light_infrequent_usage");
++    }
++    if (!needs_resident) return decide(MemoryProfile::Streaming, "light_infrequent_usage");
++    if (*headroom.available_commit_bytes < config_.promote_commit_bytes ||
++        *headroom.free_vram_bytes < config_.promote_vram_bytes) {
++        return decide(MemoryProfile::Streaming, "promotion_headroom_required");
++    }
++    if (cooldown) return decide(MemoryProfile::Streaming, "transition_cooldown");
++    return decide(MemoryProfile::Resident, recent_busy ? "busy_usage" : "large_tasks");
++}
++
++} // namespace laya
+diff --git a/tests/runtime/test_memory_policy.cpp b/tests/runtime/test_memory_policy.cpp
+new file mode 100644
+index 0000000..3ef784e
+--- /dev/null
++++ b/tests/runtime/test_memory_policy.cpp
+@@ -0,0 +1,124 @@
++#include "memory_policy.h"
++
++#include <cmath>
++#include <iostream>
++#include <stdexcept>
++
++using laya::MemoryHeadroom;
++using laya::MemoryPolicy;
++using laya::MemoryProfile;
++using laya::MemoryUsage;
++
++namespace {
++constexpr uint64_t gib = 1024ULL * 1024 * 1024;
++const MemoryHeadroom plenty{20 * gib, 6 * gib};
++const MemoryUsage light{128, 1, 128};
++
++void require(bool condition, const char* message) {
++    if (!condition) throw std::runtime_error(message);
++}
++
++void observations(MemoryPolicy& policy, const MemoryUsage& usage, double interval) {
++    for (int i = 0; i < 4; ++i) policy.observe_success(i * interval, usage);
++}
++} // namespace
++
++int main() {
++    MemoryPolicy busy;
++    require(busy.snapshot().profile == MemoryProfile::Streaming, "cold start must stream");
++    require(busy.select(0, plenty).profile == MemoryProfile::Streaming, "headroom alone must not promote");
++    for (int i = 0; i < 3; ++i) {
++        busy.observe_success(i * 10, light);
++        require(busy.select(i * 10, plenty).profile == MemoryProfile::Streaming, "promotion before four successes");
++    }
++    busy.observe_success(30, light);
++    auto decision = busy.select(40, plenty);
++    require(decision.profile == MemoryProfile::Resident && decision.changed, "busy requests should promote");
++    require(decision.reason == "busy_usage", "busy reason missing");
++    require(decision.successful_samples == 4 && *decision.avg_interval_seconds == 10, "usage metrics incorrect");
++    for (int i = 0; i < 100; ++i) {
++        const auto health = busy.snapshot();
++        require(!health.changed && health.successful_samples == 4, "health reads mutated policy");
++    }
++    // Promotion costs about 3.6 GiB. The post-promotion headroom must not
++    // immediately trip the lower thresholds or require promotion margins again.
++    decision = busy.select(41, {124 * gib / 10, 115 * gib / 100});
++    require(decision.profile == MemoryProfile::Resident && !decision.changed, "footprint-induced flapping");
++    decision = busy.select(42, {12 * gib, 2 * gib});
++    require(decision.profile == MemoryProfile::Streaming && decision.changed && decision.reason == "memory_pressure",
++            "commit pressure must bypass cooldown");
++    busy.observe_success(45, light);
++    decision = busy.select(50, plenty);
++    require(decision.profile == MemoryProfile::Streaming && decision.reason == "transition_cooldown", "early re-promotion");
++    busy.observe_success(95, light);
++    decision = busy.select(102, plenty);
++    require(decision.profile == MemoryProfile::Resident, "promotion after cooldown failed");
++    decision = busy.select(103, {20 * gib, 3 * gib / 4});
++    require(decision.profile == MemoryProfile::Streaming && decision.reason == "memory_pressure", "VRAM pressure ignored");
++
++    MemoryPolicy unknown;
++    observations(unknown, light, 10);
++    require(unknown.select(31, {}).profile == MemoryProfile::Streaming, "unknown headroom promoted");
++    require(unknown.select(32, {20 * gib, std::nullopt}).profile == MemoryProfile::Streaming, "unknown VRAM promoted");
++    require(unknown.select(33, {std::nullopt, 6 * gib}).profile == MemoryProfile::Streaming, "unknown commit promoted");
++    require(unknown.select(34, {0, 0}).reason == "memory_pressure", "known zero headroom treated as unknown");
++    require(unknown.select(35, plenty).profile == MemoryProfile::Resident, "known headroom promotion failed");
++    decision = unknown.select(36, {});
++    require(decision.profile == MemoryProfile::Streaming && decision.changed && decision.reason == "headroom_unknown",
++            "unknown headroom must demote even during cooldown");
++
++    for (const MemoryUsage large : {MemoryUsage{1024, 1, 128}, MemoryUsage{128, 4, 128}, MemoryUsage{128, 1, 512}}) {
++        MemoryPolicy policy;
++        observations(policy, large, 100);
++        decision = policy.select(301, plenty);
++        require(decision.profile == MemoryProfile::Resident && decision.reason == "large_tasks", "large jobs did not promote");
++    }
++
++    MemoryPolicy sparse;
++    observations(sparse, light, 100);
++    decision = sparse.select(301, plenty);
++    require(decision.profile == MemoryProfile::Streaming && decision.reason == "light_infrequent_usage", "sparse small jobs promoted");
++
++    MemoryPolicy margins;
++    observations(margins, light, 10);
++    require(margins.select(31, {16 * gib - 1, 6 * gib}).reason == "promotion_headroom_required", "commit margin ignored");
++    require(margins.select(32, {20 * gib, 19 * gib / 4 - 1}).reason == "promotion_headroom_required", "VRAM margin ignored");
++    require(margins.select(33, {16 * gib, 19 * gib / 4}).profile == MemoryProfile::Resident, "exact promotion margins failed");
++    decision = margins.select(64, plenty);
++    require(decision.profile == MemoryProfile::Resident && decision.reason == "transition_cooldown", "quiet workload bypassed cooldown");
++    decision = margins.select(93, plenty);
++    require(decision.profile == MemoryProfile::Streaming && decision.reason == "light_infrequent_usage", "quiet workload never demoted");
++
++    MemoryPolicy idle;
++    observations(idle, light, 10);
++    require(idle.select(31, plenty).profile == MemoryProfile::Resident, "idle test promotion failed");
++    idle.reset_idle();
++    const auto reset = idle.snapshot();
++    require(reset.profile == MemoryProfile::Streaming && reset.successful_samples == 0 &&
++            !reset.avg_interval_seconds && reset.avg_input_tokens == 0 && !reset.changed, "idle reset retained history");
++    require(idle.select(1000, plenty).profile == MemoryProfile::Streaming, "idle reset did not cold-start");
++
++    MemoryPolicy cpu(false);
++    require(cpu.snapshot().profile == MemoryProfile::Resident && !cpu.streaming_supported(), "CPU starts in streaming mode");
++    require(cpu.select(0, {}).profile == MemoryProfile::Resident, "CPU pressure handling selected streaming");
++    cpu.reset_idle();
++    require(cpu.snapshot().profile == MemoryProfile::Resident, "CPU idle reset selected streaming");
++
++    MemoryPolicy averages;
++    averages.observe_success(0, {100, 1, 128});
++    averages.observe_success(10, {500, 5, 512});
++    const auto average = averages.snapshot();
++    require(std::abs(average.avg_input_tokens - 200) < 1e-9 && average.avg_forwards == 2 && average.avg_seq_bucket == 224,
++            "EWMA formula incorrect");
++    averages.observe_success(11, {0, 0, 0});
++    require(averages.snapshot().successful_samples == 2, "zero-forward response trained policy");
++    bool rejected = false;
++    try { averages.observe_success(9, light); } catch (const std::invalid_argument&) { rejected = true; }
++    require(rejected && averages.snapshot().successful_samples == 2, "invalid observation mutated metrics");
++    averages.select(12, plenty);
++    rejected = false;
++    try { averages.select(11, plenty); } catch (const std::invalid_argument&) { rejected = true; }
++    require(rejected, "backwards clock accepted");
++
++    std::cout << "Adaptive memory policy checks passed\n";
++}
+diff --git a/examples/laya/include/memory_reservations.h b/examples/laya/include/memory_reservations.h
+new file mode 100644
+index 0000000..0142802
+--- /dev/null
++++ b/examples/laya/include/memory_reservations.h
+@@ -0,0 +1,57 @@
++#pragma once
++#include <string>
++#include <unordered_map>
++#include <stdexcept>
++
++namespace laya {
++// Serial request-loop ownership. Expiry uses monotonic seconds. Released IDs
++// remain tombstoned for 60 seconds so cancellation cannot race a delayed reserve.
++class MemoryReservations {
++    struct Entry { std::string owner; double until; bool active; };
++    std::unordered_map<std::string, Entry> entries_;
++public:
++    static bool valid(const std::string& value, size_t max) {
++        if (value.empty() || value.size() > max) return false;
++        for (unsigned char c : value)
++            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++                  (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.')) return false;
++        return true;
++    }
++    void prune(double now) {
++        for (auto i = entries_.begin(); i != entries_.end();)
++            if (i->second.until <= now) i = entries_.erase(i); else ++i;
++    }
++    bool reserve(const std::string& id, const std::string& owner, int ttl, double now) {
++        if (!valid(id, 128) || !valid(owner, 64) || ttl < 1 || ttl > 3600)
++            throw std::invalid_argument("invalid reservation id, owner or ttl_seconds (1..3600)");
++        prune(now);
++        auto i = entries_.find(id);
++        if (i != entries_.end()) {
++            if (i->second.owner != owner) throw std::runtime_error("reservation owner mismatch");
++            if (!i->second.active) return false;
++            i->second.until = now + ttl;
++        } else {
++            if (entries_.size() >= 256) throw std::runtime_error("reservation capacity reached");
++            entries_.emplace(id, Entry{owner, now + ttl, true});
++        }
++        return true;
++    }
++    bool release(const std::string& id, const std::string& owner, double now) {
++        if (!valid(id, 128) || !valid(owner, 64)) throw std::invalid_argument("invalid reservation id or owner");
++        prune(now);
++        auto i = entries_.find(id);
++        if (i != entries_.end() && i->second.owner != owner)
++            throw std::runtime_error("reservation owner mismatch");
++        const bool was_active = i != entries_.end() && i->second.active;
++        if (i == entries_.end() && entries_.size() >= 256)
++            throw std::runtime_error("reservation capacity reached");
++        entries_[id] = Entry{owner, now + 60, false};
++        return was_active;
++    }
++    size_t active(double now) const {
++        size_t n = 0;
++        for (const auto& kv : entries_) if (kv.second.active && kv.second.until > now) ++n;
++        return n;
++    }
++};
++} // namespace laya
+diff --git a/tests/runtime/test_memory_reservations.cpp b/tests/runtime/test_memory_reservations.cpp
+new file mode 100644
+index 0000000..4e2bfbd
+--- /dev/null
++++ b/tests/runtime/test_memory_reservations.cpp
+@@ -0,0 +1,25 @@
++#include "memory_reservations.h"
++#include <iostream>
++#include <stdexcept>
++static void check(bool ok) { if (!ok) throw std::runtime_error("reservation assertion failed"); }
++int main() {
++    laya::MemoryReservations r;
++    check(r.reserve("a", "vision", 10, 0));
++    check(r.reserve("b", "ui", 20, 0));
++    check(r.active(1) == 2);
++    check(r.release("a", "vision", 2));
++    check(r.active(3) == 1);
++    check(!r.release("a", "vision", 3));
++    check(!r.reserve("a", "vision", 10, 4));
++    check(r.active(21) == 0);
++    check(!r.release("cancelled", "vision", 30));
++    check(!r.reserve("cancelled", "vision", 10, 31));
++    check(r.reserve("cancelled", "vision", 10, 91));
++    bool mismatch = false;
++    try { r.release("cancelled", "other", 92); } catch (const std::runtime_error&) { mismatch = true; }
++    check(mismatch && r.active(92) == 1);
++    bool invalid = false;
++    try { r.reserve("invalid space", "ui", 1, 92); } catch (const std::invalid_argument&) { invalid = true; }
++    check(invalid);
++    std::cout << "memory reservation lifecycle passed\n";
++}

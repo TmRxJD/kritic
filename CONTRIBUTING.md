@@ -3,6 +3,11 @@
 Kritic's skill is a field-testing protocol. Verify findings independently. Fix reproducible Kritic
 defects directly and submit focused PRs with regression coverage and sanitized evidence.
 
+Every update must include a `CHANGELOG.md` entry under `Unreleased`: describe user-visible
+behavior, fixes and relevant limitations. At release, move those entries into the published
+version section; never describe unreleased work as already shipped. Documentation,
+configuration, native adapters and dependency updates count too.
+
 Keep commits scoped to one explainable purpose. Current source supports repository-owned
 `broad`, `focused` (default), or `atomic` budgets and explicit Git hooks; follow
 [the policy workflow](docs/repository-policy.md), review each staged hunk and bind an exact scope
