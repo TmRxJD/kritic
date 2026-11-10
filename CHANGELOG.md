@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- Update rmcp to 3.9.0 to address RUSTSEC-2026-0457, RUSTSEC-2026-0461 and
+  RUSTSEC-2026-0462; no dependency findings are suppressed.
+
 ### Changed
 
 - Declare the repository's default focused commit budgets and organization checks
