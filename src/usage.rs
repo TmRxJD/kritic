@@ -7,7 +7,7 @@
 //! Local side: every Kev (laya) and vision (Ollama) request appends a line to
 //! `logs/model_usage.jsonl` with its token counts and timings.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
@@ -432,49 +432,64 @@ pub fn hermes_usage(cfg: &Config, session: Option<&str>) -> Option<HermesUsage> 
 }
 
 pub fn hermes_usage_from(path: &Path, session: Option<&str>) -> Option<HermesUsage> {
-    let rows: Vec<Value> = std::fs::read_to_string(path)
-        .ok()?
-        .lines()
-        .filter_map(|l| serde_json::from_str(l).ok())
-        .collect();
-    let sid = match session {
-        Some(s) => s.to_string(),
-        None => rows.last()?["session_id"].as_str()?.to_string(),
-    };
-    let rows: Vec<&Value> = rows
-        .iter()
-        .filter(|r| r["session_id"] == sid.as_str())
-        .collect();
-    if rows.is_empty() {
-        return None;
+    struct Summary {
+        usage: HermesUsage,
+        recent_prompts: VecDeque<u64>,
     }
+    let file = std::fs::File::open(path).ok()?;
+    let mut summaries: BTreeMap<String, Summary> = BTreeMap::new();
+    let mut latest_sid = None;
     let n = |r: &Value, k: &str| r[k].as_u64().unwrap_or(0);
-    let prompts: Vec<u64> = rows.iter().map(|r| n(r, "prompt_tokens")).collect();
-    let last = rows.last()?;
-    let window = &prompts[prompts.len().saturating_sub(21)..];
+    for line in std::io::BufReader::new(file).lines() {
+        let line = line.ok()?;
+        let Ok(row) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        latest_sid = row["session_id"].as_str().map(str::to_owned);
+        let Some(sid) = latest_sid.as_deref() else {
+            continue;
+        };
+        if session.is_some_and(|wanted| wanted != sid) {
+            continue;
+        }
+        let summary = summaries.entry(sid.to_owned()).or_insert_with(|| Summary {
+            usage: HermesUsage {
+                session_id: sid.to_owned(),
+                ..Default::default()
+            },
+            recent_prompts: VecDeque::with_capacity(21),
+        });
+        let prompt = n(&row, "prompt_tokens");
+        let usage = &mut summary.usage;
+        usage.api_calls += 1;
+        usage.context_now = prompt;
+        usage.context_peak = usage.context_peak.max(prompt);
+        usage.context_length = n(&row, "context_length");
+        usage.compactions = n(&row, "compression_count");
+        usage.archived_messages = n(&row, "archived_total");
+        usage.processed_input_tokens += prompt;
+        usage.cache_read_tokens += n(&row, "cache_read_tokens");
+        usage.output_tokens += n(&row, "completion_tokens");
+        // The trend uses the latest 20 intervals, even in an interleaved log.
+        if summary.recent_prompts.len() == 21 {
+            summary.recent_prompts.pop_front();
+        }
+        summary.recent_prompts.push_back(prompt);
+    }
+    let sid = session.or(latest_sid.as_deref())?;
+    let summary = summaries.remove(sid)?;
+    let window = summary.recent_prompts;
     let growth = if window.len() > 1 {
-        (window[window.len() - 1] as f64 - window[0] as f64) / (window.len() - 1) as f64
+        (*window.back()? as f64 - *window.front()? as f64) / (window.len() - 1) as f64
     } else {
         0.0
     };
-    let length = n(last, "context_length");
-    let now = *prompts.last()?;
-    Some(HermesUsage {
-        session_id: sid,
-        api_calls: rows.len(),
-        context_now: now,
-        context_peak: prompts.iter().copied().max().unwrap_or(0),
-        context_length: length,
-        context_utilization_pct: if length > 0 {
-            (now as f64 / length as f64 * 1000.0).round() / 10.0
-        } else {
-            0.0
-        },
-        context_growth_per_call: (growth * 10.0).round() / 10.0,
-        compactions: n(last, "compression_count"),
-        archived_messages: n(last, "archived_total"),
-        processed_input_tokens: prompts.iter().sum(),
-        cache_read_tokens: rows.iter().map(|r| n(r, "cache_read_tokens")).sum(),
-        output_tokens: rows.iter().map(|r| n(r, "completion_tokens")).sum(),
-    })
+    let mut usage = summary.usage;
+    usage.context_utilization_pct = if usage.context_length > 0 {
+        (usage.context_now as f64 / usage.context_length as f64 * 1000.0).round() / 10.0
+    } else {
+        0.0
+    };
+    usage.context_growth_per_call = (growth * 10.0).round() / 10.0;
+    Some(usage)
 }
