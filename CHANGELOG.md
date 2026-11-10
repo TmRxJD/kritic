@@ -12,6 +12,11 @@
 
 ### Fixed
 
+- Compile only the Kritic package with one codegen unit in dev, test and release
+  profiles after Windows rustc exited with 0xc0000374 (STATUS_HEAP_CORRUPTION)
+  during debug compilation and 0xc0000005 (STATUS_ACCESS_VIOLATION) during release
+  compilation. The same-source single-CGU library diagnostic passed; the underlying
+  compiler fault remains unconfirmed. Preserve release optimization level 3 and ThinLTO.
 - Update rmcp to 3.9.0 to address RUSTSEC-2026-0457, RUSTSEC-2026-0461 and
   RUSTSEC-2026-0462; no dependency findings are suppressed.
 
