@@ -28,7 +28,7 @@ jobs:
           name: kritic-windows-x86_64-test
           path: kritic-windows-x86_64-test.zip
   mac-cli:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
