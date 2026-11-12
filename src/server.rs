@@ -2040,6 +2040,24 @@ impl Kritic {
         Ok(Json(r))
     }
 
+    /// CLI builder: run a command with no shell in between. Declare `program` + `args` (one array
+    /// element per argument), optional `stdin` text, `cwd`, `env`; or a `script` {language, code} for
+    /// multi-line code. Shell strings (`bash -c`, `pwsh -Command`, `cmd /c`) are rejected. `dry_run`
+    /// returns the resolved command line. Output is head/tail-clipped; a nonzero exit is reported in
+    /// exit_code. Never approves anything.
+    #[tool(name = "cli_run")]
+    pub async fn cli_run(
+        &self,
+        Parameters(p): Parameters<crate::clirun::CliParams>,
+    ) -> Result<Json<crate::clirun::CliResult>, String> {
+        let t0 = started("cli_run");
+        let cfg = &self.kev.cfg;
+        let r = crate::clirun::run(p).await;
+        finished("cli_run", t0, &r);
+        audit(cfg, "cli_run", &r);
+        Ok(Json(r))
+    }
+
     /// List repo-specific evaluator plugins in <base_dir>/.kritic/plugins/ (manifests: name,
     /// description, command, input_schema, optional Kev questions/rules). See plugin_run.
     #[tool(name = "plugin_list")]

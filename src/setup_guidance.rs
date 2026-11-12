@@ -197,6 +197,13 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "cloud.md",
             "Select review.follow_up_target=cloud and configure an authorized provider/model. Supply bounded, authorized evidence. Use a separate host reviewer session if the provider is unavailable.",
         ),
+        "cli_run" => (
+            None,
+            None,
+            false,
+            "tools.md",
+            "Needs nothing beyond the programs it is asked to run; script languages need python, node, pwsh or bash on PATH.",
+        ),
         "plugin_list" | "plugin_run" => (
             Some("plugins"),
             Some(".kritic/plugins"),

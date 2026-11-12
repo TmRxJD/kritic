@@ -69,6 +69,9 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "hygiene_critic" => {
             "Inspect project processes, sockets and leftovers. clean=true kills identified orphans/socket inheritors; files are only reported. Review scope first."
         }
+        "cli_run" => {
+            "Run a command with no shell: program + args array, stdin text, cwd, env, or a script {language, code}. Use instead of heredocs, sed/awk one-liners and `-c` strings. dry_run shows the resolved command."
+        }
         "plugin_list" => {
             "List evaluator manifests in <base_dir>/.kritic/plugins. Inspect commands and schemas before running a plugin."
         }

@@ -1,0 +1,32 @@
+name = "tool-router"
+description = "Tool router: catalog/plan/audit of skills, MCP servers and plugins; audit reports usage vs plan and asks Kev if called tools fit the request"
+command = ["python", "-I", "integrations/tool-router/kritic_plugin.py"]
+timeout_s = 60
+findings_advisory = true
+
+[input_schema]
+type = "object"
+properties.action = { type = "string", description = "audit (default) | catalog | plan" }
+properties.session = { type = "string", description = "Claude/Codex session id (from the SessionStart context)" }
+properties.project = { type = "string", description = "project directory (defaults to base_dir)" }
+properties.packs = { type = "array", description = "plan action: pack names" }
+properties.task = { type = "string", description = "plan action: one-line task" }
+
+[kev]
+name = "tool_router_kev"
+purpose = "Judge whether the non-core tools the agent actually used fit the request it was given."
+
+[[kev.fields]]
+name = "request"
+meaning = "The one-line task the agent declared when it chose its tool set."
+kind = { kind = "text", max_chars = 600 }
+
+[[kev.fields]]
+name = "used"
+meaning = "The non-core tools called this session, one per line: kind:name, call count, short description."
+kind = { kind = "text", max_chars = 1200 }
+
+[[kev.questions]]
+id = "fit"
+ask = { type = "noul", instructions = "Are the tools in `used` relevant to doing the task in `request`?", yes = "every listed tool is plausibly needed for the request", no = "at least one listed tool has nothing to do with the request" }
+gate = { gate = "advisory", why = "not calibrated yet: needs labelled request/tool-set pairs before it may gate" }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `cli_run`: CLI builder tool. Runs `program`+`args`, or a `script` {language, code}, with `stdin`/`cwd`/`env` and no shell, so heredoc/sed/`-c` quoting can't mangle commands; shell-string forms are rejected; `dry_run` previews the resolved command.
+- `integrations/tool-router`: tool router for Claude Code and Codex (skills, MCP, plugins, subsets, presets, per-session plan enforcement, new-skill registration, shell-through-kritic enforcement) with a kritic plugin that audits usage against the plan.
+
 ## 0.5.0-test.11 — test release (2026-11-10)
 
 ### Added

@@ -1,0 +1,21 @@
+{
+  "skill_library": "~/.claude/skills-disabled",
+  "protected_mcp": ["kritic", "kev-tools"],
+  "core_mcp": ["terminal", "visualize", "Claude_Browser", "ccd_*", "scheduled-tasks", "mcp-registry", "gpu_pipeline_router", "node_repl"],
+  "packs": {
+    "unreal":  {"note": "Unreal Engine C++/Blueprint skills + unreal-mcp", "skills": ["ue-*", "unreal*", "create-toolset"], "mcp": ["unreal-mcp"], "markers": ["*.uproject"]},
+    "blender": {"note": "Blender 5.x bpy/asset skills + blender MCP", "skills": ["blender-*"], "mcp": ["blender"], "markers": ["*.blend", "*/*.blend"], "path_hint": "blender"},
+    "rea":     {"note": "Reverse engineering of native/web/android artifacts (rea MCP, ~200 tools)", "skills": ["reverse-engineer-anything", "crash-triage"], "mcp": ["rea"], "path_hint": "tower-simulator"},
+    "chrome":  {"note": "Claude in Chrome: drive the user's real browser", "mcp": ["claude-in-chrome"]},
+    "desktop": {"note": "computer-use: screenshot/click native desktop apps", "mcp": ["computer-use"]},
+    "hf":      {"note": "Hugging Face hub/spaces/image generation connector", "mcp": ["367153a6*"]},
+    "docs":    {"note": "Docs connector (create/edit shared documents)", "mcp": ["1a59c906*"]},
+    "memory":  {"note": "agent-memory: cross-session search/store", "mcp": ["plugin_agent-memory*"]},
+    "runpod":  {"note": "RunPod GPU cloud management (~120 tools)", "mcp": ["runpod*", "plugin_runpod*"], "plugins": ["runpod@runpod"]},
+    "seo":     {"note": "searchfit-seo plugin", "plugins": ["searchfit-seo*"]}
+  },
+  "desc": {
+    "kritic": "end-of-task critic (protected)", "kev-tools": "Kev digest/trim/search guard (protected)",
+    "rea": "native reverse-engineering MCP", "unreal-mcp": "Unreal Editor control", "blender": "Blender control"
+  }
+}

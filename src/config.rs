@@ -238,6 +238,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "hygiene_critic",
     "plugin_list",
     "plugin_run",
+    "cli_run",
     "spec_lint",
     "token_metrics",
     "route",
