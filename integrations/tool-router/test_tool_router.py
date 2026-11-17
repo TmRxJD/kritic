@@ -22,10 +22,6 @@ ENV = dict(os.environ, TOOL_ROUTER_HOME=str(W / 'state'), TOOL_ROUTER_CLAUDE_DIR
 def run(*a, inp=None):
     r = subprocess.run([sys.executable, '-I', R, *a], input=inp, capture_output=True, text=True, env=ENV, cwd=proj, encoding='utf-8')  # nosec B603
     return r.stdout.strip() + r.stderr.strip()
-bad_cmd_env = dict(ENV, TOOL_ROUTER_CLAUDE_CMD='python -c "pass"')
-bad_cmd = subprocess.run([sys.executable, '-I', R, 'status'], capture_output=True, text=True, env=bad_cmd_env, cwd=proj)  # nosec B603
-if bad_cmd.returncode == 0 or 'unsupported Claude command' not in bad_cmd.stderr:
-    raise RuntimeError('arbitrary Claude command unexpectedly accepted')
 def hook(event, tool=None, ti=None, host='claude', sid='S1'):
     return run('hook', host, event, inp=json.dumps({'session_id': sid, 'cwd': str(proj), 'tool_name': tool, 'tool_input': ti or {}}))
 def denied(o): return '"deny"' in o
@@ -75,12 +71,27 @@ os.environ.update(TOOL_ROUTER_HOME=ENV['TOOL_ROUTER_HOME'], TOOL_ROUTER_CLAUDE_D
 (proj / '.claude').mkdir(exist_ok=True); (proj / 'game.uproject').unlink()   # no auto-detect: subset only
 (proj / '.claude/tool-router.json').write_text(json.dumps({'on': ['unreal:ue-mat*', 'unreal:ue-land*']}))
 spec = importlib.util.spec_from_file_location('trm', R); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); m.LIB = lib
+if os.name == 'nt':
+    target = W / 'target & [fixture]'
+    target.mkdir()
+    (target / 'marker.txt').write_text('junction target', encoding='utf-8')
+    link = W / 'link & [fixture]'
+    m.junction(link, target)
+    try:
+        check('Windows junction paths are literal', (link / 'marker.txt').read_text(encoding='utf-8') == 'junction target')
+    finally:
+        link.rmdir()
 sel = m.skill_selection(m.root_of(proj))
 check('selection is a subset', sel == {'unreal': ['ue-land*', 'ue-mat*']}, sel)
 check('subset selects only matching', [s for s in ('ue-materials', 'ue-blueprints', 'ue-landscape') if m.skill_in_sel(sel, s)] == ['ue-materials', 'ue-landscape'])
 check('subset does not enable MCP pack', m.active_packs(m.root_of(proj)) == [])
 (proj / 'game.uproject').write_text('{}'); (proj / '.claude/tool-router.json').unlink()
 # MCP toggle through (fake) claude CLI
+bad_cmd_env = dict(ENV, TOOL_ROUTER_CLAUDE_CMD='python -c "pass"')
+status = subprocess.run([sys.executable, '-I', R, 'status'], capture_output=True, text=True, env=bad_cmd_env, cwd=proj)  # nosec B603
+check('status requires no Claude executable', status.returncode == 0, status.stderr)
+bad_cmd = subprocess.run([sys.executable, '-I', R, 'disable', 'unreal-mcp'], capture_output=True, text=True, env=bad_cmd_env, cwd=proj)  # nosec B603
+check('arbitrary Claude command rejected', bad_cmd.returncode != 0 and 'unsupported Claude command' in bad_cmd.stderr, bad_cmd.stderr)
 check('protected refuses', 'protected' in run('disable', 'kritic'))
 run('disable', 'unreal-mcp'); calls = (W / 'claude-calls.txt').read_text()
 check('disable -> claude mcp remove', 'mcp remove -s local unreal-mcp' in calls, calls)

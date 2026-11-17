@@ -22,8 +22,8 @@ CODEX_DIR = Path(os.environ.get('TOOL_ROUTER_CODEX_DIR', HOME / '.codex'))
 def configured_claude_command():
     """Resolve only an absolute Claude executable, or the isolated test Python shim."""
     raw = os.environ.get('TOOL_ROUTER_CLAUDE_CMD')
-    if not raw:
-        executable = shutil.which('claude')
+    if not raw or raw.lower() in {'claude', 'claude.exe'}:
+        executable = shutil.which('claude.exe' if os.name == 'nt' else 'claude')
         if not executable:
             return []
         path = Path(executable).resolve()
@@ -39,6 +39,7 @@ def configured_claude_command():
         return [str(path.resolve())]
 
     if (os.environ.get('TOOL_ROUTER_TEST_MODE') == '1' and len(parts) == 2
+            and os.environ.get('TOOL_ROUTER_TEST_ROOT')
             and Path(parts[0]).resolve() == Path(sys.executable).resolve()):
         script = Path(parts[1])
         test_root = Path(os.environ['TOOL_ROUTER_TEST_ROOT']).resolve()
@@ -48,7 +49,6 @@ def configured_claude_command():
             return [str(Path(sys.executable).resolve()), str(resolved_script)]
     raise RuntimeError('unsupported Claude command; use an absolute .exe (or test-mode Python shim)')
 
-CLAUDE_CMD = configured_claude_command()
 LIB = Path(os.path.expanduser(CFG['skill_library']))
 PROTECTED = CFG['protected_mcp']          # never toggled, always allowed
 SCRIPT = str(Path(__file__).resolve()).replace('\\', '/')
@@ -196,11 +196,12 @@ def mcp_library():
 def run_claude(args, dry=None):
     dry = os.environ.get('TOOL_ROUTER_DRY') == '1' if dry is None else dry
     if dry: print('DRY claude', ' '.join(args)); return 0
-    if not CLAUDE_CMD:
-        print('Claude CLI executable was not found on PATH', file=sys.stderr)
+    command = configured_claude_command()
+    if not command:
+        print('Claude executable was not found on PATH. On Windows, install the native Claude CLI or set TOOL_ROUTER_CLAUDE_CMD to its absolute .exe path.', file=sys.stderr)
         return 1
     # The configured executable is validated and the shell is disabled.
-    r = subprocess.run(CLAUDE_CMD + args, capture_output=True, text=True,  # nosec B603
+    r = subprocess.run(command + args, capture_output=True, text=True,  # nosec B603
                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     if r.returncode: print('claude', ' '.join(args[:3]), 'failed:', (r.stderr or r.stdout).strip()[:200], file=sys.stderr)
     return r.returncode
@@ -237,7 +238,7 @@ def junction(link, target):
     powershell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
     if not powershell.is_absolute() or not powershell.is_file():
         raise RuntimeError('Windows PowerShell executable was not found at the system path')
-    env = dict(os.environ, TOOL_ROUTER_LINK=str(Path(link).resolve()), TOOL_ROUTER_TARGET=str(Path(target).resolve()))
+    env = dict(os.environ, TOOL_ROUTER_LINK=os.path.abspath(link), TOOL_ROUTER_TARGET=os.path.abspath(target))
     # Pass filesystem paths as data to a fixed PowerShell script.
     r = subprocess.run(  # nosec B603
         [str(powershell), '-NoProfile', '-NonInteractive', '-Command',
