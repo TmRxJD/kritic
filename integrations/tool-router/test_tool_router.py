@@ -1,5 +1,6 @@
 """Deterministic tests for tool-router.py on a temp project; touches no real config. Run: python test_tool_router.py"""
-import json, os, subprocess, sys, shutil, tempfile
+# Test invocations use the current Python executable in an isolated fixture.
+import json, os, subprocess, sys, shutil, tempfile  # nosec B404
 from pathlib import Path
 R = str(Path(__file__).resolve().parent / 'tool-router.py')
 T = Path(os.environ.get('TR_TEST_DIR') or tempfile.mkdtemp(prefix='tool-router-test-'))
@@ -15,11 +16,16 @@ cx = W / 'codex'; cx.mkdir()
 fake = W / 'fakeclaude.py'
 fake.write_text("import sys;open(r'%s','a').write(' '.join(sys.argv[1:])+'\\n')" % (W / 'claude-calls.txt').as_posix())
 ENV = dict(os.environ, TOOL_ROUTER_HOME=str(W / 'state'), TOOL_ROUTER_CLAUDE_DIR=str(cl), TOOL_ROUTER_CLAUDE_JSON=str(cj),
-           TOOL_ROUTER_CODEX_DIR=str(cx), TOOL_ROUTER_CLAUDE_CMD=f'{sys.executable} {fake}')
+           TOOL_ROUTER_CODEX_DIR=str(cx), TOOL_ROUTER_TEST_MODE='1', TOOL_ROUTER_TEST_ROOT=str(W),
+           TOOL_ROUTER_CLAUDE_CMD=f'"{sys.executable}" "{fake}"')
 
 def run(*a, inp=None):
-    r = subprocess.run([sys.executable, '-I', R, *a], input=inp, capture_output=True, text=True, env=ENV, cwd=proj, encoding='utf-8')
+    r = subprocess.run([sys.executable, '-I', R, *a], input=inp, capture_output=True, text=True, env=ENV, cwd=proj, encoding='utf-8')  # nosec B603
     return r.stdout.strip() + r.stderr.strip()
+bad_cmd_env = dict(ENV, TOOL_ROUTER_CLAUDE_CMD='python -c "pass"')
+bad_cmd = subprocess.run([sys.executable, '-I', R, 'status'], capture_output=True, text=True, env=bad_cmd_env, cwd=proj)  # nosec B603
+if bad_cmd.returncode == 0 or 'unsupported Claude command' not in bad_cmd.stderr:
+    raise RuntimeError('arbitrary Claude command unexpectedly accepted')
 def hook(event, tool=None, ti=None, host='claude', sid='S1'):
     return run('hook', host, event, inp=json.dumps({'session_id': sid, 'cwd': str(proj), 'tool_name': tool, 'tool_input': ti or {}}))
 def denied(o): return '"deny"' in o
@@ -63,7 +69,9 @@ lib = W / 'lib'
 for s in ('ue-materials', 'ue-blueprints', 'ue-landscape'):
     (lib / s).mkdir(parents=True); (lib / s / 'SKILL.md').write_text('---' + chr(10) + 'description: x' + chr(10) + '---' + chr(10))
 import importlib.util
-os.environ.update(TOOL_ROUTER_HOME=ENV['TOOL_ROUTER_HOME'], TOOL_ROUTER_CLAUDE_DIR=str(cl), TOOL_ROUTER_CLAUDE_JSON=str(cj), TOOL_ROUTER_CODEX_DIR=str(cx))
+os.environ.update(TOOL_ROUTER_HOME=ENV['TOOL_ROUTER_HOME'], TOOL_ROUTER_CLAUDE_DIR=str(cl), TOOL_ROUTER_CLAUDE_JSON=str(cj),
+                  TOOL_ROUTER_CODEX_DIR=str(cx), TOOL_ROUTER_CLAUDE_CMD=ENV['TOOL_ROUTER_CLAUDE_CMD'],
+                  TOOL_ROUTER_TEST_MODE='1', TOOL_ROUTER_TEST_ROOT=str(W))
 (proj / '.claude').mkdir(exist_ok=True); (proj / 'game.uproject').unlink()   # no auto-detect: subset only
 (proj / '.claude/tool-router.json').write_text(json.dumps({'on': ['unreal:ue-mat*', 'unreal:ue-land*']}))
 spec = importlib.util.spec_from_file_location('trm', R); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); m.LIB = lib
