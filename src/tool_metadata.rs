@@ -72,6 +72,10 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "cli_run" => {
             "Run a command with no shell: program + args array, stdin text, cwd, env, or a script {language, code}. Use instead of heredocs, sed/awk one-liners and `-c` strings. dry_run shows the resolved command."
         }
+        "workflow_discover" => {
+            "Find read-only workflows. Set an exact name, or query with include_schema, for argument schemas."
+        }
+        "workflow_run" => "Run a named read-only workflow with validated arguments.",
         "plugin_list" => {
             "List evaluator manifests in <base_dir>/.kritic/plugins. Inspect commands and schemas before running a plugin."
         }

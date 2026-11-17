@@ -142,16 +142,15 @@ pub fn validate(p: &CliParams) -> Result<(), String> {
             .file_stem()
             .map(|s| s.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default();
-        if SHELLS.contains(&stem.as_str()) {
-            if let Some(a) = p
+        if SHELLS.contains(&stem.as_str())
+            && let Some(a) = p
                 .args
                 .iter()
                 .find(|a| INLINE_FLAGS.contains(&a.to_ascii_lowercase().as_str()))
-            {
-                return Err(format!(
-                    "`{stem} {a} ...` is a shell string in disguise. Use `script` {{language, code}} so the code is passed as a file."
-                ));
-            }
+        {
+            return Err(format!(
+                "`{stem} {a} ...` is a shell string in disguise. Use `script` {{language, code}} so the code is passed as a file."
+            ));
         }
     }
     if let Some(s) = &p.script {
