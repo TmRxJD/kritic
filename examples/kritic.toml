@@ -140,6 +140,7 @@
 # staleness = false                            # KRITIC_CAP_STALENESS: model-free test/canonical-source audit; CLI works without enabling MCP
 # invariants = false                           # KRITIC_CAP_INVARIANTS: declared key-boundary guards and negative-test bindings
 # framing = false                              # KRITIC_CAP_FRAMING: opt-in model-free debugging evidence checkpoint
+# git_ci = false                               # KRITIC_CAP_GIT_CI: opt-in read-only Git/CI workflow discovery and execution
 # These hide tools from MCP discovery and execution. Restart the client/server after changes.
 # enabled is configuration, not proof every dependency is installed; status/doctor report details.
 # web = true                                   # KRITIC_CAP_WEB: browser interaction checks

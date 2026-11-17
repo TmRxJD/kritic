@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.0-test.12 — test release (2026-11-17)
+
+- Add opt-in workflow discovery and execution for any MCP client. Discover exact input schemas on demand, or run the read-only Git/CI workflow directly for a compact checkout and pull request summary with a bounded failed-check excerpt when available.
+- Add a reproducible synthetic benchmark for direct calls, host tool deferral, and batched results. It verifies the same evidence across all three paths and reports cached and uncached input separately.
+- Simplify the CLI runner's Git write-scope check to satisfy Clippy while preserving the same write restrictions.
+
 - `cli_run`: CLI builder tool. Runs `program`+`args`, or a `script` {language, code}, with `stdin`/`cwd`/`env` and no shell, so heredoc/sed/`-c` quoting can't mangle commands; shell-string forms are rejected; `dry_run` previews the resolved command.
 - `integrations/tool-router`: tool router for Claude Code and Codex (skills, MCP, plugins, subsets, presets, per-session plan enforcement, new-skill registration, shell-through-kritic enforcement) with a kritic plugin that audits usage against the plan.
 
