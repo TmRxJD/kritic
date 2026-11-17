@@ -6,6 +6,8 @@ Source of truth is `integrations/tool-router/` in the kritic repo; `deploy.py` c
 State/backups/usage live in `B:/AI/tool-router` (E: was full on 2026-11-11). Config: `tools.json` (packs, core MCP, protected MCP).
 Run: `python -I C:/Users/jdion/.claude/skill-router/tool-router.py <cmd>`.
 
+On Windows, Claude MCP enable and disable actions use the native `claude.exe` on `PATH`. Set `TOOL_ROUTER_CLAUDE_CMD` to its absolute path if needed. Codex actions and router status work without Claude installed.
+
 ## Agent workflow
 1. SessionStart context gives the session id. `catalog` (~250 tokens) lists packs; `catalog <pack>` lists items with descriptions; `catalog --full` (~2.3k tokens).
 2. **Declare**: `plan <pack...> --session ID --task "..."`, `plan --preset NAME --session ID`, or `plan --none --session ID` (core only).

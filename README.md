@@ -18,7 +18,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 
 [Get started](#quickstart-install-the-minimum-then-choose-extras) ·
 [Choose capabilities](#choose-your-capabilities) · [Hardware](#what-your-hardware-can-run) ·
-[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.11)
+[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.12)
 
 ## What Kritic governs
 
@@ -66,7 +66,7 @@ flowchart LR
 
 **Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter only; the Mac MCP server requires a source build. Start without models and add only relevant tools.
 
-1. Download the Windows ZIP from [v0.5.0-test.11](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.11),
+1. Download the Windows ZIP from [v0.5.0-test.12](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.12),
    verify it against the release's `SHA256SUMS`, and extract it into a persistent location.
    The ZIP includes `kritic.exe`, `kev.exe`, `kev-filter.exe`, the skill, examples, documentation and optional desktop harness.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
@@ -131,6 +131,7 @@ For every deterministic row, leave `[review].backend` and `[vision].backend` set
 | Add | Toggle / prerequisite | Result and setup |
 |---|---|---|
 | **Commit and architecture policy** | `repository=true`; Git and `.kritic/repository.toml` | `repository_critic`, CLI scope plans and an explicitly installed hook. Choose `broad`, `focused` (default) or `atomic`. [Policy setup](docs/repository-policy.md). |
+| **Read-only Git/CI inspection** | `git_ci=true`; Git, plus signed-in `gh` for PR checks | Discover a workflow schema on demand and get checkout state, CI status, and the first failing check's available evidence in one run. [Tool call efficiency](docs/tool-efficiency.md). |
 | **Test currency and canonical sources** | `staleness=true`; `.kritic/test-contracts.toml` | `staleness_critic`; CLI `kritic staleness check`. `sync` previews fixture changes; only `sync --write` writes declared JSON projections. Review pins and assertions are never auto-blessed. [Guide](docs/staleness.md). |
 | **Boundary invariants** | `invariants=true`; the same test-contract manifest | `invariant_critic`; CLI `kritic staleness invariants`. Checks required guards, release/debug mismatches, failure policies and mapped negative cases. Review whether the conditions are sensible and actually enforced. [Guide](docs/staleness.md#invariants-at-key-boundaries). |
 | **Debugging framing** | `framing=true`; `.kritic/debug-case.json` and real evidence | `framing_critic`; CLI `kritic framing --schema`. This opt-in critic alone may be consulted at a stalled-debugging checkpoint. No experiments or commands run automatically. [Guide](docs/framing.md). |

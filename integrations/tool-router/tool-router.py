@@ -6,11 +6,12 @@ Commands (use `tool:NAME` to force a single tool when a pack has the same name):
           install | uninstall | restore [ID] | backups | hook HOST EVENT | selftest
 Env overrides (tests): TOOL_ROUTER_HOME (state/backups/usage), TOOL_ROUTER_CLAUDE_CMD, TOOL_ROUTER_DRY=1,
 TOOL_ROUTER_CODEX_DIR, TOOL_ROUTER_CLAUDE_DIR, TOOL_ROUTER_CLAUDE_JSON."""
-import fnmatch, glob, hashlib, json, os, re, shlex, shutil, subprocess, sys, time
+# Child processes use validated executable paths and argv arrays.
+import fnmatch, glob, hashlib, json, os, re, shlex, shutil, subprocess, sys, time  # nosec B404
 from pathlib import Path
 
-try: sys.stdout.reconfigure(encoding='utf-8')
-except Exception: pass
+if callable(getattr(sys.stdout, 'reconfigure', None)):
+    sys.stdout.reconfigure(encoding='utf-8')
 HOME = Path.home()
 CFGDIR = Path(__file__).resolve().parent
 CFG = json.loads((CFGDIR / 'tools.json').read_text(encoding='utf8'))
@@ -18,8 +19,36 @@ STATE = Path(os.environ.get('TOOL_ROUTER_HOME', 'B:/AI/tool-router'))  # E: is f
 CLAUDE_DIR = Path(os.environ.get('TOOL_ROUTER_CLAUDE_DIR', HOME / '.claude'))
 CLAUDE_JSON = Path(os.environ.get('TOOL_ROUTER_CLAUDE_JSON', HOME / '.claude.json'))
 CODEX_DIR = Path(os.environ.get('TOOL_ROUTER_CODEX_DIR', HOME / '.codex'))
-CLAUDE_CMD = [x.strip('"') for x in shlex.split(os.environ.get('TOOL_ROUTER_CLAUDE_CMD', 'claude'), posix=False)]
-CLAUDE_CMD[0] = shutil.which(CLAUDE_CMD[0]) or CLAUDE_CMD[0]
+def configured_claude_command():
+    """Resolve only an absolute Claude executable, or the isolated test Python shim."""
+    raw = os.environ.get('TOOL_ROUTER_CLAUDE_CMD')
+    if not raw or raw.lower() in {'claude', 'claude.exe'}:
+        executable = shutil.which('claude.exe' if os.name == 'nt' else 'claude')
+        if not executable:
+            return []
+        path = Path(executable).resolve()
+        if not path.is_file() or (os.name == 'nt' and path.suffix.lower() != '.exe'):
+            return []
+        return [str(path)]
+
+    parts = [part.strip('"') for part in shlex.split(raw, posix=False)]
+    if len(parts) == 1:
+        path = Path(parts[0])
+        if not path.is_absolute() or path.suffix.lower() != '.exe' or not path.is_file():
+            raise RuntimeError('TOOL_ROUTER_CLAUDE_CMD must name an existing absolute .exe')
+        return [str(path.resolve())]
+
+    if (os.environ.get('TOOL_ROUTER_TEST_MODE') == '1' and len(parts) == 2
+            and os.environ.get('TOOL_ROUTER_TEST_ROOT')
+            and Path(parts[0]).resolve() == Path(sys.executable).resolve()):
+        script = Path(parts[1])
+        test_root = Path(os.environ['TOOL_ROUTER_TEST_ROOT']).resolve()
+        resolved_script = script.resolve()
+        if (script.is_absolute() and script.suffix.lower() == '.py' and resolved_script.is_file()
+                and test_root in resolved_script.parents):
+            return [str(Path(sys.executable).resolve()), str(resolved_script)]
+    raise RuntimeError('unsupported Claude command; use an absolute .exe (or test-mode Python shim)')
+
 LIB = Path(os.path.expanduser(CFG['skill_library']))
 PROTECTED = CFG['protected_mcp']          # never toggled, always allowed
 SCRIPT = str(Path(__file__).resolve()).replace('\\', '/')
@@ -167,7 +196,13 @@ def mcp_library():
 def run_claude(args, dry=None):
     dry = os.environ.get('TOOL_ROUTER_DRY') == '1' if dry is None else dry
     if dry: print('DRY claude', ' '.join(args)); return 0
-    r = subprocess.run(CLAUDE_CMD + args, capture_output=True, text=True)
+    command = configured_claude_command()
+    if not command:
+        print('Claude executable was not found on PATH. On Windows, install the native Claude CLI or set TOOL_ROUTER_CLAUDE_CMD to its absolute .exe path.', file=sys.stderr)
+        return 1
+    # The configured executable is validated and the shell is disabled.
+    r = subprocess.run(command + args, capture_output=True, text=True,  # nosec B603
+                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     if r.returncode: print('claude', ' '.join(args[:3]), 'failed:', (r.stderr or r.stdout).strip()[:200], file=sys.stderr)
     return r.returncode
 def mcp_disable(name, root, scope=None):
@@ -200,7 +235,17 @@ def set_plugin(name, on):
 
 # junction-based skill packs (project scope)
 def junction(link, target):
-    r = subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(target)], capture_output=True, text=True)
+    powershell = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    if not powershell.is_absolute() or not powershell.is_file():
+        raise RuntimeError('Windows PowerShell executable was not found at the system path')
+    env = dict(os.environ, TOOL_ROUTER_LINK=os.path.abspath(link), TOOL_ROUTER_TARGET=os.path.abspath(target))
+    # Pass filesystem paths as data to a fixed PowerShell script.
+    r = subprocess.run(  # nosec B603
+        [str(powershell), '-NoProfile', '-NonInteractive', '-Command',
+         "$ErrorActionPreference = 'Stop'; "
+         '$target = [WildcardPattern]::Escape($env:TOOL_ROUTER_TARGET); '
+         'New-Item -ItemType Junction -Path $env:TOOL_ROUTER_LINK -Target $target | Out-Null'],
+        capture_output=True, text=True, env=env, creationflags=subprocess.CREATE_NO_WINDOW)
     if r.returncode: raise RuntimeError((r.stderr or r.stdout).strip())
 def sync_skills(root, sel):
     sk = root / '.claude/skills'; man = sk / '.skill-router.json'
@@ -286,7 +331,7 @@ def catalog_text(root, host='claude', pack=None, full=False):
 
 # ---------- plan (per-session declaration; live-enforced by the hook) ----------
 def plan_path(sid): return STATE / 'plans' / (re.sub(r'[^\w-]', '_', sid) + '.json')
-def cwd_path(cwd): return STATE / 'plans' / ('cwd-' + hashlib.md5(pkey(root_of(cwd)).lower().encode()).hexdigest()[:12] + '.json')
+def cwd_path(cwd): return STATE / 'plans' / ('cwd-' + hashlib.md5(pkey(root_of(cwd)).lower().encode(), usedforsecurity=False).hexdigest()[:12] + '.json')
 def load_plan(sid, cwd):
     p = jload(plan_path(sid)) if sid else None
     if p is None and cwd:
@@ -309,7 +354,7 @@ def log_usage(sid, rec):
     try:
         d = STATE / 'usage'; d.mkdir(parents=True, exist_ok=True); rec['ts'] = round(time.time(), 1)
         with open(d / (re.sub(r'[^\w-]', '_', sid or 'nosession') + '.jsonl'), 'a', encoding='utf8') as f: f.write(json.dumps(rec) + '\n')
-    except Exception: pass
+    except OSError as e: print(f'tool-router: usage log failed: {e}', file=sys.stderr)
 SHELL_TOOLS = ('Bash', 'PowerShell')
 def cli_enforced(sid):
     """Only sessions that started after `cli enforce on` (they hold a marker, so their kritic has cli_run) are enforced."""
@@ -348,7 +393,8 @@ def deny_msg(kind, name, pack, plan):
     return f'Tool router: {what} is not in this session\'s plan (packs={plan["packs"]}, tools={plan["tools"]}). If the task needs it, extend the plan: `{cmd}`.'
 def hook(host, event):
     try: ev = json.loads(sys.stdin.read() or '{}')
-    except Exception: return
+    except json.JSONDecodeError as e:
+        print(f'tool-router: invalid hook input: {e}', file=sys.stderr); return
     sid = ev.get('session_id') or ev.get('sessionId') or ''; cwd = ev.get('cwd') or os.getcwd()
     out = {}
     try:

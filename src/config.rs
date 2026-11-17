@@ -193,6 +193,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.resources", "KRITIC_CAP_RESOURCES"),
     ("capabilities.contracts", "KRITIC_CAP_CONTRACTS"),
     ("capabilities.repository", "KRITIC_CAP_REPOSITORY"),
+    ("capabilities.git_ci", "KRITIC_CAP_GIT_CI"),
     ("capabilities.history", "KRITIC_CAP_HISTORY"),
     ("capabilities.debt", "KRITIC_CAP_DEBT"),
     ("capabilities.framing", "KRITIC_CAP_FRAMING"),
@@ -239,6 +240,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "plugin_list",
     "plugin_run",
     "cli_run",
+    "workflow_discover",
+    "workflow_run",
     "spec_lint",
     "token_metrics",
     "route",
@@ -513,6 +516,7 @@ fn capability_settings(
         "resources",
         "contracts",
         "repository",
+        "git_ci",
         "history",
         "debt",
         "framing",
@@ -532,6 +536,7 @@ fn capability_settings(
                     | "framing"
                     | "staleness"
                     | "invariants"
+                    | "git_ci"
             ),
             Some(v) => v.parse::<bool>().unwrap_or_else(|_| {
                 config_errors.push(format!(
@@ -901,6 +906,7 @@ impl Config {
             "resource_critic" | "hygiene_critic" => self.capability("resources"),
             "contract_critic" => self.capability("contracts"),
             "repository_critic" => self.capability("repository"),
+            "workflow_discover" | "workflow_run" => self.capability("git_ci"),
             "review_history" => self.capability("history"),
             "technical_debt_critic" => self.capability("debt"),
             "framing_critic" => self.capability("framing"),

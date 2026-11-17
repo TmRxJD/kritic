@@ -204,6 +204,13 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "tools.md",
             "Needs nothing beyond the programs it is asked to run; script languages need python, node, pwsh or bash on PATH.",
         ),
+        "workflow_discover" | "workflow_run" => (
+            Some("git_ci"),
+            None,
+            false,
+            "tools.md",
+            "Enable capabilities.git_ci. Local inspection needs git; an explicit GitHub.com PR also needs signed-in gh and permission to read its checks and job log.",
+        ),
         "plugin_list" | "plugin_run" => (
             Some("plugins"),
             Some(".kritic/plugins"),
