@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add an optional model-free agent message contract with strict task/result/blocker/question/update envelopes, explicit scope/evidence/check fields, bounded size and concise prose. Native Codex, Claude and Hermes adapters reject invalid messages without silently altering evidence; unsupported/opaque paths remain directive-only.
+
 ## 0.5.0-test.13 — test release (2026-11-19)
 
 - Keep tool discovery and agent messaging available before scope declaration. Hook denials now include the actual caller identity and an exact restricted native-command bootstrap when the MCP tool is not loaded; the bootstrap cannot append arbitrary shell commands or declare another actor.
