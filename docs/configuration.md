@@ -1,5 +1,9 @@
 # Configuration
 
+Unreleased session/handoff review is off by default: `capabilities.sessions=false`.
+Opt in with `true` or `KRITIC_CAP_SESSIONS=true`; lifecycle hooks/controller enrollment
+are separately explicit. [Schemas and setup](session-continuity.md).
+
 The standalone test.10 CLI filter uses command-line flags and `KEV_LOG_DIR`, independently
 of `kritic.toml`. No capability toggle or MCP restart is needed. `--kev` opts into
 an existing local ranker per invocation; it never starts/downloads a model. The server

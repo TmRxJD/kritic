@@ -137,6 +137,7 @@
 # disabled = []                       # KRITIC_DISABLED_TOOLS (comma-separated)
 
 [capabilities]
+sessions = false # Session/handoff review; automatic lifecycle enrollment is separate.
 # staleness = false                            # KRITIC_CAP_STALENESS: model-free test/canonical-source audit; CLI works without enabling MCP
 # invariants = false                           # KRITIC_CAP_INVARIANTS: declared key-boundary guards and negative-test bindings
 # framing = false                              # KRITIC_CAP_FRAMING: opt-in model-free debugging evidence checkpoint

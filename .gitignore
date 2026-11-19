@@ -6,3 +6,4 @@
 /harness/py/.venv/
 /harness/py/**/__pycache__/
 __pycache__/
+/.kritic/session-state/

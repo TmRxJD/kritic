@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in session and handoff evidence critics: pinned original captures, explicit user corrections and solutions, current fixture bindings, complete dirty-work inventories, and operational session limits. Missing evidence or context-budget overflow stays blocked; no model approval is implied.
+- Add explicit same-worktree ownership succession to the worktree critic. Prepare at an observed turn boundary, bind an actual fresh-session identity, then accept the pinned handoff and evidence inventory. Preserve task, scopes, HEAD, index and dirty bytes; fence previous writers and retain successor ownership across process exit/resume. Cancellation preserves the original assignment. Unattended session launching remains a separate controller integration.
+- Separate runtime presence from durable work ownership. Session-end events no longer silently release editing claims. An undeclared peer cannot edit but no longer blocks a correctly declared owner. Database guards preserve durable reservations when an older coordinator attempts a conflicting declaration.
+
 ## 0.5.0-test.13 — test release (2026-11-19)
 
 - Keep tool discovery and agent messaging available before scope declaration. Hook denials now include the actual caller identity and an exact restricted native-command bootstrap when the MCP tool is not loaded; the bootstrap cannot append arbitrary shell commands or declare another actor.

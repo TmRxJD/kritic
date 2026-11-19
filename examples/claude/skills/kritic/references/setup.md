@@ -1,5 +1,11 @@
 # Agent setup and recovery
 
+`session_critic` and `handoff_critic`: opt in with `capabilities.sessions=true` in
+a matching build, then use `kritic session --schema`. Pin actual capture, workspace,
+user corrections and canonical fixture bindings under permanent
+`.kritic/session-state/`. Unknown capture coverage/controller capability cannot
+authorize automatic continuation. See `docs/session-continuity.md` in the source.
+
 Use this when a critic is absent, unconfigured, or cannot collect evidence. Diagnose and repair
 ordinary setup within the authorized task; do not merely relay an OS error to the user. Ask only
 when the target, real requirements, credentials, paid/network disclosure or resource permission

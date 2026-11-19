@@ -120,6 +120,13 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "framing.md",
             "Use kritic framing --schema and examples/debug-case.json for structure. Create a case from actual reproduction, pinned observations, configuration ownership and hypotheses; synthetic example evidence cannot diagnose this project.",
         ),
+        "session_critic" | "handoff_critic" => (
+            Some("sessions"),
+            Some(".kritic/session-state/session.json"),
+            true,
+            "session-continuity.md",
+            "Use kritic session --schema. Explicitly enable capabilities.sessions, capture actual host/session history with hashes and coverage, pin workspace and current fixture bindings, and preserve all user corrections. Handoff review uses a pinned session-case reference. Automatic rollover requires separate policy enrollment and a capability-tested host controller; unknown capture/telemetry is not readiness.",
+        ),
         "critic_score" | "decide" => (
             None,
             None,

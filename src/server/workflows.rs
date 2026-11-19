@@ -4,7 +4,18 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::{Json, handler::server::wrapper::Parameters, tool, tool_router};
+
+mod sessions;
+
+impl Kritic {
+    pub(super) fn workflows_router() -> ToolRouter<Self> {
+        let mut routes = Self::registered_workflows_router();
+        routes.merge(Self::sessions_router());
+        routes
+    }
+}
 
 use super::{
     Kritic, audit, finished,
@@ -15,7 +26,7 @@ use super::{
 const WORKFLOW_NAME: &str = "git_ci_snapshot";
 const WORKFLOW_SUMMARY: &str = "Read status in a trusted Git checkout and summarize a GitHub pull request (PR)'s checks and failed job log.";
 
-#[tool_router(router = workflows_router, vis = "pub(super)")]
+#[tool_router(router = registered_workflows_router, vis = "pub(super)")]
 impl Kritic {
     /// Find read-only workflows. Set name or request schemas for a keyword query.
     #[tool(name = "workflow_discover")]

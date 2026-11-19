@@ -10,7 +10,7 @@ import shlex
 import time
 
 from paths import git, identity, local_path, repository
-from registry import actor_id, actors, audit, authorized, observe, transaction
+from registry import actor_id, actors, audit, authorized, observe, pending_transfer, transfer_fence, transaction
 
 READ_TOOLS = {'Read', 'Glob', 'Grep', 'read_file', 'search_files', 'list_directory', 'WebSearch', 'WebFetch'}
 STRUCTURED_TOOLS = {'Write', 'Edit', 'MultiEdit', 'write_file', 'edit_file', 'apply_patch', 'patch', 'apply_diff'}
@@ -70,9 +70,9 @@ def bootstrap(tool, data, host, session, agent):
             return False
         raw = data.get('stdin') or '{}'
     value = json.loads(raw)
-    if value.get('action') not in ('schema', 'status', 'declare', 'release'):
+    if value.get('action') not in ('schema', 'status', 'declare', 'release', 'transfer'):
         return False
-    if value.get('action') in ('declare', 'release'):
+    if value.get('action') in ('declare', 'release', 'transfer'):
         owner = value.get('request') or {}
         if owner.get('host') != host or owner.get('session_id') != session or (agent is not None and owner.get('agent_id', 'main') != agent):
             raise ValueError('Use your actual host/session/agent identity for coordination bootstrap')
@@ -155,9 +155,10 @@ def hook(host, event, payload):
         with transaction() as db:
             audit(db, key, 'session_ended', {'event': event})
             if event == 'end' and agent == 'main':
-                db.execute('UPDATE actors SET ended=1,generation=generation+1 WHERE host=? AND session=?', (host, session))
+                for row in db.execute('SELECT id FROM actors WHERE host=? AND session=?',(host,session)).fetchall():
+                    db.execute('UPDATE actors SET ended=1 WHERE id=?',(row['id'],))
             else:
-                db.execute('UPDATE actors SET ended=1,generation=generation+1 WHERE id=?', (key,))
+                db.execute('UPDATE actors SET ended=1 WHERE id=?', (key,))
         return {}
     data = payload.get('tool_input') or payload.get('args') or {}
     tool = payload.get('tool_name', '')
@@ -168,7 +169,7 @@ def hook(host, event, payload):
         if bootstrap(tool, data, host, session, payload.get('agent_id')):
             return {}
     if event == 'pretool' and tool.endswith('worktree_evaluate'):
-        if data.get('action') in ('declare', 'release'):
+        if data.get('action') in ('declare', 'release', 'transfer'):
             declaration = data.get('request') or {}
             if declaration.get('host') != host or declaration.get('session_id') != session:
                 return response(host, f'Use actual hook identity host={host}, session_id={session}; do not alter another session claim.', True)
@@ -205,6 +206,13 @@ def hook(host, event, payload):
                 if previous and not previous['ended'] and (previous['repo'] != info['repo'] or (previous['declaration'] and identity(previous['worktree']) != identity(info['worktree']))):
                     return response(host, 'This worktree has no unambiguous declaration for the session. Declare its actual actor and scope before editing; the existing reservation is preserved.', True)
         observe(db, host, session, agent, info)
+        db.execute('INSERT OR IGNORE INTO actor_epochs VALUES (?,0,NULL,NULL)',(key,))
+        if event == 'prompt':
+            db.execute('UPDATE actor_epochs SET epoch=epoch+1,boundary_epoch=NULL,boundary_generation=NULL WHERE actor=?',(key,))
+        if event == 'boundary':
+            generation = db.execute('SELECT generation FROM actors WHERE id=?',(key,)).fetchone()[0]
+            db.execute('UPDATE actor_epochs SET boundary_epoch=epoch,boundary_generation=? WHERE actor=?',(generation,key))
+            return {}
         active = actors(db, info['repo'])
         if event in LIFECYCLE:
             message = (f'Worktree coordination actor {key}. {len(active)} registered agent(s) in this repository. '
@@ -216,6 +224,13 @@ def hook(host, event, payload):
             return response(host, message, event=event)
         if tool in READ_TOOLS:
             return {}
+        if pending_transfer(db,key):
+            return response(host,'This source is quiescent for ownership transfer. Read/recovery/messaging and coordination APIs remain available. Cancel the pending transfer before resuming edits; never overwrite successor work.',True)
+        if event == 'pretool' and not tool.endswith(('session_critic','handoff_critic')):
+            metadata = (Path(info['worktree'])/'.kritic/session-state').resolve()
+            only_metadata = changed and all((Path(original_cwd)/path).resolve().is_relative_to(metadata) for path in changed)
+            if not only_metadata:
+                db.execute('UPDATE actor_epochs SET boundary_epoch=NULL,boundary_generation=NULL WHERE actor=?',(key,))
         if tool.endswith('cli_run') and isinstance(data, dict):
             args = data.get('args')
             program = Path(str(data.get('program', ''))).name.casefold()
@@ -228,10 +243,10 @@ def hook(host, event, payload):
             return {}
         if changed and (None in roots or len({identity(root) for root in roots if root}) != 1):
             return response(host, 'Split structured writes spanning repository/non-repository paths or multiple worktrees, then use the correct declared owner for each.', True)
-        undeclared = [row['id'] for row in active if not row['declaration']]
-        if undeclared:
+        if not current['declaration']:
+            undeclared = [key]
             return response(host, f'Declare worktree, task, change_summary and owned scopes before edits. Missing declarations: {undeclared}. ' + setup_help(host, session, agent, info['worktree']), True)
-        locations = [identity(row['worktree']) for row in active if row['declaration'].get('access') != 'read_only']
+        locations = [identity(row['worktree']) for row in active if row['declaration'] and row['declaration'].get('access') != 'read_only']
         if len(set(locations)) != len(locations):
             return response(host, 'Registered agents share a worktree. Declare distinct worktrees before edits; preserve all existing changes.', True)
         effective = Path(original_cwd).resolve()
@@ -239,7 +254,7 @@ def hook(host, event, payload):
             if payload.get('agent_id') and current['declaration'].get('access') == 'read_only':
                 return response(host, 'This agent declared read_only access. Declare an editing task and nonoverlapping write scope before modifying files.', True)
             absolute = [str((effective / p).resolve()) if not Path(p).is_absolute() else str(Path(p).resolve()) for p in changed]
-            owners = [row for row in active if row['host'] == host and row['session'] == session and row['declaration'].get('access') != 'read_only' and authorized(row['declaration'], absolute)]
+            owners = [row for row in active if row['host'] == host and row['session'] == session and row['declaration'] and row['declaration'].get('access') != 'read_only' and authorized(row['declaration'], absolute)]
             if len(owners) != 1:
                 return response(host, f'Write targets are outside one declared owner scope or escape its worktree: {changed}. Expand the actual task scope without overlapping peers, or use the correct worktree.', True)
             if agent != 'main' and owners[0]['agent'] != agent:
@@ -248,7 +263,7 @@ def hook(host, event, payload):
         if tool in STRUCTURED_TOOLS:
             return response(host, 'Unsupported structured write format. Use an explicit file path or supported apply_patch headers so scope can be checked.', True)
         # Opaque commands cannot be reliably converted to filesystem effects.
-        owners = [row for row in active if row['host'] == host and row['session'] == session and identity(row['worktree']) == identity(effective)]
+        owners = [row for row in active if row['host'] == host and row['session'] == session and row['declaration'] and identity(row['worktree']) == identity(effective)]
         if payload.get('agent_id'):
             owners = [row for row in owners if row['id'] == key]
         else:
@@ -256,4 +271,6 @@ def hook(host, event, payload):
             owners = editors or owners
         if len(owners) != 1:
             return response(host, 'Run this operation with an explicit cwd equal to its declared worktree. Opaque command effects cannot be inferred safely from the session cwd.', True)
+        if transfer_fence(db,key,info):
+            return response(host,'This source transferred its writer role and cannot run opaque operations in the successor worktree. Use supported reads or a separate declared assignment.',True)
         return {}

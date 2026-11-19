@@ -25,7 +25,7 @@ pub(crate) fn tool() -> Value {
     json!({"name":"worktree_evaluate",
         "description":"Opt-in repository coordination and intent review. action=schema returns request fields. Declare task, worktree and owned file/folder scopes. Inspect worktrees against an explicit main ref, then evaluate reviewed hunk decisions into an isolated plan. No automatic merges or cleanup. Optional Kev advice is uncalibrated.",
         "inputSchema":{"type":"object","additionalProperties":false,"required":["action"],"properties":{
-            "action":{"type":"string","enum":["schema","declare","status","release","inspect","evaluate"]},
+            "action":{"type":"string","enum":["schema","declare","status","release","inspect","evaluate","transfer"]},
             "request":{"type":"object","description":"Action-specific fields from action=schema."},
             "use_kev":{"type":"boolean","default":false,"description":"Optional intent advice for inspect/evaluate only."}}}})
 }
@@ -164,7 +164,7 @@ pub(crate) fn call(args: &Value) -> Result<String, String> {
         serde_json::from_value(args.clone()).map_err(|e| format!("invalid request: {e}"))?;
     if !matches!(
         request.action.as_str(),
-        "schema" | "declare" | "status" | "release" | "inspect" | "evaluate"
+        "schema" | "declare" | "status" | "release" | "inspect" | "evaluate" | "transfer"
     ) || !request.request.is_object()
     {
         return Err("Unknown action or non-object request; use action=schema".into());

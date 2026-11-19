@@ -91,11 +91,13 @@ class CoordinationTests(unittest.TestCase):
         event = self.event('a', self.a, tool='exec_command')
         event['tool_input'] = {'cmd': command, 'workdir': str(self.a)}
         self.assertEqual(hook('codex', 'pretool', event), {})
+        # The restricted bootstrap cannot append shell commands before declaration.
+        event['tool_input']['cmd'] = command + ' && echo unauthorized'
+        self.assertEqual(hook('codex', 'pretool', event)['hookSpecificOutput']['permissionDecision'], 'deny')
+        event['tool_input']['cmd'] = command
         result = subprocess.run([sys.executable, '-I', str(coordinator), '--request-json', json.dumps(declaration)],
                                 capture_output=True, text=True, check=True)  # nosec B603
         self.assertIn('declared', result.stdout)
-        event['tool_input']['cmd'] = command + ' && echo unauthorized'
-        self.assertEqual(hook('codex', 'pretool', event)['hookSpecificOutput']['permissionDecision'], 'deny')
         declaration['request']['session_id'] = 'b'
         event['tool_input']['cmd'] = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))
         with self.assertRaisesRegex(ValueError, 'actual host/session/agent'):
@@ -192,11 +194,12 @@ class CoordinationTests(unittest.TestCase):
             outcomes = list(pool.map(reserve, values))
         self.assertEqual(sorted(outcomes), ['conflict', 'declared'])
 
-    def test_multiple_harnesses_require_all_declarations_and_check_targets(self):
+    def test_each_caller_declares_without_deadlocking_an_already_declared_peer(self):
         hook('codex', 'session', self.event('a', self.a))
         hook('claude', 'session', self.event('b', self.b))
         declare(self.declaration('a', self.a, 'src/a.txt'))
-        self.assertEqual(hook('codex', 'pretool', self.event('a', self.a))['hookSpecificOutput']['permissionDecision'], 'deny')
+        self.assertEqual(hook('codex', 'pretool', self.event('a', self.a)), {})
+        self.assertEqual(hook('claude', 'pretool', self.event('b', self.b))['hookSpecificOutput']['permissionDecision'], 'deny')
         declare(self.declaration('b', self.b, 'src/b.txt', 'claude'))
         self.assertEqual(hook('codex', 'pretool', self.event('a', self.a)), {})
         wrong = self.event('a', self.a)
@@ -217,6 +220,13 @@ class CoordinationTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertTrue(all(row['declaration'] for row in rows))
         hook('codex', 'subagent_end', self.event('family', self.a, agent_id='child'))
+        retained = status({'worktree': str(self.a)})['actors']
+        self.assertEqual(len(retained), 2)
+        child_claim = next(row for row in retained if row['agent'] == 'child')
+        self.assertEqual(child_claim['claim_state'], 'active')
+        self.assertIn('durable claim retained', child_claim['presence'])
+        release({'host':'codex','session_id':'family','agent_id':'child',
+                 'expected_generation':child_claim['generation'],'reason':'Child assignment explicitly completed'})
         self.assertEqual(len(status({'worktree': str(self.a)})['actors']), 1)
 
     def test_hermes_block_directive_and_session_end_preserve_files(self):

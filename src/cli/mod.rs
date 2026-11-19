@@ -10,6 +10,7 @@ pub mod framing;
 pub mod history;
 pub mod register;
 pub mod repository;
+pub mod session;
 pub mod setup;
 pub mod staleness;
 pub mod timeline;
@@ -58,6 +59,8 @@ pub enum Cmd {
     Debt(debt::DebtArgs),
     /// Check debugging evidence and problem framing; never approves a diagnosis.
     Framing(framing::FramingArgs),
+    /// Review session limits or a pinned handoff; automatic lifecycle control is separate.
+    Session(session::SessionArgs),
     /// Audit test currency/canonical ownership, or explicitly synchronize JSON fixtures.
     Staleness(staleness::StalenessArgs),
     /// Compare video frames and correlate synchronized performance evidence.

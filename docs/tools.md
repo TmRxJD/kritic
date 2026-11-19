@@ -1,5 +1,10 @@
 # Tools — test release
 
+Unreleased optional `session_critic` / `handoff_critic` check explicit session limits,
+protected user context, workspace and current fixture bindings. Models are optional;
+covered evidence is not semantic completeness or permission to reset a session.
+[Setup and boundaries](session-continuity.md).
+
 For frame-by-frame baseline and candidate video comparison with synchronized frame
 timing, worker activity and resource samples, use the standalone
 [`kritic timeline` command](timeline.md).

@@ -27,6 +27,12 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "framing_critic" => {
             "Check a debugging case against pinned observations, pipeline and hypotheses. No commands or models run. Consistency is not proof of root cause; inspect full_result."
         }
+        "session_critic" => {
+            "Check pinned session limits, protected user instructions and live workspace/fixture evidence. Optional lossless archive/typed relevance advice never grants a fresh-session transfer."
+        }
+        "handoff_critic" => {
+            "Check all captured user events, declared obligations, corrections and current fixture bindings before fresh context. Covered is scoped evidence, not semantic completeness or a launch receipt."
+        }
         "staleness_critic" => {
             "Audit declared test inventory, canonical owners, review hashes and JSON fixtures. Read-only; changed inputs require review, never automatic test blessing. No execution or semantic approval."
         }

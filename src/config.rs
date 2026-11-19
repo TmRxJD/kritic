@@ -199,6 +199,7 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.framing", "KRITIC_CAP_FRAMING"),
     ("capabilities.staleness", "KRITIC_CAP_STALENESS"),
     ("capabilities.invariants", "KRITIC_CAP_INVARIANTS"),
+    ("capabilities.sessions", "KRITIC_CAP_SESSIONS"),
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
@@ -225,6 +226,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "framing_critic",
     "staleness_critic",
     "invariant_critic",
+    "session_critic",
+    "handoff_critic",
     "critic_score",
     "decide",
     "visual_critic",
@@ -522,6 +525,7 @@ fn capability_settings(
         "framing",
         "staleness",
         "invariants",
+        "sessions",
         "plugins",
         "context",
         "domain_maps",
@@ -536,6 +540,7 @@ fn capability_settings(
                     | "framing"
                     | "staleness"
                     | "invariants"
+                    | "sessions"
                     | "git_ci"
             ),
             Some(v) => v.parse::<bool>().unwrap_or_else(|_| {
@@ -912,6 +917,7 @@ impl Config {
             "framing_critic" => self.capability("framing"),
             "staleness_critic" => self.capability("staleness"),
             "invariant_critic" => self.capability("invariants"),
+            "session_critic" | "handoff_critic" => self.capability("sessions"),
             "plugin_list" | "plugin_run" => self.capability("plugins"),
             "route" | "context_trim" | "locate" => {
                 self.capability("context") && self.backend != "off"
