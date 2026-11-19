@@ -55,18 +55,23 @@ def transaction():
             BEGIN SELECT RAISE(ABORT,'Transferred source cannot reclaim the writer role; use an acknowledged transfer'); END""")
         # Old clients filter out ended actors. Enforce durable reservations at the
         # database boundary too; an old declaration must not create a second writer.
-        conflict = """NEW.declaration IS NOT NULL AND COALESCE(json_extract(NEW.declaration,'$.access'),'edit')='edit' AND EXISTS (
-            SELECT 1 FROM actors a JOIN claim_states s ON s.actor=a.id
-            WHERE a.id<>NEW.id AND a.repo=NEW.repo AND s.state IN ('active','quiescent')
+        db.execute("""CREATE VIEW IF NOT EXISTS durable_writer_conflicts AS
+            SELECT w.id AS writer FROM actors w JOIN actors a ON a.id<>w.id AND a.repo=w.repo
+            JOIN claim_states s ON s.actor=a.id
+            WHERE w.declaration IS NOT NULL AND COALESCE(json_extract(w.declaration,'$.access'),'edit')='edit'
+            AND s.state IN ('active','quiescent')
             AND a.declaration IS NOT NULL AND COALESCE(json_extract(a.declaration,'$.access'),'edit')='edit'
-            AND (lower(replace(a.worktree,char(92),'/'))=lower(replace(NEW.worktree,char(92),'/')) OR EXISTS (
-                SELECT 1 FROM json_each(a.declaration,'$.scopes') x,json_each(NEW.declaration,'$.scopes') y
+            AND (lower(replace(a.worktree,char(92),'/'))=lower(replace(w.worktree,char(92),'/')) OR EXISTS (
+                SELECT 1 FROM json_each(a.declaration,'$.scopes') x,json_each(w.declaration,'$.scopes') y
                 WHERE lower(json_extract(x.value,'$.path'))=lower(json_extract(y.value,'$.path'))
                 OR (substr(json_extract(x.value,'$.path'),-1)='/' AND lower(substr(json_extract(y.value,'$.path'),1,length(json_extract(x.value,'$.path'))))=lower(json_extract(x.value,'$.path')))
-                OR (substr(json_extract(y.value,'$.path'),-1)='/' AND lower(substr(json_extract(x.value,'$.path'),1,length(json_extract(y.value,'$.path'))))=lower(json_extract(y.value,'$.path'))))))"""
-        for operation in ('INSERT','UPDATE OF declaration,worktree,repo'):
-            name = 'insert' if operation == 'INSERT' else 'update'
-            db.execute(f"CREATE TRIGGER IF NOT EXISTS durable_writer_{name} BEFORE {operation} ON actors WHEN {conflict} BEGIN SELECT RAISE(ABORT,'Durable writer reservation conflicts; use the matching coordinator'); END")
+                OR (substr(json_extract(y.value,'$.path'),-1)='/' AND lower(substr(json_extract(x.value,'$.path'),1,length(json_extract(y.value,'$.path'))))=lower(json_extract(y.value,'$.path')))))""")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS durable_writer_insert AFTER INSERT ON actors
+            WHEN EXISTS (SELECT 1 FROM durable_writer_conflicts WHERE writer=NEW.id)
+            BEGIN SELECT RAISE(ABORT,'Durable writer reservation conflicts; use the matching coordinator'); END""")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS durable_writer_update AFTER UPDATE OF declaration,worktree,repo ON actors
+            WHEN EXISTS (SELECT 1 FROM durable_writer_conflicts WHERE writer=NEW.id)
+            BEGIN SELECT RAISE(ABORT,'Durable writer reservation conflicts; use the matching coordinator'); END""")
         yield db
         db.execute('COMMIT')
     except BaseException:
