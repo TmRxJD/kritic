@@ -86,6 +86,8 @@ jobs:
           COORDINATION_TEST_ROOT: ${{ runner.temp }}/coordination-tests
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s integrations/coordination -p 'test_*.py'
+      - name: Agent message contract
+        run: python -B -m unittest discover -s integrations/agent-messages -p 'test_*.py'
       - name: Stage validated Windows test binary
         # cargo test creates hashed test harnesses, not every standalone MCP executable.
         # Build the exact executables before the staging script hashes/copies them.
