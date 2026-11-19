@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-test.14 — test release (2026-11-19)
+
+- Add explicit prompt cloud output-format selection for supporting OpenAI-compatible/OpenAI endpoints. A live compatible-API generation returned non-JSON; schema mode requests the canonical candidate contract while retaining strict decoding and original-prompt authority. Generic prompt-only compatibility remains the default.
+
+- Gate Windows release packaging on a reproducible CPU-only live Qwen prompt-provider smoke. Verify the downloaded runtime checksum, enforce commit reserve and an owned process-tree memory limit, retain model/output evidence, and confirm no test descendants remain.
+- Require nonempty source-to-brief mappings in both the generated prompt schema and validator. A live small-model reply exposed the previous schema/validation mismatch; rejected evidence-free assessments retain the original prompt.
+
+- Add opt-in prompt intake with bounded deterministic checks and explicit local generative Qwen, existing cloud API, or official Codex CLI/login providers. Preserve exact originals, reject concrete literal/condition drift, and keep model briefs advisory with semantic equivalence unproven.
+- Add nonblocking supplementary prompt hooks for compatible Codex/Claude Code hosts and an optional Hermes pre-LLM adapter. Keep errors fail-open, avoid self-review recursion, and leave tool permissions, worktree ownership and original user authority intact. Native augmentation does not claim input-token savings.
+- Document supported subscription/API boundaries and the task-manager integration direction. Direct ChatGPT OAuth and a full independent execution harness are not advertised as implemented.
 
 - Add opt-in session and handoff evidence critics: pinned original captures, explicit user corrections and solutions, current fixture bindings, complete dirty-work inventories, and operational session limits. Missing evidence or context-budget overflow stays blocked; no model approval is implied.
 - Add explicit same-worktree ownership succession to the worktree critic. Prepare at an observed turn boundary, bind an actual fresh-session identity, then accept the pinned handoff and evidence inventory. Preserve task, scopes, HEAD, index and dirty bytes; fence previous writers and retain successor ownership across process exit/resume. Cancellation preserves the original assignment. Unattended session launching remains a separate controller integration.

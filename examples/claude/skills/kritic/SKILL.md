@@ -46,7 +46,7 @@ their work, discard their changes or bypass a scope denial. If recovery is itsel
 blocked, preserve the exact denial as a Kritic defect. See the release's
 `integrations/coordination/README.md` for enrollment, recovery and coverage limits.
 
-Source builds with session continuity add `worktree_evaluate(action="transfer")`.
+Test.14 with Kev Tools 0.4 adds `worktree_evaluate(action="transfer")`.
 For a user-requested continuation, keep the existing worktree and dirty work. Use
 the discovered prepare/bind/accept schemas, a covered pinned handoff and the actual
 fresh-session identity. The successor must read the evidence and acknowledge it
@@ -54,11 +54,20 @@ before inheriting the source task and scopes. The source must remain quiescent w
 pending and cannot resume writing after acceptance. Runtime exit does not release
 ownership; use explicit release or acknowledged transfer. Never redeclare around
 a reservation, copy an old tree over current work, or infer ownership from a missing
-heartbeat. Matching adapters are required; test.13 predates transfer support.
+heartbeat. Matching test.14 adapters are required; test.13 predates transfer support.
 The critics do not start fresh sessions themselves. Do not create handoffs or
 restart sessions without an explicit user request or an explicitly enrolled policy.
 
 ### Setup is the agent's responsibility
+
+Test.14 optionally exposes `prompt_critic` and `kritic prompt` for explicitly
+enrolled prompt intake, separate from end-of-task implementation review. Keep the
+original user's text authoritative; a model brief cannot change scope, permissions
+or acceptance criteria. Review exact source mappings and rejected literals; never
+claim semantic equivalence from a score. Hooks may add supplementary context, never
+silently replace user instructions or block ordinary work on model failure. Local
+Qwen, explicit cloud APIs and official Codex CLI login are selected independently;
+no automatic cloud disclosure or credential scraping. See `docs/prompt-pipeline.md`.
 
 At first project review or after a setup failure, resolve the actual target repository and inspect
 `status(start=false, base_dir=repo)` when supported. For absent tools, missing manifests,

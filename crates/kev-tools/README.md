@@ -4,7 +4,9 @@ Shared MCP tools for Codex, Claude Code and Hermes. The server provides extracti
 
 ## Worktree intent and scope
 
-`worktree_evaluate` exposes `schema`, `declare`, `status`, `release`, `inspect` and `evaluate` actions. Its strict action-specific request schemas are returned on demand by `{"action":"schema"}`. Declarations name the actual host/session/agent, separate worktree, task, change explanation and exact file/directory scopes. Conflicting reservations are rejected atomically across enrolled Codex, Claude Code and Hermes sessions.
+`worktree_evaluate` exposes `schema`, `declare`, `status`, `release`, `inspect`, `evaluate` and `transfer` actions. Its strict action-specific request schemas are returned on demand by `{"action":"schema"}`. Declarations name the actual host/session/agent, separate worktree, task, change explanation and exact file/directory scopes. Conflicting reservations are rejected atomically across enrolled Codex, Claude Code and Hermes sessions.
+
+Version 0.4 adds explicit same-worktree session succession: prepare at an observed turn boundary, bind a real successor identity, then accept the pinned handoff and current evidence. Transfer preserves task/scopes, HEAD, index and dirty work, fences previous writers and keeps accepted ownership across exit/resume. Missing evidence blocks transfer; cancellation retains the original assignment. Session end does not release durable editing ownership. Automatic fresh-session launching requires a separate host controller. See [session continuity](../../docs/session-continuity.md).
 
 The shared coordination integration lives in Kritic's `integrations/coordination/`. Install its Python runtime beside the Kev Tools executable under `coordination/` or set `KEV_COORDINATION_SCRIPT` to the absolute coordinator.py path. It uses Python 3.11+, Git and a permanent SQLite registry. The same integration supplies additive lifecycle and pre-tool harness hooks. Reconnect existing sessions to load the new tool and hooks.
 

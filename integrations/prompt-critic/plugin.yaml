@@ -1,0 +1,5 @@
+name: kritic-prompt
+version: 0.1.0
+description: Opt-in advisory prompt brief; original user message remains authoritative.
+hooks:
+  - pre_llm_call

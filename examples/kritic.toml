@@ -56,6 +56,13 @@
 # vision_gpu_uuid = ""                          # KRITIC_VISION_GPU_KEV_UUID
 # vision_gpu_idle_s = 120                       # KRITIC_VISION_GPU_KEV_IDLE_S (0: never stop)
 
+[prompt]
+# backend = "off" # KRITIC_PROMPT_BACKEND: off | local | cloud | codex; explicit model use only
+# model = "" # KRITIC_PROMPT_MODEL: installed Qwen, cloud override, or native Codex selection
+# cloud_format = "prompt" # KRITIC_PROMPT_CLOUD_FORMAT: prompt | json_object | json_schema; explicit endpoint support
+# codex_exe = "codex" # KRITIC_PROMPT_CODEX_EXE: official binary; owns its own login
+# timeout_s = 12 # KRITIC_PROMPT_TIMEOUT_S: 1..120; native prompt hook caps this at 8
+
 [cloud]
 # Optional, explicitly selected API provider. No keys or host-agent OAuth tokens are discovered.
 # API access/billing is separate from an assistant subscription. Alternatively let your existing
@@ -137,6 +144,7 @@
 # disabled = []                       # KRITIC_DISABLED_TOOLS (comma-separated)
 
 [capabilities]
+# prompts = false # KRITIC_CAP_PROMPTS: advisory prompt intake, separate opt-in
 # sessions = false # KRITIC_CAP_SESSIONS: review only; automatic lifecycle enrollment is separate.
 # staleness = false                            # KRITIC_CAP_STALENESS: model-free test/canonical-source audit; CLI works without enabling MCP
 # invariants = false                           # KRITIC_CAP_INVARIANTS: declared key-boundary guards and negative-test bindings

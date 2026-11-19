@@ -1,5 +1,9 @@
 # Tools — test release
 
+Test.14 adds opt-in `prompt_critic`: deterministic prompt inspection and
+explicit Qwen/cloud/native Codex brief generation. Original user authority remains;
+no semantic equivalence or replacement is implied. See [prompt intake](prompt-pipeline.md).
+
 Unreleased optional `session_critic` / `handoff_critic` check explicit session limits,
 protected user context, workspace and current fixture bindings. Models are optional;
 covered evidence is not semantic completeness or permission to reset a session.
