@@ -12,7 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from contract import schema, validate
 from hook import response, violation
-from deploy import install
+from deploy import activate_link, install, make_link
 import hermes_plugin
 
 
@@ -155,6 +155,39 @@ class MessageTests(unittest.TestCase):
         self.assertIn('unrelated-hook',commands)
         self.assertEqual(sum(str(new/'hook.py').replace('\\','/') in command for command in commands),1)
         self.assertFalse(any(str(old/'hook.py').replace('\\','/') in command for command in commands))
+
+    def test_failed_link_replacement_restores_old_alias(self):
+        root = Path(os.environ.get('AGENT_MESSAGE_TEST_ROOT',tempfile.gettempdir())) / f'link-failure-{time.time_ns()}'
+        old,new,destination = root/'old/hermes-plugin',root/'new/hermes-plugin',root/'plugins/messages'
+        old.mkdir(parents=True)
+        new.mkdir(parents=True)
+        make_link(destination,old)
+        with patch('deploy.make_link',side_effect=OSError('injected link failure')):
+            with self.assertRaisesRegex(OSError,'injected'):
+                activate_link(destination,new,old)
+        self.assertEqual(destination.resolve(),old)
+        self.assertTrue(old.is_dir())
+        self.assertTrue(new.is_dir())
+
+    def test_later_config_failure_rolls_back_hermes_link_and_hooks(self):
+        root = Path(os.environ.get('AGENT_MESSAGE_TEST_ROOT',tempfile.gettempdir())) / f'config-failure-{time.time_ns()}'
+        codex,claude,old,new,hermes = root/'codex',root/'claude',root/'old',root/'new',root/'hermes'
+        hermes.mkdir(parents=True)
+        (hermes/'config.yaml').write_text('plugins:\n  enabled:\n    - existing\nmcp_servers: {}\n',encoding='utf8')
+        install(old,codex,claude,hermes)
+        paths = [codex/'hooks.json',claude/'settings.json',hermes/'config.yaml']
+        before = {path:path.read_bytes() for path in paths}
+        original = os.replace
+        def fail_claude(source,destination):
+            if Path(destination) == claude/'settings.json':
+                raise OSError('injected config failure')
+            return original(source,destination)
+        with patch('deploy.os.replace',side_effect=fail_claude):
+            with self.assertRaisesRegex(OSError,'injected'):
+                install(new,codex,claude,hermes,replace_runtime=old)
+        self.assertEqual((hermes/'plugins/agent-message-contract').resolve(),old/'hermes-plugin')
+        for path in paths:
+            self.assertEqual(path.read_bytes(),before[path])
 
 
 if __name__ == '__main__':

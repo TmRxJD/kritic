@@ -9,6 +9,60 @@ import shlex
 import subprocess  # nosec B404
 
 
+def make_link(destination, target):
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    if os.name == 'nt':
+        shell = Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/WindowsPowerShell/v1.0/powershell.exe'
+        subprocess.run(  # nosec B603
+            [str(shell),'-NoProfile','-NonInteractive','-Command',
+             "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:MESSAGE_LINK -Target ([WildcardPattern]::Escape($env:MESSAGE_TARGET)) | Out-Null"],
+            env=dict(os.environ,MESSAGE_LINK=str(destination),MESSAGE_TARGET=str(target)),check=True,creationflags=subprocess.CREATE_NO_WINDOW)
+    else:
+        destination.symlink_to(target,target_is_directory=True)
+
+
+def remove_owned_link(destination, target):
+    # Roll back only the alias created by this activation, never its contents.
+    if destination.resolve() != target:
+        raise ValueError('Hermes plugin link changed during activation; preserve it and inspect the backup')
+    if destination.is_symlink():
+        destination.unlink()
+    elif os.name == 'nt':
+        os.rmdir(destination)  # Removes the verified junction, not its target.
+    else:
+        raise ValueError('Expected an owned plugin symlink')
+
+
+def activate_link(destination, target, previous):
+    backup = None
+    if destination.exists():
+        if destination.resolve() == target:
+            return None
+        if previous is None or destination.resolve() != previous:
+            raise ValueError('Hermes message plugin points elsewhere; select its exact --replace-runtime')
+        backup = destination.with_name(destination.name+'.previous-'+previous.parent.name)
+        if backup.exists():
+            raise ValueError('Previous Hermes plugin link backup already exists; inspect before retrying')
+        destination.rename(backup)
+    try:
+        make_link(destination,target)
+    except BaseException:
+        if destination.exists():
+            remove_owned_link(destination,target)
+        if backup is not None:
+            backup.rename(destination)
+        raise
+    return destination,target,backup
+
+
+def undo_link(receipt):
+    if receipt:
+        destination,target,backup = receipt
+        remove_owned_link(destination,target)
+        if backup is not None:
+            backup.rename(destination)
+
+
 def install(runtime, codex, claude, hermes=None, replace_runtime=None):
     source = Path(__file__).resolve().parent
     runtime = Path(runtime).resolve()
@@ -23,6 +77,7 @@ def install(runtime, codex, claude, hermes=None, replace_runtime=None):
     marker = {'integration':'kritic-agent-message-contract','schema_version':1}
     (runtime/'MESSAGE-CONTRACT.json').write_text(json.dumps(marker),encoding='utf8')
     updates = []
+    link = None
     for host, path in [('codex', Path(codex)/'hooks.json'), ('claude', Path(claude)/'settings.json')]:
         before = path.read_bytes() if path.exists() else None
         data = json.loads(before) if before else {}
@@ -79,29 +134,13 @@ def install(runtime, codex, claude, hermes=None, replace_runtime=None):
         (plugin/'contract.json').write_text(json.dumps({'hook':(runtime/'hook.py').as_posix()}),encoding='utf8')
         (plugin/'plugin.yaml').write_text('name: agent-message-contract\nversion: 0.1.0\ndescription: Compact typed agent messages.\nhooks:\n  - pre_tool_call\n',encoding='utf8')
         destination = home/'plugins/agent-message-contract'
-        create = not destination.exists()
-        if destination.exists():
-            if destination.resolve() != plugin:
-                if not previous or destination.resolve() != previous/'hermes-plugin':
-                    raise ValueError('Hermes message plugin already points elsewhere; select its exact --replace-runtime')
-                backup = destination.with_name(destination.name+'.previous-'+previous.name)
-                if backup.exists():
-                    raise ValueError('Previous Hermes plugin link backup already exists; inspect before retrying')
-                destination.rename(backup)
-                create = True
-        if create:
-            destination.parent.mkdir(parents=True,exist_ok=True)
-            if os.name == 'nt':
-                shell = Path(os.environ.get('SystemRoot','C:/Windows'))/'System32/WindowsPowerShell/v1.0/powershell.exe'
-                subprocess.run(  # nosec B603
-                    [str(shell),'-NoProfile','-NonInteractive','-Command',
-                     "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:MESSAGE_LINK -Target ([WildcardPattern]::Escape($env:MESSAGE_TARGET)) | Out-Null"],
-                    env=dict(os.environ,MESSAGE_LINK=str(destination),MESSAGE_TARGET=str(plugin)),check=True,creationflags=subprocess.CREATE_NO_WINDOW)
-            else:
-                destination.symlink_to(plugin,target_is_directory=True)
+        link = destination,plugin,previous/'hermes-plugin' if previous else None
         updates.append((path,before,raw.encode('utf8')))
     changed = []
+    receipt = None
     try:
+        if link:
+            receipt = activate_link(*link)
         for path,before,after in updates:
             if (path.read_bytes() if path.exists() else None) != before:
                 raise ValueError(f'Configuration changed: {path}')
@@ -114,12 +153,15 @@ def install(runtime, codex, claude, hermes=None, replace_runtime=None):
             os.replace(temporary,path)
             changed.append((path,before,after))
     except BaseException:
-        for path,before,after in reversed(changed):
-            if path.read_bytes() == after:
-                if before is None:
-                    path.unlink()
-                else:
-                    path.write_bytes(before)
+        try:
+            for path,before,after in reversed(changed):
+                if path.read_bytes() == after:
+                    if before is None:
+                        path.unlink()
+                    else:
+                        path.write_bytes(before)
+        finally:
+            undo_link(receipt)
         raise
     return {'hook':(runtime/'hook.py').as_posix(),'configs':[str(p) for p,_,_ in updates]}
 
