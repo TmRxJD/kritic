@@ -11,8 +11,8 @@ def messages(tool, args):
     name = tool.rsplit('__', 1)[-1].rsplit('.', 1)[-1]
     if name in ('spawn_agent', 'send_message', 'followup_task', 'message_agent'):
         return [('message', args.get('message'), name == 'spawn_agent')]
-    if name in ('Task', 'Agent', 'create_thread', 'fork_thread', 'send_message_to_thread'):
-        return [('prompt', args.get('prompt'), name in ('Task', 'Agent', 'create_thread', 'fork_thread'))]
+    if name in ('Task', 'Agent', 'create_thread', 'send_message_to_thread'):
+        return [('prompt', args.get('prompt'), name in ('Task', 'Agent', 'create_thread'))]
     if name == 'SendMessage' and args.get('type', 'message') in ('message', 'broadcast'):
         return [('content', args.get('content'), False)]
     if name == 'delegate_task':

@@ -51,6 +51,11 @@ the runtime validator itself uses only Python's standard library. Reconnect clie
 and restart Hermes to load new hooks/plugins. Defaults target `~/.codex` and
 `~/.claude`; use `--help` for overrides. Run tests before enrollment:
 `python -B -m unittest discover -s integrations/agent-messages -p 'test_*.py'`.
+For an upgrade, choose a new permanent runtime and pass `--replace-runtime
+<previous runtime>`. The installer refuses known competing versions unless that
+exact prior runtime is selected, then replaces only its managed hooks. Re-enrollment
+also removes an old restricted matcher for the same contract before installing
+unrestricted message coverage. Unrelated hooks remain intact.
 
 The native adapter checks Codex `spawn_agent`, `send_message`, `followup_task`,
 Codex app thread prompts, Claude `Task`/`Agent`/`SendMessage`, and Hermes
@@ -59,6 +64,8 @@ Hermes delegation uses the JSON envelope in `goal`; put references in the JSON
 `context` array rather than its unchecked external `context` string. Every child
 in a Hermes batch is checked. List/stop and shutdown control operations are left
 alone. Nonmessage tools and user-facing replies are unaffected.
+Codex `fork_thread` carries no message/prompt; it is left alone. Any subsequent
+thread message is validated separately.
 
 Only enrolled supported hook paths are enforced. Calls hidden inside an opaque
 code-mode wrapper and automatic subagent final responses may bypass native

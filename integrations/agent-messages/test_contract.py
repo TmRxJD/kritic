@@ -76,6 +76,7 @@ class MessageTests(unittest.TestCase):
         self.assertIsNotNone(violation('delegate_task', {'tasks':[{'goal':raw},{'goal':'unchecked prose'}]}))
         self.assertIsNone(violation('delegate_task', {'action':'list'}))
         self.assertIsNone(violation('Edit', {'file_path':'src/a.rs','content':'user-facing thank you text'}))
+        self.assertIsNone(violation('mcp__codex_app__fork_thread', {'threadId':'existing-thread','environment':'worktree'}))
 
     def test_native_hook_process_accepts_valid_and_denies_invalid(self):
         script = Path(__file__).resolve().parent / 'hook.py'
@@ -132,6 +133,28 @@ class MessageTests(unittest.TestCase):
         callback = callbacks['pre_tool_call']
         self.assertEqual(callback('message_agent',{'message':'Please review, thanks'})['action'],'block')
         self.assertIsNone(callback('message_agent',{'message':json.dumps(self.task())}))
+
+    def test_installer_migrates_exact_managed_version_and_restricted_matcher(self):
+        root = Path(os.environ.get('AGENT_MESSAGE_TEST_ROOT',tempfile.gettempdir())) / f'message-upgrade-{time.time_ns()}'
+        codex,claude,old,new = root/'codex',root/'claude',root/'old',root/'new'
+        install(old,codex,claude)
+        path = codex/'hooks.json'
+        data = json.loads(path.read_text(encoding='utf8'))
+        data['hooks']['PreToolUse'][0]['matcher'] = 'Read'
+        data['hooks']['PreToolUse'].append({'hooks':[{'type':'command','command':'unrelated-hook'}]})
+        path.write_text(json.dumps(data),encoding='utf8')
+        install(old,codex,claude)
+        data = json.loads(path.read_text(encoding='utf8'))
+        self.assertEqual(len(data['hooks']['PreToolUse']),2)
+        self.assertNotIn('matcher',data['hooks']['PreToolUse'][-1])
+        with self.assertRaisesRegex(ValueError,'replace-runtime'):
+            install(new,codex,claude)
+        install(new,codex,claude,replace_runtime=old)
+        data = json.loads(path.read_text(encoding='utf8'))
+        commands = [item['command'] for group in data['hooks']['PreToolUse'] for item in group['hooks']]
+        self.assertIn('unrelated-hook',commands)
+        self.assertEqual(sum(str(new/'hook.py').replace('\\','/') in command for command in commands),1)
+        self.assertFalse(any(str(old/'hook.py').replace('\\','/') in command for command in commands))
 
 
 if __name__ == '__main__':
