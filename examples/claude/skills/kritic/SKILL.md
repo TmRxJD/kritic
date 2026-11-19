@@ -27,6 +27,25 @@ as part of invoking this test-release skill; they do not authorize publishing th
 
 ## Review workflow
 
+### Optional worktree coordination is a separate companion
+
+Test.13 includes the `kev-tools` companion MCP server. Register its executable in
+addition to `kritic` to expose `worktree_evaluate` and `staleness_evaluate`; reconnect
+existing clients after registration. These tools are opt-in. When coordination
+hooks are enrolled, each agent declares its actual identity, task, change explanation,
+worktree and owned scopes through `worktree_evaluate(action="schema")`, then
+`action="declare"`. Directory scopes end in `/`; editing agents need separate trees
+and nonoverlapping scopes. Read-only reviewers declare `access="read_only"`.
+
+If the tool is absent, discover it first. Discovery and peer messaging must stay
+available before declaration. The hook supplies a restricted native-command
+bootstrap with the exact installed coordinator path, full caller identity and JSON
+request. Use it through `exec_command` or `Bash`, supplying your actual task and
+scopes. Ask undeclared peers to declare themselves; never impersonate them, guess
+their work, discard their changes or bypass a scope denial. If recovery is itself
+blocked, preserve the exact denial as a Kritic defect. See the release's
+`integrations/coordination/README.md` for enrollment, recovery and coverage limits.
+
 ### Setup is the agent's responsibility
 
 At first project review or after a setup failure, resolve the actual target repository and inspect

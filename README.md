@@ -18,7 +18,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 
 [Get started](#quickstart-install-the-minimum-then-choose-extras) ·
 [Choose capabilities](#choose-your-capabilities) · [Hardware](#what-your-hardware-can-run) ·
-[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.12)
+[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.13)
 
 ## What Kritic governs
 
@@ -26,6 +26,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 |---|---|---|
 | **Requirements and acceptance** | Work contracts, current input/evidence hashes, declared assertions and enforcement wiring. | Uncovered prose and unrun checks stay unverified. A weak assertion cannot establish the whole requirement. |
 | **Repository discipline** | Broad/focused/atomic commit budgets, staged-tree scope plans, file size, naming, layers, imports and organization rules. Explicit local hooks can reject noncompliant commits. | Size and pattern compliance do not prove semantic cohesion, modularity or good comments. Hooks can be bypassed. |
+| **Opt-in worktree coordination** | Shared Codex, Claude Code and Hermes task/scope declarations, editing-worktree reservations, and reviewed integration plans through Kev Tools. See [setup and coverage](integrations/coordination/README.md). | Enrolled sessions and supported structured writes are checked. Opaque commands remain cooperative, and model advice does not approve a merge. |
 | **Tests and canonical sources** | One graph of canonical owners, test dependencies, reviewed hashes and generated JSON fixtures. Staleness checks flag drift; invariant checks inspect declared boundaries, guards and negative-test bindings. | Consistent hashes or matching guard text do not prove tests are correct, execute, or cover every important boundary. |
 | **Implementation and behavior** | Project validators, security scanners, linters, browser interactions, accessibility/workflow rules, Windows desktop tests and resource/process measurements. | Evidence covers the checks and states actually exercised. Missing dependencies and unobserved effects remain gaps. |
 | **Problem framing and product quality** | Debugging-case consistency, competing explanations and causal evidence; optional screenshot/novice review against explicit visual and workflow goals. | A consistent frame is not a proven root cause. Functional success does not establish professional or AAA quality. |
@@ -66,7 +67,7 @@ flowchart LR
 
 **Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter only; the Mac MCP server requires a source build. Start without models and add only relevant tools.
 
-1. Download the Windows ZIP from [v0.5.0-test.12](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.12),
+1. Download the Windows ZIP from [v0.5.0-test.13](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.13),
    verify it against the release's `SHA256SUMS`, and extract it into a persistent location.
    The ZIP includes `kritic.exe`, `kev.exe`, `kev-filter.exe`, the skill, examples, documentation and optional desktop harness.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)

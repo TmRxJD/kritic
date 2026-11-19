@@ -4,10 +4,11 @@ $artifactDir = Join-Path $env:RUNNER_TEMP 'kritic-windows-test'
 New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
 Copy-Item -LiteralPath target/debug/kritic.exe -Destination "$artifactDir/kritic.exe"
 $binaries = [ordered]@{}
-foreach ($name in @('kritic.exe', 'kev.exe', 'kev-filter.exe')) {
+foreach ($name in @('kritic.exe', 'kev.exe', 'kev-filter.exe', 'kev-tools.exe')) {
     Copy-Item -LiteralPath "target/debug/$name" -Destination "$artifactDir/$name"
     $binaries[$name] = (Get-FileHash -LiteralPath "$artifactDir/$name" -Algorithm SHA256).Hash.ToLowerInvariant()
 }
+Copy-Item integrations/coordination "$artifactDir/coordination" -Recurse
 [ordered]@{
     head_sha = $env:PR_HEAD_SHA
     checkout_sha = (git rev-parse HEAD)
