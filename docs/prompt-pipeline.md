@@ -33,6 +33,7 @@ first. Never invent scope, commands, tests, acceptance criteria or permissions.
 prompts = true
 [prompt]
 backend = "off" # off | local | cloud | codex
+cloud_format = "prompt" # prompt | json_object | json_schema (OpenAI-compatible/OpenAI)
 timeout_s = 12  # 1..120; hooks cap this at 8 seconds
 ```
 
@@ -48,6 +49,13 @@ and does not pretend to detect arbitrary ambiguity.
   optionally override `prompt.model`. Existing OpenAI-compatible/OpenAI/Anthropic/
   Gemini text APIs work; JEV generation is rejected. Explicit selection discloses
   the supplied prompt and may incur charges. No silent fallback or retry loop.
+  The default `cloud_format="prompt"` preserves generic endpoint compatibility.
+  For a supporting OpenAI/OpenAI-compatible endpoint, explicitly choose
+  `json_schema` to request the canonical candidate schema or `json_object` for
+  JSON mode. Unsupported formats/providers fail safely and retain the original;
+  no automatic downgrade occurs. Schema-constrained output still requires all
+  local intent/evidence guards. [Ollama documents compatible structured output](https://docs.ollama.com/capabilities/structured-outputs);
+  its local compatible API is tested separately from billed external providers.
 - Codex: set `backend="codex"`, `codex_exe="codex"` or the official binary's
   absolute path, and optionally a model your account supports. `kritic prompt
   --login codex` invokes official sign-in. Kritic never reads/copies its tokens.

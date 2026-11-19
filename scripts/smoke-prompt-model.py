@@ -286,6 +286,7 @@ def main():
         config.write_text('[capabilities]\nprompts=true\n[prompt]\ntimeout_s=120\n', encoding='utf8')
         env.update(KRITIC_CONFIG=str(config), KRITIC_CAP_PROMPTS='true', KRITIC_PROMPT_MODEL=args.model,
                    KRITIC_PROMPT_TIMEOUT_S='120', KRITIC_OLLAMA_URL=base,
+                   KRITIC_PROMPT_CLOUD_FORMAT='json_schema',
                    KRITIC_KEV_REQUEST_S='120', KRITIC_CLOUD_MAX_OUTPUT_TOKENS='2048',
                    KRITIC_CLOUD_PROVIDER='openai-compatible', KRITIC_CLOUD_MODEL=args.model,
                    KRITIC_CLOUD_URL=base + '/v1/chat/completions', KRITIC_CLOUD_KEY_ENV='SMOKE_DUMMY_KEY',

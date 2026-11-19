@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - 2026-11-19
+
+- Add explicit same-worktree ownership transfer phases for a prepared, bound and accepted session successor; preserve task/scopes, Git state and dirty evidence, and fence previous writers.
+- Keep editing ownership durable across session-end events. Cancellation preserves the original assignment; unavailable peers cannot silently discard claims.
+- Expose transfer schemas on demand. Automatic session launching remains a separate host-controller integration; a transfer never implies a merge or cleanup.
+
 ## 0.3.0 - 2026-11-19
 
 - Add opt-in `worktree_evaluate` actions for shared ownership declarations, scope status/history and read-only worktree intent review.

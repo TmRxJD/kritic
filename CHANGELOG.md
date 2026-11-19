@@ -2,6 +2,8 @@
 
 ## 0.5.0-test.14 — test release (2026-11-19)
 
+- Add explicit prompt cloud output-format selection for supporting OpenAI-compatible/OpenAI endpoints. A live compatible-API generation returned non-JSON; schema mode requests the canonical candidate contract while retaining strict decoding and original-prompt authority. Generic prompt-only compatibility remains the default.
+
 - Gate Windows release packaging on a reproducible CPU-only live Qwen prompt-provider smoke. Verify the downloaded runtime checksum, enforce commit reserve and an owned process-tree memory limit, retain model/output evidence, and confirm no test descendants remain.
 - Require nonempty source-to-brief mappings in both the generated prompt schema and validator. A live small-model reply exposed the previous schema/validation mismatch; rejected evidence-free assessments retain the original prompt.
 
