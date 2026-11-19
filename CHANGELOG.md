@@ -2,6 +2,8 @@
 
 ## 0.5.0-test.14 — test release (2026-11-19)
 
+- Gate Windows release packaging on a reproducible CPU-only live Qwen prompt-provider smoke. Verify the downloaded runtime checksum, enforce commit reserve and an owned process-tree memory limit, retain model/output evidence, and confirm no test descendants remain.
+
 - Add opt-in prompt intake with bounded deterministic checks and explicit local generative Qwen, existing cloud API, or official Codex CLI/login providers. Preserve exact originals, reject concrete literal/condition drift, and keep model briefs advisory with semantic equivalence unproven.
 - Add nonblocking supplementary prompt hooks for compatible Codex/Claude Code hosts and an optional Hermes pre-LLM adapter. Keep errors fail-open, avoid self-review recursion, and leave tool permissions, worktree ownership and original user authority intact. Native augmentation does not claim input-token savings.
 - Document supported subscription/API boundaries and the task-manager integration direction. Direct ChatGPT OAuth and a full independent execution harness are not advertised as implemented.

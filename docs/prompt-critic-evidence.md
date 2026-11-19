@@ -62,3 +62,12 @@ These results do not prove arbitrary intent preservation, production usefulness,
 every cloud account's compatibility or complete harness behavior.
 
 See [setup, provider limits and pipeline boundaries](prompt-pipeline.md).
+
+Release packaging additionally runs `scripts/smoke-prompt-model.py` against the
+compiled release binary with CPU-only Qwen2.5 1.5B. The Windows runtime archive is
+version/checksum pinned. The smoke requires actual valid local and loopback
+OpenAI-compatible proposals, exact original/hash retention, CPU placement and
+verified cleanup. `prompt-cpu-evidence` records model digest, reports and resource
+samples; inspect its observed result rather than treating workflow presence as a
+passing test. Local Job Object checks confirmed suspended assignment/resume and
+termination of a Python parent/grandchild tree with zero active descendants.
