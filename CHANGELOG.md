@@ -2,6 +2,8 @@
 
 ## 0.5.0-test.13 — test release (2026-11-19)
 
+- Keep tool discovery and agent messaging available before scope declaration. Hook denials now include the actual caller identity and an exact restricted native-command bootstrap when the MCP tool is not loaded; the bootstrap cannot append arbitrary shell commands or declare another actor.
+
 - Ship Kev Tools 0.3.0 as a workspace crate and Windows/Apple Silicon companion binary, with the matching Python coordinator beside it. No GPU is required for deterministic provenance selection or worktree coordination.
 - Add opt-in schema-enforced version/provenance selection with content hashes, explicit authority, current/historical modes and optional bounded Kev advice. Ambiguous, mutated or stale authority evidence blocks selection.
 

@@ -2,6 +2,8 @@
 import concurrent.futures
 import json
 import os
+import shlex
+import subprocess  # nosec B404
 from pathlib import Path
 import sys
 import tempfile
@@ -71,6 +73,33 @@ class CoordinationTests(unittest.TestCase):
     def test_scope_overlap_is_component_based(self):
         self.assertTrue(overlaps('src/foo/', 'src/foo/a.txt'))
         self.assertFalse(overlaps('src/foo/', 'src/foobar/a.txt'))
+
+    def test_missing_mcp_tool_can_discover_message_and_declare_with_native_command(self):
+        hook('codex', 'session', self.event('a', self.a))
+        hook('claude', 'session', self.event('b', self.b))
+        for tool in ('tool_search.search', 'functions.search_tools', 'mcp__codex_app__send_message_to_thread', 'collaboration.send_message'):
+            event = self.event('a', self.a, tool=tool)
+            event['tool_input'] = {'query': 'worktree_evaluate'}
+            self.assertEqual(hook('codex', 'pretool', event), {})
+        denied = hook('codex', 'pretool', self.event('a', self.a))
+        reason = denied['hookSpecificOutput']['permissionDecisionReason']
+        self.assertIn('--request-json', reason)
+        self.assertIn('session_id=a', reason)
+        coordinator = Path(__file__).resolve().parent / 'coordinator.py'
+        declaration = {'action': 'declare', 'request': self.declaration('a', self.a, 'src/a.txt')}
+        command = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))
+        event = self.event('a', self.a, tool='exec_command')
+        event['tool_input'] = {'cmd': command, 'workdir': str(self.a)}
+        self.assertEqual(hook('codex', 'pretool', event), {})
+        result = subprocess.run([sys.executable, '-I', str(coordinator), '--request-json', json.dumps(declaration)],
+                                capture_output=True, text=True, check=True)  # nosec B603
+        self.assertIn('declared', result.stdout)
+        event['tool_input']['cmd'] = command + ' && echo unauthorized'
+        self.assertEqual(hook('codex', 'pretool', event)['hookSpecificOutput']['permissionDecision'], 'deny')
+        declaration['request']['session_id'] = 'b'
+        event['tool_input']['cmd'] = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))
+        with self.assertRaisesRegex(ValueError, 'actual host/session/agent'):
+            hook('codex', 'pretool', event)
 
     def test_file_directory_aliases_conflict(self):
         self.assertTrue(overlaps('src/foo', 'src/foo/'))

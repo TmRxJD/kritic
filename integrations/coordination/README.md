@@ -95,6 +95,19 @@ Optional `use_kev=true` asks the existing local typed classifier for `aligned`, 
 
 ## Install harness adapters
 
+### Recovery when the declaration tool is missing
+
+Tool discovery and agent messaging remain available before declarations. The hook
+prints the caller's full actual host/session/agent identity and a ready-to-edit
+`python -I <installed coordinator.py> --request-json '<JSON>'` command. Run that
+exact coordinator through the native command tool (`exec_command` or `Bash`),
+replacing the task/change explanation, actual worktree and scopes. This restricted
+bootstrap is accepted even without the Kev Tools MCP tool or Kritic CLI tool.
+It accepts only schema/status/declaration/release operations; appended shell commands
+and impersonating another actor are rejected. Reconnect MCP afterwards to expose
+`worktree_evaluate`. Ask each undeclared peer to declare its own task and scope;
+do not guess their assignments or release their claims to unblock yourself.
+
 The test.13 Windows ZIP and Apple Silicon archive include `bin/kev-tools` (`.exe`
 on Windows) and its matching `bin/coordination/` directory. Extract the whole
 archive into permanent storage. Register a separate stdio MCP server named

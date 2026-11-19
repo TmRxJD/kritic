@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import time
 
 from paths import git, identity, local_path, repository
@@ -14,6 +15,68 @@ from registry import actor_id, actors, audit, authorized, observe, transaction
 READ_TOOLS = {'Read', 'Glob', 'Grep', 'read_file', 'search_files', 'list_directory', 'WebSearch', 'WebFetch'}
 STRUCTURED_TOOLS = {'Write', 'Edit', 'MultiEdit', 'write_file', 'edit_file', 'apply_patch', 'patch', 'apply_diff'}
 LIFECYCLE = {'session': 'SessionStart', 'prompt': 'UserPromptSubmit', 'subagent': 'SubagentStart'}
+SETUP_TOOLS = {'search_tools', 'search_tool', 'tool_search', 'discover_tools', 'list_tools',
+               'send_message', 'send_input', 'send_message_to_thread', 'read_thread', 'list_threads',
+               'list_agents', 'wait_agent', 'get_worktree_creation_status'}
+
+
+def setup_help(host, session, agent, cwd):
+    """Give a usable declaration route even when the MCP tool is not loaded."""
+    coordinator = (Path(__file__).resolve().parent / 'coordinator.py').as_posix()
+    value = {'action': 'declare', 'request': {'host': host, 'session_id': session,
+             'agent_id': agent, 'worktree': str(cwd), 'task': 'REPLACE with your actual task',
+             'change_summary': 'REPLACE with your intended changes',
+             'scopes': [{'path': 'REPLACE with an exact file or folder/', 'purpose': 'REPLACE with its purpose'}]}}
+    command = f'python -I "{coordinator}" --request-json ' + shlex.quote(json.dumps(value))
+    return (f'Your actual identity: host={host}, session_id={session}, agent_id={agent}. '
+            'Discover worktree_evaluate and call action=schema, then action=declare with your own identity. '
+            'If unavailable, use the native command tool (exec_command or Bash) with this exact installed '
+            'coordinator command, replacing only task, change_summary, worktree and scopes with actual values: '
+            f'{command}. This restricted bootstrap is allowed before declaration; arbitrary shell commands are not. '
+            'Tool discovery and agent messaging remain available. Ask undeclared peers to declare themselves; '
+            'never invent their tasks or impersonate them. Reconnect MCP to load the newly installed tool.')
+
+
+def bootstrap(tool, data, host, session, agent):
+    """Accept only an exact coordinator invocation, not general shell execution."""
+    name = tool.rsplit('__', 1)[-1].rsplit('.', 1)[-1]
+    args = None
+    if name == 'cli_run':
+        program, args = data.get('program', ''), data.get('args')
+    elif name in ('exec_command', 'Bash', 'run_command'):
+        command = data.get('cmd') or data.get('command')
+        if not isinstance(command, str):
+            return False
+        try:
+            tokens = shlex.split(command)
+        except ValueError:
+            return False
+        if not tokens:
+            return False
+        program, args = tokens[0], tokens[1:]
+    else:
+        return False
+    if Path(str(program)).name.casefold() not in ('python', 'python.exe', 'python3') or not isinstance(args, list):
+        return False
+    coordinator = Path(__file__).resolve().parent / 'coordinator.py'
+    if len(args) not in (2, 4) or args[0] != '-I' or identity(args[1]) != identity(coordinator):
+        return False
+    if len(args) == 4:
+        if args[2] != '--request-json':
+            return False
+        raw = args[3]
+    else:
+        if name != 'cli_run':
+            return False
+        raw = data.get('stdin') or '{}'
+    value = json.loads(raw)
+    if value.get('action') not in ('schema', 'status', 'declare', 'release'):
+        return False
+    if value.get('action') in ('declare', 'release'):
+        owner = value.get('request') or {}
+        if owner.get('host') != host or owner.get('session_id') != session or owner.get('agent_id', 'main') != agent:
+            raise ValueError('Use your actual host/session/agent identity for coordination bootstrap')
+    return True
 
 
 def response(host, message, deny=False, event='pretool'):
@@ -98,6 +161,12 @@ def hook(host, event, payload):
         return {}
     data = payload.get('tool_input') or payload.get('args') or {}
     tool = payload.get('tool_name', '')
+    if event == 'pretool':
+        name = tool.rsplit('__', 1)[-1].rsplit('.', 1)[-1]
+        if name in SETUP_TOOLS or tool in ('functions.search', 'mcp__tool_search__search') or (tool.startswith('tool_search.') and name in ('search', 'msearch')):
+            return {}
+        if bootstrap(tool, data, host, session, agent):
+            return {}
     if event == 'pretool' and tool.endswith('worktree_evaluate'):
         if data.get('action') in ('declare', 'release'):
             declaration = data.get('request') or {}
@@ -142,23 +211,14 @@ def hook(host, event, payload):
                        'When multiple agents are present, each must declare a separate worktree, task, change_summary, '
                        'and file/folder scopes with purposes through worktree_evaluate action=declare before editing. '
                        'Use action=schema for exact fields and action=status to inspect reservations. '
-                       'Directory scopes end in /. Narrow or reassign overlapping scopes. No automatic merge or cleanup.')
+                       'Directory scopes end in /. Narrow or reassign overlapping scopes. No automatic merge or cleanup. '
+                       + setup_help(host, session, agent, info['worktree']))
             return response(host, message, event=event)
         if tool in READ_TOOLS:
             return {}
         if tool.endswith('cli_run') and isinstance(data, dict):
             args = data.get('args')
             program = Path(str(data.get('program', ''))).name.casefold()
-            if program in ('python', 'python.exe', 'python3') and isinstance(args, list) and len(args) == 2 and args[0] == '-I':
-                coordinator = Path(__file__).resolve().parent / 'coordinator.py'
-                if identity(args[1]) == identity(coordinator):
-                    bootstrap = json.loads(data.get('stdin') or '{}')
-                    if bootstrap.get('action') in ('schema', 'status', 'declare', 'release'):
-                        if bootstrap.get('action') in ('declare', 'release'):
-                            owner = bootstrap.get('request') or {}
-                            if owner.get('host') != host or owner.get('session_id') != session:
-                                return response(host, 'Use your actual host/session identity for coordination bootstrap.', True)
-                        return {}
             if program in ('git', 'git.exe') and isinstance(args, list) and args[:2] == ['worktree', 'add'] and all(isinstance(arg, str) for arg in args) and not any(arg.startswith('--force') or (arg.startswith('-') and not arg.startswith('--') and ('f' in arg or 'B' in arg)) for arg in args):
                 return {}
         if tool.endswith(('create_worktree', 'attach_worktree')):
@@ -170,7 +230,7 @@ def hook(host, event, payload):
             return response(host, 'Split structured writes spanning repository/non-repository paths or multiple worktrees, then use the correct declared owner for each.', True)
         undeclared = [row['id'] for row in active if not row['declaration']]
         if undeclared:
-            return response(host, f'Declare worktree, task, change_summary and owned scopes before edits. Missing declarations: {undeclared}. Use worktree_evaluate action=declare. Read tools and coordination APIs remain available.', True)
+            return response(host, f'Declare worktree, task, change_summary and owned scopes before edits. Missing declarations: {undeclared}. ' + setup_help(host, session, agent, info['worktree']), True)
         locations = [identity(row['worktree']) for row in active if row['declaration'].get('access') != 'read_only']
         if len(set(locations)) != len(locations):
             return response(host, 'Registered agents share a worktree. Declare distinct worktrees before edits; preserve all existing changes.', True)

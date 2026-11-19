@@ -57,9 +57,14 @@ def request(value):
 
 
 def main():
-    raw = sys.stdin.buffer.read(1_000_001)
     is_hook = len(sys.argv) == 4 and sys.argv[1] == 'hook'
     try:
+        if len(sys.argv) == 3 and sys.argv[1] == '--request-json':
+            raw = sys.argv[2].encode('utf8')
+        elif len(sys.argv) == 1 or is_hook:
+            raw = sys.stdin.buffer.read(1_000_001)
+        else:
+            raise ValueError('Use JSON stdin or --request-json <JSON>; hook mode is internal')
         if len(raw) > 1_000_000:
             raise ValueError('Request exceeds 1 MB')
         value = json.loads(raw)
