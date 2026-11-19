@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from evaluate import evaluate, inspect
 from hooks import hook, response
 from registry import declare, fields, release, status
+from transfers import schema as transfer_schema, transfer
 
 
 def schema():
@@ -38,6 +39,7 @@ def schema():
         'release': {'type': 'object', 'additionalProperties': False, 'required': ['host', 'session_id', 'reason'],
             'properties': {'host': {'enum': ['codex', 'claude', 'hermes']}, 'session_id': text, 'reason': text,
                 'agent_id': text, 'expected_generation': {'type': 'integer', 'minimum': 1}}},
+        'transfer': transfer_schema(),
         'semantics': 'File scopes are exact; directories end in /. Separate worktrees and nonoverlapping scopes are required for concurrent agents. All changes need grounded review. Inspect/evaluate perform no merge, reset, checkout, cleanup or remote fetch.',
         'coverage': 'Structured writes are scope checked; opaque shell/MCP effects are cooperative. Codex subagents can share session_id without agent_id on tool events; a unique declared worktree can identify the editing owner, not prove the caller identity.'}
 
@@ -50,7 +52,7 @@ def request(value):
         if data:
             raise ValueError('schema action accepts no request fields')
         return schema()
-    functions = {'declare': declare, 'status': status, 'release': release, 'inspect': inspect, 'evaluate': evaluate}
+    functions = {'declare': declare, 'status': status, 'release': release, 'inspect': inspect, 'evaluate': evaluate, 'transfer':transfer}
     if action not in functions:
         raise ValueError('Unknown coordination action')
     return functions[action](data)

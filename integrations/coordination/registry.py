@@ -30,7 +30,48 @@ def transaction():
     try:
         db.execute('CREATE TABLE IF NOT EXISTS actors (id TEXT PRIMARY KEY, repo TEXT NOT NULL, host TEXT NOT NULL, session TEXT NOT NULL, agent TEXT NOT NULL, worktree TEXT NOT NULL, seen REAL NOT NULL, ended INTEGER NOT NULL, generation INTEGER NOT NULL, declaration TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS intent_events (repo TEXT NOT NULL, actor TEXT NOT NULL, generation INTEGER NOT NULL, event TEXT NOT NULL, created REAL NOT NULL, payload TEXT NOT NULL)')
+        db.execute('CREATE TABLE IF NOT EXISTS transfers (id TEXT PRIMARY KEY, repo TEXT NOT NULL, worktree TEXT NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL, generation INTEGER NOT NULL, payload TEXT NOT NULL)')
+        db.execute('CREATE TABLE IF NOT EXISTS actor_epochs (actor TEXT PRIMARY KEY, epoch INTEGER NOT NULL, boundary_epoch INTEGER, boundary_generation INTEGER)')
+        # Kept separately for compatibility with older nine-column actor inserts.
+        # The declaration remains the single authoritative intent/scope document.
+        db.execute("CREATE TABLE IF NOT EXISTS claim_states (actor TEXT PRIMARY KEY, state TEXT NOT NULL CHECK(state IN ('active','quiescent','transferred','released','completed')))")
         db.execute('BEGIN IMMEDIATE')
+        migrating = {row['id'] for row in db.execute('SELECT id FROM actors WHERE id NOT IN (SELECT actor FROM claim_states)')}
+        db.execute("INSERT OR IGNORE INTO claim_states SELECT id,CASE WHEN declaration IS NOT NULL AND ended=0 THEN 'active' ELSE 'released' END FROM actors")
+        # Recover pre-state-table transfer ownership from its durable intent log.
+        # Runtime-end events are not ownership events and cannot override it.
+        for row in db.execute("SELECT a.id,(SELECT event FROM intent_events e WHERE e.actor=a.id AND event IN ('ownership_accepted','ownership_transferred','released','declared') ORDER BY rowid DESC LIMIT 1) AS last_intent FROM actors a"):
+            if row['id'] in migrating and row['last_intent'] in ('ownership_accepted','ownership_transferred'):
+                state = 'active' if row['last_intent'] == 'ownership_accepted' else 'transferred'
+                db.execute('UPDATE claim_states SET state=? WHERE actor=?',(state,row['id']))
+        # Older adapters must fail closed rather than erase a durable assignment.
+        db.execute("""CREATE TRIGGER IF NOT EXISTS preserve_durable_declaration BEFORE UPDATE OF declaration ON actors
+            WHEN OLD.declaration IS NOT NULL AND NEW.declaration IS NULL AND EXISTS
+            (SELECT 1 FROM claim_states WHERE actor=OLD.id AND state IN ('active','quiescent','transferred'))
+            BEGIN SELECT RAISE(ABORT,'Durable ownership cannot be erased by session presence; use the matching coordinator'); END""")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS fence_transferred_writer BEFORE UPDATE OF declaration ON actors
+            WHEN json_extract(NEW.declaration,'$.access') IS NOT 'read_only' AND EXISTS
+            (SELECT 1 FROM claim_states WHERE actor=OLD.id AND state='transferred')
+            BEGIN SELECT RAISE(ABORT,'Transferred source cannot reclaim the writer role; use an acknowledged transfer'); END""")
+        # Old clients filter out ended actors. Enforce durable reservations at the
+        # database boundary too; an old declaration must not create a second writer.
+        db.execute("""CREATE VIEW IF NOT EXISTS durable_writer_conflicts AS
+            SELECT w.id AS writer FROM actors w JOIN actors a ON a.id<>w.id AND a.repo=w.repo
+            JOIN claim_states s ON s.actor=a.id
+            WHERE w.declaration IS NOT NULL AND COALESCE(json_extract(w.declaration,'$.access'),'edit')='edit'
+            AND s.state IN ('active','quiescent')
+            AND a.declaration IS NOT NULL AND COALESCE(json_extract(a.declaration,'$.access'),'edit')='edit'
+            AND (lower(replace(a.worktree,char(92),'/'))=lower(replace(w.worktree,char(92),'/')) OR EXISTS (
+                SELECT 1 FROM json_each(a.declaration,'$.scopes') x,json_each(w.declaration,'$.scopes') y
+                WHERE lower(json_extract(x.value,'$.path'))=lower(json_extract(y.value,'$.path'))
+                OR (substr(json_extract(x.value,'$.path'),-1)='/' AND lower(substr(json_extract(y.value,'$.path'),1,length(json_extract(x.value,'$.path'))))=lower(json_extract(x.value,'$.path')))
+                OR (substr(json_extract(y.value,'$.path'),-1)='/' AND lower(substr(json_extract(x.value,'$.path'),1,length(json_extract(y.value,'$.path'))))=lower(json_extract(y.value,'$.path')))))""")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS durable_writer_insert AFTER INSERT ON actors
+            WHEN EXISTS (SELECT 1 FROM durable_writer_conflicts WHERE writer=NEW.id)
+            BEGIN SELECT RAISE(ABORT,'Durable writer reservation conflicts; use the matching coordinator'); END""")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS durable_writer_update AFTER UPDATE OF declaration,worktree,repo ON actors
+            WHEN EXISTS (SELECT 1 FROM durable_writer_conflicts WHERE writer=NEW.id)
+            BEGIN SELECT RAISE(ABORT,'Durable writer reservation conflicts; use the matching coordinator'); END""")
         yield db
         db.execute('COMMIT')
     except BaseException:
@@ -51,11 +92,16 @@ def actor_id(host, session, agent='main'):
 
 def actors(db, repo, include_ended=False):
     rows = []
-    query = 'SELECT * FROM actors WHERE repo=? ORDER BY id' if include_ended else 'SELECT * FROM actors WHERE repo=? AND ended=0 ORDER BY id'
+    query = 'SELECT a.*,s.state AS claim_state FROM actors a LEFT JOIN claim_states s ON s.actor=a.id WHERE a.repo=?'
+    if not include_ended:
+        query += " AND (a.ended=0 OR s.state IN ('active','quiescent'))"
+    query += ' ORDER BY a.id'
     for item in db.execute(query, (repo,)):
         row = dict(item)
         row['declaration'] = json.loads(row['declaration']) if row['declaration'] else None
         row['presence'] = 'recent' if time.time() - row['seen'] <= 1800 else 'suspect; claim retained'
+        if row['ended'] and row['claim_state'] in ('active','quiescent'):
+            row['presence'] = 'runtime ended; durable claim retained'
         rows.append(row)
     return rows
 
@@ -66,13 +112,35 @@ def observe(db, host, session, agent, info):
     if old is None:
         db.execute('INSERT INTO actors VALUES (?,?,?,?,?,?,?,0,1,NULL)',
                    (key, info['repo'], host, session, agent, info['worktree'], time.time()))
-    elif old['repo'] != info['repo'] or identity(old['worktree']) != identity(info['worktree']) or old['ended']:
+        db.execute("INSERT INTO claim_states VALUES (?,'released')",(key,))
+    elif old['repo'] != info['repo'] or identity(old['worktree']) != identity(info['worktree']):
+        state = claim_state(db,key)
+        if state in ('active','quiescent'):
+            raise ValueError('Current durable work assignment is still owned; explicitly release or transfer it before rebinding this actor')
         audit(db, key, 'previous_intent_before_rebind', dict(old))
-        db.execute('UPDATE actors SET repo=?,worktree=?,seen=?,ended=0,generation=generation+1,declaration=NULL WHERE id=?',
-                   (info['repo'], info['worktree'], time.time(), key))
+        db.execute("UPDATE claim_states SET state='released' WHERE actor=?",(key,))
+        db.execute('UPDATE actors SET repo=?,worktree=?,seen=?,ended=0,declaration=NULL WHERE id=?',
+                   (info['repo'], info['worktree'], time.time(),key))
     else:
-        db.execute('UPDATE actors SET seen=? WHERE id=?', (time.time(), key))
+        if claim_state(db,key) in ('released','completed'):
+            db.execute('UPDATE actors SET declaration=NULL,seen=?,ended=0 WHERE id=?',(time.time(),key))
+        else:
+            db.execute('UPDATE actors SET seen=?,ended=0 WHERE id=?', (time.time(), key))
     return key
+
+
+def transfer_fence(db,key,info):
+    row = db.execute('SELECT repo,worktree FROM actors WHERE id=?',(key,)).fetchone()
+    return claim_state(db,key) == 'transferred' and row and row['repo'] == info['repo'] and identity(row['worktree']) == identity(info['worktree'])
+
+
+def claim_state(db,key):
+    row = db.execute('SELECT state FROM claim_states WHERE actor=?',(key,)).fetchone()
+    return row['state'] if row else 'released'
+
+
+def pending_transfer(db,key):
+    return db.execute("SELECT id FROM transfers WHERE source=? AND status IN ('prepared','bound','launch_unknown') LIMIT 1",(key,)).fetchone()
 
 
 def audit(db, key, event, payload):
@@ -112,6 +180,14 @@ def declare(request):
         raise ValueError('Declared scope escapes the worktree through a link or junction')
     key = actor_id(request['host'], request['session_id'], request.get('agent_id', 'main'))
     with transaction() as db:
+        if pending_transfer(db,key):
+            raise ValueError('Cancel or finish the pending transfer before changing source intent or scopes')
+        fenced = bool(transfer_fence(db,key,info))
+        if request.get('access','edit') == 'edit' and fenced:
+            raise ValueError('This source session transferred its write ownership; resume in the successor or arrange an explicit transfer back')
+        reserved = db.execute("SELECT id,source FROM transfers WHERE repo=? AND worktree=? AND status IN ('prepared','bound','launch_unknown') LIMIT 1",(info['repo'],info['worktree'])).fetchone()
+        if request.get('access','edit') == 'edit' and reserved:
+            raise ValueError(f'Worktree has a pending ownership transfer {reserved["id"]}; preserve its reservation')
         # A declaration never authorizes effects in a different repository.
         old = db.execute('SELECT repo,ended FROM actors WHERE id=?', (key,)).fetchone()
         if old and not old['ended'] and old['repo'] != info['repo']:
@@ -128,6 +204,7 @@ def declare(request):
         observe(db, request['host'], request['session_id'], request.get('agent_id', 'main'), info)
         declaration = dict(request, worktree=info['worktree'], declared_head=info['head'], declared_at=time.time())
         db.execute('UPDATE actors SET declaration=?,generation=generation+1 WHERE id=?', (json.dumps(declaration), key))
+        db.execute('UPDATE claim_states SET state=? WHERE actor=?',('transferred' if fenced else 'active',key))
         generation = db.execute('SELECT generation FROM actors WHERE id=?', (key,)).fetchone()[0]
         audit(db, key, 'declared', declaration)
     return {'status': 'declared', 'actor_id': key, 'generation': generation, 'repo': info['repo'], 'declaration': declaration}
@@ -140,11 +217,16 @@ def release(request):
         raise ValueError('expected_generation must be a positive integer')
     key = actor_id(request['host'], request['session_id'], request.get('agent_id', 'main'))
     with transaction() as db:
+        if pending_transfer(db,key):
+            raise ValueError('Cancel or finish the pending transfer before releasing its reservation')
+        if claim_state(db,key) == 'transferred':
+            return {'status':'transferred','actor_id':key,'worktree_action':'none','reason':'The successor owns the write assignment; source presence cannot release it'}
         row = db.execute('SELECT generation FROM actors WHERE id=?', (key,)).fetchone()
         if not row:
             raise ValueError('Unknown actor; inspect status first')
         if request.get('expected_generation', row[0]) != row[0]:
             raise ValueError('Claim changed; inspect status again before releasing')
+        db.execute("UPDATE claim_states SET state='released' WHERE actor=?",(key,))
         db.execute('UPDATE actors SET ended=1,generation=generation+1 WHERE id=?', (key,))
         audit(db, key, 'released', {'reason': request['reason']})
     return {'status': 'released', 'actor_id': key, 'reason': request['reason'], 'worktree_action': 'none'}
@@ -165,7 +247,7 @@ def status(request):
                 history.append(event)
     return {'repo': info['repo'], 'worktree': info['worktree'], 'actors': active,
             'intent_history': history,
-            'coverage': 'Registered hook events only; suspect claims are retained until session end or explicit release'}
+            'coverage': 'Registered hook events only; runtime end changes presence, not durable ownership. Explicit release or acknowledged transfer closes editing claims'}
 
 
 def authorized(declaration, targets):

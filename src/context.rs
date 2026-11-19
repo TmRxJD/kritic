@@ -274,6 +274,11 @@ pub struct CompressInput {
     /// Tail messages kept verbatim.
     #[serde(default = "six")]
     pub protect_last_n: usize,
+    /// Continuity workflows preserve every user event and explicitly pinned observation.
+    #[serde(default)]
+    pub protect_user_messages: bool,
+    #[serde(default)]
+    pub protected_event_ids: Vec<String>,
     /// Tool results larger than this are archived even under the target.
     #[serde(default = "big")]
     pub big_chars: usize,
@@ -364,7 +369,15 @@ pub async fn compress<D: Decider>(
     let mut protected = vec![false; n];
     let mut head_left = input.protect_first_n;
     for (i, m) in messages.iter().enumerate() {
-        if m["role"] == "system" {
+        if m["role"] == "system"
+            || (input.protect_user_messages && m["role"] == "user")
+            || m["continuity_event_id"].as_str().is_some_and(|id| {
+                input
+                    .protected_event_ids
+                    .iter()
+                    .any(|protected| protected == id)
+            })
+        {
             protected[i] = true;
         } else if head_left > 0 {
             protected[i] = true;

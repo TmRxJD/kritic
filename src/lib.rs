@@ -10,6 +10,7 @@ pub mod clirun;
 pub mod commit_policy;
 pub mod config;
 pub mod context;
+pub use kritic_continuity as continuity;
 pub mod contract;
 pub mod critic;
 pub mod debt;

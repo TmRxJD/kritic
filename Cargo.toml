@@ -30,6 +30,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 serde_yaml = "0.9.34"
 sha2 = "0.11.0"
+kritic-continuity = { path = "crates/continuity" }
 sysinfo = "0.38.4"
 tar = "0.4.46"
 tokio = { version = "1.53.1", features = ["full"] }
@@ -41,7 +42,7 @@ zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 [dev-dependencies]
 
 [workspace]
-members = ["crates/kev-filter", "crates/kev-tools"]
+members = ["crates/kev-filter", "crates/kev-tools", "crates/continuity"]
 default-members = ["."]
 resolver = "3"
 

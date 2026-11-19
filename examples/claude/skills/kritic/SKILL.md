@@ -46,6 +46,18 @@ their work, discard their changes or bypass a scope denial. If recovery is itsel
 blocked, preserve the exact denial as a Kritic defect. See the release's
 `integrations/coordination/README.md` for enrollment, recovery and coverage limits.
 
+Source builds with session continuity add `worktree_evaluate(action="transfer")`.
+For a user-requested continuation, keep the existing worktree and dirty work. Use
+the discovered prepare/bind/accept schemas, a covered pinned handoff and the actual
+fresh-session identity. The successor must read the evidence and acknowledge it
+before inheriting the source task and scopes. The source must remain quiescent while
+pending and cannot resume writing after acceptance. Runtime exit does not release
+ownership; use explicit release or acknowledged transfer. Never redeclare around
+a reservation, copy an old tree over current work, or infer ownership from a missing
+heartbeat. Matching adapters are required; test.13 predates transfer support.
+The critics do not start fresh sessions themselves. Do not create handoffs or
+restart sessions without an explicit user request or an explicitly enrolled policy.
+
 ### Setup is the agent's responsibility
 
 At first project review or after a setup failure, resolve the actual target repository and inspect

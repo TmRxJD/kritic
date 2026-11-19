@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess  # nosec B404
 
-FILES = ('coordinator.py', 'registry.py', 'paths.py', 'hooks.py', 'evaluate.py', 'hermes_plugin.py', 'README.md')
+FILES = ('coordinator.py', 'registry.py', 'paths.py', 'hooks.py', 'evaluate.py', 'transfers.py', 'hermes_plugin.py', 'README.md')
 
 
 def install(runtime, codex, claude, hermes=None, hermes_kev_exe=None):
@@ -30,7 +30,7 @@ def install(runtime, codex, claude, hermes=None, hermes_kev_exe=None):
         data = json.loads(before) if before else {}
         hooks = data.setdefault('hooks', {})
         events = {'SessionStart': 'session', 'UserPromptSubmit': 'prompt', 'PreToolUse': 'pretool',
-                  'SessionEnd': 'end', 'SubagentStart': 'subagent', 'SubagentStop': 'subagent_end'}
+                  'SessionEnd': 'end', 'SubagentStart': 'subagent', 'SubagentStop': 'subagent_end', 'Stop':'boundary'}
         for event, action in events.items():
             command = f'python -I "{coordinator.as_posix()}" hook {host} {action}'
             groups = hooks.setdefault(event, [])
