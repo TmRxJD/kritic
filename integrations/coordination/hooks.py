@@ -74,7 +74,7 @@ def bootstrap(tool, data, host, session, agent):
         return False
     if value.get('action') in ('declare', 'release'):
         owner = value.get('request') or {}
-        if owner.get('host') != host or owner.get('session_id') != session or owner.get('agent_id', 'main') != agent:
+        if owner.get('host') != host or owner.get('session_id') != session or (agent is not None and owner.get('agent_id', 'main') != agent):
             raise ValueError('Use your actual host/session/agent identity for coordination bootstrap')
     return True
 
@@ -165,7 +165,7 @@ def hook(host, event, payload):
         name = tool.rsplit('__', 1)[-1].rsplit('.', 1)[-1]
         if name in SETUP_TOOLS or tool in ('functions.search', 'mcp__tool_search__search') or (tool.startswith('tool_search.') and name in ('search', 'msearch')):
             return {}
-        if bootstrap(tool, data, host, session, agent):
+        if bootstrap(tool, data, host, session, payload.get('agent_id')):
             return {}
     if event == 'pretool' and tool.endswith('worktree_evaluate'):
         if data.get('action') in ('declare', 'release'):

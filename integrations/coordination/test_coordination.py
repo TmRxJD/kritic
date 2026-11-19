@@ -100,6 +100,13 @@ class CoordinationTests(unittest.TestCase):
         event['tool_input']['cmd'] = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))
         with self.assertRaisesRegex(ValueError, 'actual host/session/agent'):
             hook('codex', 'pretool', event)
+        declaration['request']['session_id'] = 'a'
+        declaration['request']['agent_id'] = 'child'
+        event['tool_input']['cmd'] = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))
+        self.assertEqual(hook('codex', 'pretool', event), {})
+        event['agent_id'] = 'different-child'
+        with self.assertRaisesRegex(ValueError, 'actual host/session/agent'):
+            hook('codex', 'pretool', event)
 
     def test_file_directory_aliases_conflict(self):
         self.assertTrue(overlaps('src/foo', 'src/foo/'))
