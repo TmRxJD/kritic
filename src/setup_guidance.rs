@@ -127,6 +127,13 @@ fn guide(tool: &str) -> Result<Guide, String> {
             "session-continuity.md",
             "Use kritic session --schema. Explicitly enable capabilities.sessions, capture actual host/session history with hashes and coverage, pin workspace and current fixture bindings, and preserve all user corrections. Handoff review uses a pinned session-case reference. Automatic rollover requires separate policy enrollment and a capability-tested host controller; unknown capture/telemetry is not readiness.",
         ),
+        "prompt_critic" => (
+            Some("prompts"),
+            None,
+            false,
+            "prompt-pipeline.md",
+            "Enable capabilities.prompts explicitly. prompt.backend=off is deterministic; select local with an installed Qwen prompt.model, cloud with explicit API credentials, or codex with the official CLI and its login. Native hooks add an advisory task brief beside the unchanged original; they do not replace user authority. See kritic prompt --schema and the provider support matrix.",
+        ),
         "critic_score" | "decide" => (
             None,
             None,

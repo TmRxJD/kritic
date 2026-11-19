@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in prompt intake with bounded deterministic checks and explicit local generative Qwen, existing cloud API, or official Codex CLI/login providers. Preserve exact originals, reject concrete literal/condition drift, and keep model briefs advisory with semantic equivalence unproven.
+- Add nonblocking supplementary prompt hooks for compatible Codex/Claude Code hosts and an optional Hermes pre-LLM adapter. Keep errors fail-open, avoid self-review recursion, and leave tool permissions, worktree ownership and original user authority intact. Native augmentation does not claim input-token savings.
+- Document supported subscription/API boundaries and the task-manager integration direction. Direct ChatGPT OAuth and a full independent execution harness are not advertised as implemented.
+
 - Add opt-in session and handoff evidence critics: pinned original captures, explicit user corrections and solutions, current fixture bindings, complete dirty-work inventories, and operational session limits. Missing evidence or context-budget overflow stays blocked; no model approval is implied.
 - Add explicit same-worktree ownership succession to the worktree critic. Prepare at an observed turn boundary, bind an actual fresh-session identity, then accept the pinned handoff and evidence inventory. Preserve task, scopes, HEAD, index and dirty bytes; fence previous writers and retain successor ownership across process exit/resume. Cancellation preserves the original assignment. Unattended session launching remains a separate controller integration.
 - Separate runtime presence from durable work ownership. Session-end events no longer silently release editing claims. An undeclared peer cannot edit but no longer blocks a correctly declared owner. Database guards preserve durable reservations when an older coordinator attempts a conflicting declaration.

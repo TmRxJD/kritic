@@ -1,5 +1,11 @@
 # Bring your own reviewer
 
+Source-build [prompt intake](prompt-pipeline.md) supports the official Codex CLI's
+existing login or explicit API transports. `kritic prompt --login codex` invokes
+official sign-in without copying tokens. Direct Sign in with ChatGPT is researched,
+not implemented here. Claude subscription login remains in native Claude Code;
+Kritic does not offer that login or relay its credentials. See the provider matrix.
+
 **Test release: verify every judgment.** There are two ways to use the cloud AI you already have.
 
 ## Existing coding agent — no new API or GPU

@@ -1,5 +1,11 @@
 # Kritic
 
+Source builds add an opt-in [prompt intake pipeline](docs/prompt-pipeline.md):
+small local Qwen, explicit cloud APIs or an existing official Codex login can propose
+an actionable brief while retaining the original user's intent and authority.
+Native hooks add advisory context; a full task manager and direct OAuth login are
+separate capabilities. The published test.13 binary predates this feature.
+
 **Governance, verification and review for AI-assisted software work. No GPU required.**
 
 Kritic is an experimental, repository-owned governance system for coding agents. It helps you turn

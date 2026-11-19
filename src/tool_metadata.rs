@@ -30,6 +30,9 @@ pub(crate) fn description(name: &str) -> Option<&'static str> {
         "session_critic" => {
             "Check pinned session limits, protected user instructions and live workspace/fixture evidence. Optional lossless archive/typed relevance advice never grants a fresh-session transfer."
         }
+        "prompt_critic" => {
+            "Opt-in prompt brief and ambiguity review. Original remains authoritative; proposals never grant permission or prove semantic equivalence. Model/provider selection is explicit."
+        }
         "handoff_critic" => {
             "Check all captured user events, declared obligations, corrections and current fixture bindings before fresh context. Covered is scoped evidence, not semantic completeness or a launch receipt."
         }

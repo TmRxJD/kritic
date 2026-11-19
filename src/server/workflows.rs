@@ -7,12 +7,14 @@ use serde_json::{Map, Value};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::{Json, handler::server::wrapper::Parameters, tool, tool_router};
 
+mod prompts;
 mod sessions;
 
 impl Kritic {
     pub(super) fn workflows_router() -> ToolRouter<Self> {
         let mut routes = Self::registered_workflows_router();
         routes.merge(Self::sessions_router());
+        routes.merge(Self::prompts_router());
         routes
     }
 }

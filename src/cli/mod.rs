@@ -8,6 +8,7 @@ pub mod doctor;
 pub mod fetch;
 pub mod framing;
 pub mod history;
+pub mod prompt;
 pub mod register;
 pub mod repository;
 pub mod session;
@@ -61,6 +62,8 @@ pub enum Cmd {
     Framing(framing::FramingArgs),
     /// Review session limits or a pinned handoff; automatic lifecycle control is separate.
     Session(session::SessionArgs),
+    /// Review stdin as a prompt or augment a native UserPromptSubmit event
+    Prompt(prompt::PromptArgs),
     /// Audit test currency/canonical ownership, or explicitly synchronize JSON fixtures.
     Staleness(staleness::StalenessArgs),
     /// Compare video frames and correlate synchronized performance evidence.

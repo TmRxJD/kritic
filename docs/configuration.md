@@ -1,5 +1,11 @@
 # Configuration
 
+Source-build prompt intake: enable `capabilities.prompts`, then select
+`prompt.backend=off|local|cloud|codex`, `prompt.model`, `prompt.codex_exe` and
+`prompt.timeout_s` (1..120). Capability and model default off. Selecting a provider
+does not enroll a hook. See [prompt pipeline](prompt-pipeline.md) and `[prompt]`
+in the canonical example.
+
 Unreleased session/handoff review is off by default: `capabilities.sessions=false`.
 Opt in with `true` or `KRITIC_CAP_SESSIONS=true`; lifecycle hooks/controller enrollment
 are separately explicit. [Schemas and setup](session-continuity.md).

@@ -1,5 +1,11 @@
 # Agent setup and recovery
 
+`prompt_critic`: opt in with `capabilities.prompts=true`; `prompt.backend=off`
+is deterministic. Choose local installed Qwen, explicit cloud API credentials, or
+the official Codex CLI/login in `[prompt]`. Use `kritic prompt --schema` and
+`kritic prompt --provider-status`. Native prompt hooks add advisory context and
+retain the original; errors must not block the task. See `docs/prompt-pipeline.md`.
+
 `session_critic` and `handoff_critic`: opt in with `capabilities.sessions=true` in
 a matching build, then use `kritic session --schema`. Pin actual capture, workspace,
 user corrections and canonical fixture bindings under permanent

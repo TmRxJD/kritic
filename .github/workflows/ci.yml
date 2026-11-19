@@ -86,6 +86,10 @@ jobs:
           COORDINATION_TEST_ROOT: ${{ runner.temp }}/coordination-tests
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s integrations/coordination -p 'test_*.py'
+      - name: Prompt intake adapter contracts
+        run: python -B -m unittest discover -s integrations/prompt-critic -p 'test_*.py'
+      - name: Prompt core and native-provider event contracts
+        run: cargo test -p kritic-prompts --all-targets --locked
       - name: Agent message contract
         run: python -B -m unittest discover -s integrations/agent-messages -p 'test_*.py'
       - name: Stage validated Windows test binary

@@ -60,6 +60,15 @@ restart sessions without an explicit user request or an explicitly enrolled poli
 
 ### Setup is the agent's responsibility
 
+Source builds optionally expose `prompt_critic` and `kritic prompt` for explicitly
+enrolled prompt intake, separate from end-of-task implementation review. Keep the
+original user's text authoritative; a model brief cannot change scope, permissions
+or acceptance criteria. Review exact source mappings and rejected literals; never
+claim semantic equivalence from a score. Hooks may add supplementary context, never
+silently replace user instructions or block ordinary work on model failure. Local
+Qwen, explicit cloud APIs and official Codex CLI login are selected independently;
+no automatic cloud disclosure or credential scraping. See `docs/prompt-pipeline.md`.
+
 At first project review or after a setup failure, resolve the actual target repository and inspect
 `status(start=false, base_dir=repo)` when supported. For absent tools, missing manifests,
 dependency/configuration errors or offline optional reviewers, read

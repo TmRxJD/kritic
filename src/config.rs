@@ -37,6 +37,10 @@ pub struct Config {
     pub cloud_url: String,
     pub cloud_model: String,
     pub cloud_provider: String,
+    pub prompt_backend: String,
+    pub prompt_model: String,
+    pub prompt_codex_exe: PathBuf,
+    pub prompt_timeout_s: u64,
     pub cloud_max_tokens: u32,
     /// File holding the gateway key when `AI_GATEWAY_API_KEY` is not set.
     pub cloud_key_file: PathBuf,
@@ -200,6 +204,11 @@ pub const KEYS: &[(&str, &str)] = &[
     ("capabilities.staleness", "KRITIC_CAP_STALENESS"),
     ("capabilities.invariants", "KRITIC_CAP_INVARIANTS"),
     ("capabilities.sessions", "KRITIC_CAP_SESSIONS"),
+    ("capabilities.prompts", "KRITIC_CAP_PROMPTS"),
+    ("prompt.backend", "KRITIC_PROMPT_BACKEND"),
+    ("prompt.model", "KRITIC_PROMPT_MODEL"),
+    ("prompt.codex_exe", "KRITIC_PROMPT_CODEX_EXE"),
+    ("prompt.timeout_s", "KRITIC_PROMPT_TIMEOUT_S"),
     ("capabilities.plugins", "KRITIC_CAP_PLUGINS"),
     ("capabilities.context", "KRITIC_CAP_CONTEXT"),
     ("capabilities.domain_maps", "KRITIC_CAP_DOMAIN_MAPS"),
@@ -228,6 +237,7 @@ pub const TOOL_NAMES: &[&str] = &[
     "invariant_critic",
     "session_critic",
     "handoff_critic",
+    "prompt_critic",
     "critic_score",
     "decide",
     "visual_critic",
@@ -526,6 +536,7 @@ fn capability_settings(
         "staleness",
         "invariants",
         "sessions",
+        "prompts",
         "plugins",
         "context",
         "domain_maps",
@@ -541,6 +552,7 @@ fn capability_settings(
                     | "staleness"
                     | "invariants"
                     | "sessions"
+                    | "prompts"
                     | "git_ci"
             ),
             Some(v) => v.parse::<bool>().unwrap_or_else(|_| {
@@ -650,6 +662,16 @@ impl Config {
             vision_backend,
             vision_cloud_model: s.str("vision.cloud_model", &cloud_model),
             cloud_provider,
+            prompt_backend: choice_setting(
+                &s,
+                "prompt.backend",
+                &["off", "local", "cloud", "codex"],
+                "off",
+                &mut config_errors,
+            ),
+            prompt_model: s.str("prompt.model", ""),
+            prompt_codex_exe: PathBuf::from(s.str("prompt.codex_exe", "codex")),
+            prompt_timeout_s: s.num("prompt.timeout_s", 12),
             cloud_max_tokens: s.num("cloud.max_output_tokens", 4096),
             kev_cpu_only,
             kev_externally_managed,
@@ -800,6 +822,11 @@ impl Config {
             );
             self.visual_min = 6.0;
         }
+        if !(1..=120).contains(&self.prompt_timeout_s) {
+            self.config_errors
+                .push("prompt.timeout_s must be in 1..=120 (using 12)".into());
+            self.prompt_timeout_s = 12;
+        }
         for name in &self.disabled_tools {
             if !TOOL_NAMES.contains(&name.as_str()) {
                 self.config_errors
@@ -918,6 +945,7 @@ impl Config {
             "staleness_critic" => self.capability("staleness"),
             "invariant_critic" => self.capability("invariants"),
             "session_critic" | "handoff_critic" => self.capability("sessions"),
+            "prompt_critic" => self.capability("prompts"),
             "plugin_list" | "plugin_run" => self.capability("plugins"),
             "route" | "context_trim" | "locate" => {
                 self.capability("context") && self.backend != "off"

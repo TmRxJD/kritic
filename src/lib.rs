@@ -32,6 +32,7 @@ pub mod phase3;
 pub mod plugins;
 pub mod policy;
 pub mod proc;
+pub mod prompt;
 pub mod provider;
 pub mod repository;
 pub mod scan;
