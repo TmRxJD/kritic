@@ -1,6 +1,9 @@
 use kritic_continuity::{Request, evidence, handoff_critic, session_critic};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture {
     root: PathBuf,
@@ -19,13 +22,18 @@ impl Fixture {
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir)
             .join(format!(
-                "continuity-{}-{}",
+                "continuity-{}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
-                    .as_nanos()
+                    .as_nanos(),
+                FIXTURE_SEQUENCE.fetch_add(1, Ordering::Relaxed)
             ));
+        // Windows clock resolution can give concurrent tests identical timestamps.
+        // Reserve each directory exclusively; never silently share a Git inventory.
+        std::fs::create_dir_all(root.parent().unwrap()).unwrap();
+        std::fs::create_dir(&root).unwrap();
         std::fs::create_dir_all(root.join(".state")).unwrap();
         evidence::git(&root, &["init", "-q", "-b", "main"]).unwrap();
         evidence::git(&root, &["config", "user.name", "Continuity Fixture"]).unwrap();
