@@ -87,6 +87,11 @@ jobs:
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s integrations/coordination -p 'test_*.py'
       - name: Stage validated Windows test binary
+        # cargo test creates hashed test harnesses, not every standalone MCP executable.
+        # Build the exact executables before the staging script hashes/copies them.
+        # Kept separate so missing release companions fail before upload.
+        run: cargo build --workspace --bins --locked
+      - name: Package validated Windows test binaries
         shell: pwsh
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
