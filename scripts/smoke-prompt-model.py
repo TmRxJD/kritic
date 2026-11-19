@@ -8,7 +8,8 @@ import os
 from pathlib import Path
 import socket
 import struct
-import subprocess  # nosec B404 - required for the explicitly owned, suspended process tree
+# Required for the explicitly owned, suspended process tree; no shell execution.
+import subprocess  # nosec B404
 import sys
 import threading
 import time

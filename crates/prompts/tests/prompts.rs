@@ -54,7 +54,7 @@ fn invented_commands_and_uncited_mapping_are_rejected() {
 #[test]
 fn ambiguity_asks_questions_without_rewriting_original() {
     let original = "Make it better";
-    let report=evaluate(original,Some(json!({"action":"clarify","brief":original,"intent_map":[],"questions":["Which observable result should improve?"],"reasons":[]}))).unwrap();
+    let report=evaluate(original,Some(json!({"action":"clarify","brief":original,"intent_map":[{"source_quote":original,"brief_quote":original}],"questions":["Which observable result should improve?"],"reasons":[]}))).unwrap();
     assert_eq!(report["status"], "clarification");
     assert_eq!(report["original"], original);
 }
@@ -66,6 +66,19 @@ fn empty_oversized_and_unknown_fields_do_not_pass() {
     let mut bad = proposal("hello there", "hello");
     bad["extra"] = json!(true);
     assert!(evaluate("hello there", Some(bad)).is_err());
+}
+
+#[test]
+fn request_schema_and_runtime_both_require_grounded_model_assessments() {
+    assert_eq!(
+        kritic_prompts::schema()["properties"]["intent_map"]["minItems"],
+        1
+    );
+    for action in ["keep", "rewrite", "clarify"] {
+        let report=evaluate("Please list 3 ideas. Please list 3 ideas.",Some(json!({"action":action,"brief":"List 3 ideas.","intent_map":[],"questions":[],"reasons":[]}))).unwrap();
+        assert_eq!(report["status"], "rejected_proposal");
+        assert!(hook_context(&report).is_none());
+    }
 }
 
 #[test]

@@ -11,7 +11,9 @@ byte/word counts, selected provider, brief, source-to-brief quote mappings, ques
 and validation failures. A model can keep, rewrite or clarify. Clear short requests
 need no forced template; length alone does not imply poor quality.
 
-Rewrites must be shorter and nonempty, with exact source/brief quotes. Guards reject
+Every model assessment includes nonempty exact source/brief quote mappings; unchanged
+briefs can map a short original quote to itself. Rewrites must also be shorter and
+nonempty. Guards reject
 lost/invented paths, URLs, versions, numbers, code and conditional/prohibitory
 paragraphs. Entire paragraphs stay verbatim to avoid splitting filenames, URLs,
 decimals or line-wrapped conditions. This deliberately rejects some otherwise

@@ -31,7 +31,7 @@ simple server names only. Unsupported names fail closed before inference. An
 ambiguous fixture's malformed clarify proposal was rejected; the model instruction
 now spells out the exact keep/clarify schema contract rather than weakening validation.
 
-Offline coverage: 11 core/native-event behavioral tests, three Hermes adapter
+Offline coverage: 12 core/native-event behavioral tests, three Hermes adapter
 tests, all-target compilation and core all-target Clippy. Negative cases include
 missing paths/versions/prohibitions, invented commands, invalid mappings, fenced
 code loss, filename/URL/decimal/line-wrap guard bypasses, malformed completion and
