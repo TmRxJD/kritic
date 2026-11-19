@@ -35,6 +35,9 @@ foreach ($name in @('kev', 'kev-filter')) {
     $binaryHashes["bin/$name.exe"] = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 # Copy only canonical tracked harness files, never working-tree caches.
+Copy-Item -LiteralPath target/release/kev-tools.exe -Destination package/kritic/bin/
+$binaryHashes['bin/kev-tools.exe'] = (Get-FileHash target/release/kev-tools.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+Copy-Item package/kritic/integrations/coordination package/kritic/bin/coordination -Recurse
 Copy-Item package/kritic/harness/py package/kritic/bin/harness/ -Recurse
 $binaryHash = (Get-FileHash package/kritic/bin/kritic.exe -Algorithm SHA256).Hash.ToLowerInvariant()
 @{ version = $version; source_revision = $revision; platform = 'windows-x86_64'; binary_sha256 = $binaryHash; binaries = $binaryHashes } |

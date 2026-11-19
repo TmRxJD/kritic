@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.0-test.13 — test release (2026-11-19)
+
+- Ship Kev Tools 0.3.0 as a workspace crate and Windows/Apple Silicon companion binary, with the matching Python coordinator beside it. No GPU is required for deterministic provenance selection or worktree coordination.
+- Add opt-in schema-enforced version/provenance selection with content hashes, explicit authority, current/historical modes and optional bounded Kev advice. Ambiguous, mutated or stale authority evidence blocks selection.
+
+- Add opt-in cross-harness worktree intent and scope coordination under `integrations/coordination`. Enrolled Codex, Claude Code and Hermes agents declare separate editing worktrees, task/change explanations and nonoverlapping file/folder scopes. Shared transactional reservations preserve intent history.
+- Add a read-only merge-review engine for the Kev Tools bridge. It compares explicit main/base/head evidence, separates already integrated, unrelated and diverged changes, and produces individually reviewed hunk plans while preserving unfinished work. The integration documents structured-write coverage, opaque-command limits and Codex subagent identity constraints.
 
 ## 0.5.0-test.12 — test release (2026-11-17)
 

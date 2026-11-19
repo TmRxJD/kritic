@@ -1,5 +1,14 @@
 # Test-release protocol
 
+Test.13 adds the `kev-tools` companion MCP executable, opt-in version/provenance
+selection and shared Codex/Claude/Hermes worktree scope coordination. Both Windows
+and Apple Silicon archives contain `bin/kev-tools` (with `.exe` on Windows) and
+`bin/coordination/`. Python 3.11+ and Git are required for coordination; the
+deterministic tools need no model or GPU. Hook enrollment is explicit: follow the
+[coordination guide](../integrations/coordination/README.md). Existing client sessions
+must reconnect after registration. Opaque shell effects remain cooperative and no
+review plan authorizes an automatic merge or deletion.
+
 Test.6 adds the standalone `kev` / `kev-filter` command-output filter and optional native
 MLX reviewer profiles. The Windows ZIP contains Kritic and both filter aliases. The
 Apple Silicon CLI archive contains the two filter aliases plus matching source/docs,

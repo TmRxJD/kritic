@@ -22,7 +22,8 @@ mkdir -p "$stage/bin"
 git archive HEAD --format=tar --output=package-mac/source.tar
 tar -xf package-mac/source.tar -C "$stage"
 rm -- package-mac/source.tar
-cp -- "$bin/kev" "$bin/kev-filter" "$stage/bin/"
+cp -- "$bin/kev" "$bin/kev-filter" "$bin/kev-tools" "$stage/bin/"
+cp -R integrations/coordination "$stage/bin/coordination"
 printf '%s\n' "$revision" > "$stage/SOURCE-REVISION.txt"
 python3 - "$stage" "$version" "$revision" <<'PY'
 import hashlib, json, pathlib, sys
@@ -30,7 +31,7 @@ root = pathlib.Path(sys.argv[1])
 manifest = dict(version=sys.argv[2], source_revision=sys.argv[3], platform='macos-arm64',
                 distribution='CLI binaries and source; Kritic MCP server requires a source build',
                 binaries={f'bin/{name}': hashlib.sha256((root/'bin'/name).read_bytes()).hexdigest()
-                          for name in ('kev', 'kev-filter')})
+                          for name in ('kev', 'kev-filter', 'kev-tools')})
 (root/'RELEASE-MANIFEST.json').write_text(json.dumps(manifest, indent=2)+'\n')
 PY
 tar -czf "$archive" -C package-mac kritic
