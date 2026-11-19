@@ -3,10 +3,20 @@ on:
   push:
     tags: ['v*-test.*']
   workflow_dispatch:
+    inputs:
+      smoke_only:
+        description: Test a CI binary on CPU without rebuilding release binaries
+        type: boolean
+        default: false
+      ci_run_id:
+        description: Source CI run containing kritic-windows-test (smoke_only)
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
   package:
+    if: github.event_name != 'workflow_dispatch' || !inputs.smoke_only
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -25,16 +35,7 @@ jobs:
       - run: cargo build --workspace --release --bins --locked
       - name: Verify CPU-only prompt inference before packaging
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $archive = Join-Path $env:RUNNER_TEMP 'ollama-v0.40.16-windows-amd64.zip'
-          $runtime = Join-Path $env:RUNNER_TEMP 'kritic-ollama-v0.40.16'
-          Invoke-WebRequest -Uri 'https://github.com/ollama/ollama/releases/download/v0.40.16/ollama-windows-amd64.zip' -OutFile $archive -TimeoutSec 300
-          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne '50fcf5ad54277f2fa5d173ebfc93bcb017adbc0c9ef2314daabc96ca9e6aa64e') { throw 'Ollama archive SHA256 mismatch' }
-          Expand-Archive -LiteralPath $archive -DestinationPath $runtime
-          $ollama = Join-Path $runtime 'ollama.exe'
-          python scripts/smoke-prompt-model.py --kritic (Resolve-Path target/release/kritic.exe).Path --ollama $ollama --work-dir (Join-Path $env:RUNNER_TEMP 'kritic-prompt-live') --model 'qwen2.5:1.5b'
-          if ($LASTEXITCODE -ne 0) { throw 'CPU prompt inference smoke failed' }
+        run: ./scripts/smoke-prompt-release.ps1 -Kritic target/release/kritic.exe
       - name: Retain CPU prompt evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -50,6 +51,7 @@ jobs:
           name: kritic-windows-x86_64-test
           path: kritic-windows-x86_64-test.zip
   mac-cli:
+    if: github.event_name != 'workflow_dispatch' || !inputs.smoke_only
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -71,3 +73,30 @@ jobs:
           name: kritic-cli-macos-arm64-test
           path: kritic-cli-macos-arm64-test.tar.gz
 # Packaging only: publishing a GitHub release/tag requires a separate maintainer action.
+  prompt-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.smoke_only
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Download and verify the selected CI binary
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: ./scripts/fetch-ci-prompt-candidate.ps1
+      - name: Live CPU provider smoke
+        shell: pwsh
+        run: ./scripts/smoke-prompt-release.ps1 -UseCiCandidate
+      - name: Retain CPU prompt evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prompt-cpu-evidence
+          path: ${{ runner.temp }}/kritic-prompt-live/*.json
+          if-no-files-found: warn

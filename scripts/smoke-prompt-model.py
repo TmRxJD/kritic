@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import socket
 import struct
-import subprocess
+import subprocess  # nosec B404 - required for the explicitly owned, suspended process tree
 import sys
 import threading
 import time
@@ -70,8 +70,15 @@ class OwnedJob:
             raise C.WinError(C.get_last_error())
 
     def spawn(self, command, **kwargs):
+        if kwargs.get('shell') or not isinstance(command, (list, tuple)) or not command:
+            raise ValueError('Owned children require an argv list without a shell')
+        executable = Path(command[0])
+        if not executable.is_absolute() or not executable.is_file() or executable.suffix.lower() != '.exe':
+            raise ValueError('Owned children require an existing absolute Windows executable')
         # Suspended creation prevents any descendant escaping before assignment.
-        process = subprocess.Popen(command, creationflags=0x08000000 | 0x4, **kwargs)
+        # Callers supply validated absolute executables and fixed serve/prompt argv;
+        # user prompt data goes only to stdin. No shell or generated command is run.
+        process = subprocess.Popen(command, creationflags=0x08000000 | 0x4, **kwargs)  # nosec B603
         if not self.assign(self.handle, W.HANDLE(int(process._handle))):
             process.kill()
             process.wait(timeout=5)
