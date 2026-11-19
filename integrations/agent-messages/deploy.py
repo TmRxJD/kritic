@@ -22,6 +22,7 @@ def make_link(destination, target):
 
 
 def remove_owned_link(destination, target):
+    target = target.resolve()
     # Roll back only the alias created by this activation, never its contents.
     if destination.resolve() != target:
         raise ValueError('Hermes plugin link changed during activation; preserve it and inspect the backup')
@@ -34,6 +35,10 @@ def remove_owned_link(destination, target):
 
 
 def activate_link(destination, target, previous):
+    # Resolve parent aliases without following the plugin alias being replaced.
+    destination = destination.parent.resolve()/destination.name
+    target = target.resolve()
+    previous = previous.resolve() if previous is not None else None
     backup = None
     if destination.exists():
         if destination.resolve() == target:

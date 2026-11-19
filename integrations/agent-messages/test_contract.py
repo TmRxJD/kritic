@@ -153,8 +153,8 @@ class MessageTests(unittest.TestCase):
         data = json.loads(path.read_text(encoding='utf8'))
         commands = [item['command'] for group in data['hooks']['PreToolUse'] for item in group['hooks']]
         self.assertIn('unrelated-hook',commands)
-        self.assertEqual(sum(str(new/'hook.py').replace('\\','/') in command for command in commands),1)
-        self.assertFalse(any(str(old/'hook.py').replace('\\','/') in command for command in commands))
+        self.assertEqual(sum((new/'hook.py').resolve().as_posix() in command for command in commands),1)
+        self.assertFalse(any((old/'hook.py').resolve().as_posix() in command for command in commands))
 
     def test_failed_link_replacement_restores_old_alias(self):
         root = Path(os.environ.get('AGENT_MESSAGE_TEST_ROOT',tempfile.gettempdir())) / f'link-failure-{time.time_ns()}'
@@ -165,7 +165,7 @@ class MessageTests(unittest.TestCase):
         with patch('deploy.make_link',side_effect=OSError('injected link failure')):
             with self.assertRaisesRegex(OSError,'injected'):
                 activate_link(destination,new,old)
-        self.assertEqual(destination.resolve(),old)
+        self.assertEqual(destination.resolve(),old.resolve())
         self.assertTrue(old.is_dir())
         self.assertTrue(new.is_dir())
 
@@ -185,7 +185,7 @@ class MessageTests(unittest.TestCase):
         with patch('deploy.os.replace',side_effect=fail_claude):
             with self.assertRaisesRegex(OSError,'injected'):
                 install(new,codex,claude,hermes,replace_runtime=old)
-        self.assertEqual((hermes/'plugins/agent-message-contract').resolve(),old/'hermes-plugin')
+        self.assertEqual((hermes/'plugins/agent-message-contract').resolve(),(old/'hermes-plugin').resolve())
         for path in paths:
             self.assertEqual(path.read_bytes(),before[path])
 
