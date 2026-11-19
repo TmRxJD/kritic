@@ -1,6 +1,6 @@
 # Prompt critic and intake pipeline
 
-**Opt-in source-build test feature; test.13 predates it.** Prompt preparation is
+**Opt-in feature in test.14 or later.** Prompt preparation is
 not implementation approval or permission to execute. The original user message
 remains authoritative. No GPU is required. Never inherently trust a proposed brief.
 
@@ -71,7 +71,7 @@ status. Host/provider retention is separate. A hash identifies bytes, not author
 freshness or meaning; never reuse another task's report as current.
 
 For Claude Code `settings.json` or compatible Codex `hooks.json`, preserve other
-hooks and add the following using the **actual matching executable**, not test.13:
+hooks and add the following using the **actual matching test.14 or later executable**:
 
 ```json
 {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"\"B:/AI/Runtime/kritic/bin/kritic.exe\" prompt --hook claude","timeout":15}]}]}}

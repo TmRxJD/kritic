@@ -5,8 +5,8 @@ impairment or proof that a summary is semantically complete.
 [Research and design limits](session-continuity-research.md).
 
 Enable `capabilities.sessions=true` or `KRITIC_CAP_SESSIONS=true` in a matching
-source build. `kritic session --schema` prints the authoritative session/handoff
-schemas. The published test.13 binary predates these critics. Automatic lifecycle
+test.14 or later build. `kritic session --schema` prints the authoritative session/handoff
+schemas. Automatic lifecycle
 enrollment is separate; enabling review tools does not restart anything.
 
 Keep private exports/cases/reports in permanent `.kritic/session-state/` storage,

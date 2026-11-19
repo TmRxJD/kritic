@@ -1,6 +1,6 @@
 # Configuration
 
-Source-build prompt intake: enable `capabilities.prompts`, then select
+Test.14 prompt intake: enable `capabilities.prompts`, then select
 `prompt.backend=off|local|cloud|codex`, `prompt.model`, `prompt.codex_exe` and
 `prompt.timeout_s` (1..120). Capability and model default off. Selecting a provider
 does not enroll a hook. See [prompt pipeline](prompt-pipeline.md) and `[prompt]`

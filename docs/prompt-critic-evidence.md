@@ -39,11 +39,26 @@ tool-call events. A positive case preserves a protected paragraph while shorteni
 repetition elsewhere. Independent review found the punctuation guard defect and
 reported no further scoped authority/fail-open findings after its fix.
 
-Hermes registration/child contracts are tested with mocks against the inspected
-installed hook API. An actual native Hermes dispatch through the new installed
-binary has **not** been run. Local Qwen and API-key prompt generation have **not**
-been live-tested in this run. Full Kritic linking/runtime tests require CI because
-the measured local commit reserve was only 6.82 GiB. These results do not prove
-arbitrary intent preservation, production usefulness or complete harness behavior.
+Release verification adds 29 compiled CLI/MCP checks covering local and all four
+API transport envelopes, credential header placement with synthetic keys, malformed
+responses, truncation, tool-call rejection, native hook augmentation and recursion.
+These use loopback inference fixtures, not paid external API-model requests.
+
+The actual installed Hermes `PluginManager`/`PluginContext` dispatcher also passed
+13 checks through the real prompt adapter and compiled CLI child: supplementary
+context, unchanged user message, duplicate/recursion suppression and HTTP 503
+fail-open behavior. Inference was a loopback fixture. No global plugins were changed.
+
+Seven further compiled CLI/MCP checks exercised session/handoff evidence and actual
+Git ownership transactions, including dirty-work preservation, source fencing,
+successor resume and stale-fixture rejection. Session identities were synthetic;
+this is not a claim of an automatic real-session controller.
+
+PRs #40 and #41 passed Windows linking/runtime tests and security plus Ubuntu,
+macOS and browser CI. Local full linking was avoided because measured commit reserve
+was only 6.82 GiB. A live small-Qwen GPU probe was stopped by its memory guard before
+the six-GiB reserve was crossed; model availability depends on real host resources.
+These results do not prove arbitrary intent preservation, production usefulness,
+every cloud account's compatibility or complete harness behavior.
 
 See [setup, provider limits and pipeline boundaries](prompt-pipeline.md).

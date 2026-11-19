@@ -46,6 +46,11 @@ Use `action=transfer`; request `action=schema` for the exact phase fields. This 
 
 Use `phase=status` to reconcile an uncertain result before retrying. The source may `phase=cancel` an unaccepted transfer with a reason; this restores its writer role without modifying files. Changed evidence, new user input, a changed workspace, wrong acknowledgements and concurrent acceptance fail closed. Preserve both sessions and the work; never reset the tree or infer abandonment from a missing heartbeat. These hooks cover supported enrolled events only, so matching adapter versions and exclusive external-process ownership remain prerequisites. A separately authorized host controller is still required for unattended fresh-session launch and recovery.
 
+Native turn-boundary enrollment currently uses Codex/Claude Code `Stop`. Hermes
+declaration and session-end hooks do not by themselves establish this boundary;
+a Hermes source needs a separately verified turn-completion controller integration
+before preparing a transfer. Never fabricate a boundary event to get past that check.
+
 ## Inspect worktrees against main
 
 Refresh the intended remote ref separately and check that it represents the actual integration target. The coordinator does not fetch or guess which branch is authoritative.
@@ -120,7 +125,7 @@ and impersonating another actor are rejected. Reconnect MCP afterwards to expose
 `worktree_evaluate`. Ask each undeclared peer to declare its own task and scope;
 do not guess their assignments or release their claims to unblock yourself.
 
-The test.13 Windows ZIP and Apple Silicon archive include `bin/kev-tools` (`.exe`
+The test.14 Windows ZIP and Apple Silicon archive include `bin/kev-tools` (`.exe`
 on Windows) and its matching `bin/coordination/` directory. Extract the whole
 archive into permanent storage. Register a separate stdio MCP server named
 `kev-tools` with `command` set to the executable's absolute path and `args=[]` in

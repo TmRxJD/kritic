@@ -1,6 +1,6 @@
 # Bring your own reviewer
 
-Source-build [prompt intake](prompt-pipeline.md) supports the official Codex CLI's
+Test.14 [prompt intake](prompt-pipeline.md) supports the official Codex CLI's
 existing login or explicit API transports. `kritic prompt --login codex` invokes
 official sign-in without copying tokens. Direct Sign in with ChatGPT is researched,
 not implemented here. Claude subscription login remains in native Claude Code;

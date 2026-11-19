@@ -1,6 +1,6 @@
 # Tools — test release
 
-Source builds add opt-in `prompt_critic`: deterministic prompt inspection and
+Test.14 adds opt-in `prompt_critic`: deterministic prompt inspection and
 explicit Qwen/cloud/native Codex brief generation. Original user authority remains;
 no semantic equivalence or replacement is implied. See [prompt intake](prompt-pipeline.md).
 

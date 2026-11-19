@@ -1,10 +1,10 @@
 # Kritic
 
-Source builds add an opt-in [prompt intake pipeline](docs/prompt-pipeline.md):
+Test.14 includes an opt-in [prompt intake pipeline](docs/prompt-pipeline.md):
 small local Qwen, explicit cloud APIs or an existing official Codex login can propose
 an actionable brief while retaining the original user's intent and authority.
 Native hooks add advisory context; a full task manager and direct OAuth login are
-separate capabilities. The published test.13 binary predates this feature.
+separate capabilities. Enable only the stages and providers you intend to use.
 
 **Governance, verification and review for AI-assisted software work. No GPU required.**
 
@@ -24,7 +24,7 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 
 [Get started](#quickstart-install-the-minimum-then-choose-extras) ·
 [Choose capabilities](#choose-your-capabilities) · [Hardware](#what-your-hardware-can-run) ·
-[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.13)
+[Client setup](docs/clients.md) · [Test release](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.14)
 
 ## What Kritic governs
 
@@ -32,12 +32,12 @@ account or dedicated GPU. Optional local/cloud reviewers can provide additional 
 |---|---|---|
 | **Requirements and acceptance** | Work contracts, current input/evidence hashes, declared assertions and enforcement wiring. | Uncovered prose and unrun checks stay unverified. A weak assertion cannot establish the whole requirement. |
 | **Repository discipline** | Broad/focused/atomic commit budgets, staged-tree scope plans, file size, naming, layers, imports and organization rules. Explicit local hooks can reject noncompliant commits. | Size and pattern compliance do not prove semantic cohesion, modularity or good comments. Hooks can be bypassed. |
-| **Opt-in worktree coordination** | Shared Codex, Claude Code and Hermes task/scope declarations, editing-worktree reservations, and reviewed integration plans through Kev Tools. Source builds also support acknowledged same-worktree succession that preserves dirty work and fences previous writers. See [setup and coverage](integrations/coordination/README.md). | Enrolled sessions and supported structured writes are checked. Opaque commands remain cooperative, and model advice does not approve a merge. Fresh-session launching requires a separate controller. |
+| **Opt-in worktree coordination** | Shared Codex, Claude Code and Hermes task/scope declarations, editing-worktree reservations, reviewed integration plans, and acknowledged same-worktree succession that preserves dirty work and fences previous writers. See [setup and coverage](integrations/coordination/README.md). | Enrolled sessions and supported structured writes are checked. Opaque commands remain cooperative, and model advice does not approve a merge. Fresh-session launching requires a separate controller. |
 | **Tests and canonical sources** | One graph of canonical owners, test dependencies, reviewed hashes and generated JSON fixtures. Staleness checks flag drift; invariant checks inspect declared boundaries, guards and negative-test bindings. | Consistent hashes or matching guard text do not prove tests are correct, execute, or cover every important boundary. |
 | **Implementation and behavior** | Project validators, security scanners, linters, browser interactions, accessibility/workflow rules, Windows desktop tests and resource/process measurements. | Evidence covers the checks and states actually exercised. Missing dependencies and unobserved effects remain gaps. |
 | **Problem framing and product quality** | Debugging-case consistency, competing explanations and causal evidence; optional screenshot/novice review against explicit visual and workflow goals. | A consistent frame is not a proven root cause. Functional success does not establish professional or AAA quality. |
 | **Maintenance and continuity** | Dependency inventory, opt-in registry lookups, estimated urgency/upgrade effort, private review history and comparison of explicit snapshots. | No automatic dependency upgrades, compatibility guarantee, cached acceptance or demonstrated cross-task learning. |
-| **Opt-in session evidence (source build)** | [Session and handoff critics](docs/session-continuity.md) check pinned original context, user corrections, solutions, current fixtures and dirty work before a successor acknowledges ownership. Deterministic checks require no GPU. | Coverage depends on the supplied original capture and declared facts. No universal degradation threshold or automatic fresh-session controller is claimed. Published test.13 predates these tools. |
+| **Opt-in session evidence** | [Session and handoff critics](docs/session-continuity.md) check pinned original context, user corrections, solutions, current fixtures and dirty work before a successor acknowledges ownership. Deterministic checks require no GPU. | Coverage depends on the supplied original capture and declared facts. No universal degradation threshold or automatic fresh-session controller is claimed. Requires test.14 or later. |
 | **Command output** | Portable `kev run` / `kev show`, raw stdout/stderr archives, bounded deterministic excerpts and optional local relevance ranking. No GPU or MCP required. | Finite noninteractive commands only; excerpts can clip diagnostics. Model rankings never establish success. [Guide](docs/cli-filter.md). |
 | **Agent context and project extensions** | Compact MCP discovery, optional context helpers, a separately enabled Hermes archive/recall engine, repository plugins and a Beat Saber evaluator. | No autonomous agent orchestration, implicit context takeover or general proof of domain quality. |
 
@@ -72,9 +72,9 @@ flowchart LR
 
 ## Quickstart: install the minimum, then choose extras
 
-**Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter only; the Mac MCP server requires a source build. Start without models and add only relevant tools.
+**Windows x86-64 is the full tested distribution.** The Apple Silicon archive contains the CLI filter and Kev Tools provenance/worktree companion; the full Kritic MCP server requires a source build on Mac. Start without models and add only relevant tools.
 
-1. Download the Windows ZIP from [v0.5.0-test.13](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.13),
+1. Download the Windows ZIP from [v0.5.0-test.14](https://github.com/TmRxJD/kritic/releases/tag/v0.5.0-test.14),
    verify it against the release's `SHA256SUMS`, and extract it into a persistent location.
    The ZIP includes `kritic.exe`, `kev.exe`, `kev-filter.exe`, the skill, examples, documentation and optional desktop harness.
    Install the [Microsoft Visual C++ x64 runtime](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
