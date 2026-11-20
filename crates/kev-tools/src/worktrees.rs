@@ -23,9 +23,9 @@ fn empty_request() -> Value {
 
 pub(crate) fn tool() -> Value {
     json!({"name":"worktree_evaluate",
-        "description":"Opt-in repository coordination and intent review. action=schema returns request fields. Declare task, worktree and owned file/folder scopes. Inspect worktrees against an explicit main ref, then evaluate reviewed hunk decisions into an isolated plan. No automatic merges or cleanup. Optional Kev advice is uncalibrated.",
+        "description":"Opt-in repository coordination and intent review. action=schema returns fields. Declare task/worktree/scopes. User-authorized recover inspects then accepts one unavailable owner's assignment without source release or handoff. Inspect/evaluate produce reviewed merge plans only; no automatic merge or cleanup. Optional Kev advice is uncalibrated.",
         "inputSchema":{"type":"object","additionalProperties":false,"required":["action"],"properties":{
-            "action":{"type":"string","enum":["schema","declare","status","release","inspect","evaluate","transfer"]},
+            "action":{"type":"string","enum":["schema","declare","status","release","inspect","evaluate","transfer","recover"]},
             "request":{"type":"object","description":"Action-specific fields from action=schema."},
             "use_kev":{"type":"boolean","default":false,"description":"Optional intent advice for inspect/evaluate only."}}}})
 }
@@ -164,7 +164,14 @@ pub(crate) fn call(args: &Value) -> Result<String, String> {
         serde_json::from_value(args.clone()).map_err(|e| format!("invalid request: {e}"))?;
     if !matches!(
         request.action.as_str(),
-        "schema" | "declare" | "status" | "release" | "inspect" | "evaluate" | "transfer"
+        "schema"
+            | "declare"
+            | "status"
+            | "release"
+            | "inspect"
+            | "evaluate"
+            | "transfer"
+            | "recover"
     ) || !request.request.is_object()
     {
         return Err("Unknown action or non-object request; use action=schema".into());

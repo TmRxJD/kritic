@@ -4,7 +4,9 @@ Shared MCP tools for Codex, Claude Code and Hermes. The server provides extracti
 
 ## Worktree intent and scope
 
-`worktree_evaluate` exposes `schema`, `declare`, `status`, `release`, `inspect`, `evaluate` and `transfer` actions. Its strict action-specific request schemas are returned on demand by `{"action":"schema"}`. Declarations name the actual host/session/agent, separate worktree, task, change explanation and exact file/directory scopes. Conflicting reservations are rejected atomically across enrolled Codex, Claude Code and Hermes sessions.
+`worktree_evaluate` exposes `schema`, `declare`, `status`, `release`, `inspect`, `evaluate`, `transfer` and `recover` actions. Its strict action-specific request schemas are returned on demand by `{"action":"schema"}`. Declarations name the actual host/session/agent, separate worktree, task, change explanation and exact file/directory scopes. Conflicting reservations are rejected atomically across enrolled Codex, Claude Code and Hermes sessions.
+
+Version 0.5 adds user-authorized recovery when an old session cannot release ownership. Inspect one exact source actor/generation, then acknowledge and accept the hash-bound plan as the actual successor. The task/scopes and dirty/index/untracked work are preserved; the old writer is fenced and pending source transfers invalidated. No fresh source handoff is required. Multiple trees recover separately; missing context stays unverified. See [ownership recovery](../../docs/ownership-recovery.md).
 
 Version 0.4 adds explicit same-worktree session succession: prepare at an observed turn boundary, bind a real successor identity, then accept the pinned handoff and current evidence. Transfer preserves task/scopes, HEAD, index and dirty work, fences previous writers and keeps accepted ownership across exit/resume. Missing evidence blocks transfer; cancellation retains the original assignment. Session end does not release durable editing ownership. Automatic fresh-session launching requires a separate host controller. See [session continuity](../../docs/session-continuity.md).
 

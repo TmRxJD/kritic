@@ -36,6 +36,14 @@ Use `action=status`, `request={"worktree":"<absolute root>","include_history":tr
 
 ## Resume the same worktree in a fresh session
 
+If the source cannot cooperate (for example, its token quota is exhausted), use
+the separate **Kev Tools 0.5 `action=recover` inspect/accept workflow** with explicit
+user authorization. It needs no source release, handoff or boundary and preserves
+one exact assignment while fencing its old writer. Both MCP and the restricted
+native-command bootstrap permit recovery before declaration. See
+[ownership recovery](../../docs/ownership-recovery.md). Do not clear the database,
+mass-release other trees or impersonate the old session.
+
 Use `action=transfer`; request `action=schema` for the exact phase fields. This requires matching updated coordination adapters on both sessions. This protocol transfers registry ownership; it does not launch a model, approve a handoff's meaning, merge branches, or grant operating-system filesystem permissions.
 
 1. The current editing owner finishes its turn. The native Stop event records the observed turn boundary. Produce a covered [handoff report](../../docs/session-continuity.md) with pinned context, current revision, dirty files, selected fixtures, and exactly the declared write scope.

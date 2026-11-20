@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add Kev Tools 0.5 user-authorized unavailable-owner recovery, including cross-host Claude-to-Codex continuation. The successor can inherit one exact task/scope assignment without an old-owner release or new handoff; live generation/activity/Git checks, source fencing and audit records protect enrolled coordination paths. Unknown conversation context remains unverified.
+- Bind exact declaration bytes separately from a float-free recovery plan, preventing JSON transport timestamp rounding from rejecting valid takeover acknowledgements; preserve original stored metadata when ownership moves.
+
 ## 0.5.0-test.14 — test release (2026-11-19)
 
 - Add explicit prompt cloud output-format selection for supporting OpenAI-compatible/OpenAI endpoints. A live compatible-API generation returned non-JSON; schema mode requests the canonical candidate contract while retaining strict decoding and original-prompt authority. Generic prompt-only compatibility remains the default.

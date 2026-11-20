@@ -95,8 +95,12 @@ class CoordinationTests(unittest.TestCase):
         event['tool_input']['cmd'] = command + ' && echo unauthorized'
         self.assertEqual(hook('codex', 'pretool', event)['hookSpecificOutput']['permissionDecision'], 'deny')
         event['tool_input']['cmd'] = command
+        # patch.dict restores Python's empty environment values, but Windows may
+        # drop them from its native block. Preserve paired GIT_CONFIG_KEY/VALUE
+        # entries explicitly when launching the bootstrap from this test fixture.
         result = subprocess.run([sys.executable, '-I', str(coordinator), '--request-json', json.dumps(declaration)],
-                                capture_output=True, text=True, check=True)  # nosec B603
+                                capture_output=True, text=True, check=False, env=dict(os.environ))  # nosec B603
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertIn('declared', result.stdout)
         declaration['request']['session_id'] = 'b'
         event['tool_input']['cmd'] = f'python -I "{coordinator.as_posix()}" --request-json ' + shlex.quote(json.dumps(declaration))

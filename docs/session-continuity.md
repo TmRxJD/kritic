@@ -1,5 +1,10 @@
 # Session and handoff critics
 
+An unavailable source does not have to release its worktree: Kev Tools 0.5 offers
+[explicit user-authorized ownership recovery](ownership-recovery.md). It preserves
+one exact assignment and its dirty work while fencing the old writer; a missing
+fresh handoff remains an acknowledged context gap, not a passing handoff review.
+
 Opt-in, model-free checks for **declared, pinned evidence**, not a diagnosis of
 impairment or proof that a summary is semantically complete.
 [Research and design limits](session-continuity-research.md).

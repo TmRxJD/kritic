@@ -34,7 +34,9 @@ def setup_help(host, session, agent, cwd):
             'coordinator command, replacing only task, change_summary, worktree and scopes with actual values: '
             f'{command}. This restricted bootstrap is allowed before declaration; arbitrary shell commands are not. '
             'Tool discovery and agent messaging remain available. Ask undeclared peers to declare themselves; '
-            'never invent their tasks or impersonate them. Reconnect MCP to load the newly installed tool.')
+            'never invent their tasks or impersonate them. If the user authorized continuing an unavailable owner\'s work, '
+            'discover recover via action=schema and inspect one exact source assignment before accepting it; no old-owner release is required. '
+            'Reconnect MCP to load the newly installed tool.')
 
 
 def bootstrap(tool, data, host, session, agent):
@@ -70,9 +72,9 @@ def bootstrap(tool, data, host, session, agent):
             return False
         raw = data.get('stdin') or '{}'
     value = json.loads(raw)
-    if value.get('action') not in ('schema', 'status', 'declare', 'release', 'transfer'):
+    if value.get('action') not in ('schema', 'status', 'declare', 'release', 'transfer', 'recover'):
         return False
-    if value.get('action') in ('declare', 'release', 'transfer'):
+    if value.get('action') in ('declare', 'release', 'transfer', 'recover'):
         owner = value.get('request') or {}
         if owner.get('host') != host or owner.get('session_id') != session or (agent is not None and owner.get('agent_id', 'main') != agent):
             raise ValueError('Use your actual host/session/agent identity for coordination bootstrap')
@@ -169,7 +171,7 @@ def hook(host, event, payload):
         if bootstrap(tool, data, host, session, payload.get('agent_id')):
             return {}
     if event == 'pretool' and tool.endswith('worktree_evaluate'):
-        if data.get('action') in ('declare', 'release', 'transfer'):
+        if data.get('action') in ('declare', 'release', 'transfer', 'recover'):
             declaration = data.get('request') or {}
             if declaration.get('host') != host or declaration.get('session_id') != session:
                 return response(host, f'Use actual hook identity host={host}, session_id={session}; do not alter another session claim.', True)
