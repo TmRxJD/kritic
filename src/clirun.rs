@@ -221,6 +221,65 @@ pub fn resolve(program: &str) -> Option<PathBuf> {
         .find_map(|d| try_in(&d))
 }
 
+#[cfg(windows)]
+fn is_native_windows_bash(path: &Path) -> bool {
+    path.is_file()
+        && !path.components().any(|part| {
+            let part = part.as_os_str().to_string_lossy();
+            part.eq_ignore_ascii_case("system32") || part.eq_ignore_ascii_case("syswow64")
+        })
+}
+
+#[cfg(windows)]
+fn native_bash_on_path(directories: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    for directory in directories {
+        let candidate = directory.join("bash.exe");
+        if is_native_windows_bash(&candidate) {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Script files use Windows paths, so the WSL system launcher is not a
+/// compatible Bash interpreter. Prefer Git's native Bash without changing
+/// explicit `program` resolution for callers intentionally invoking WSL.
+fn resolve_script_program(language: &str, program: &str) -> Result<PathBuf, String> {
+    #[cfg(windows)]
+    if matches!(language.to_ascii_lowercase().as_str(), "bash" | "sh") {
+        if let Some(git) = resolve("git")
+            && let Some(parent) = git.parent()
+        {
+            for relative in ["bash.exe", "../bin/bash.exe", "../../bin/bash.exe"] {
+                let candidate = parent.join(relative);
+                if is_native_windows_bash(&candidate) {
+                    return candidate
+                        .canonicalize()
+                        .map_err(|error| format!("Bash path: {error}"));
+                }
+            }
+        }
+        if let Some(bash) = std::env::var_os("PATH")
+            .and_then(|path| native_bash_on_path(std::env::split_paths(&path)))
+        {
+            return Ok(bash);
+        }
+        return Err("Bash scripts on Windows require native Bash (for example Git for Windows); the WSL system launcher cannot read Windows script paths".into());
+    }
+    #[cfg(not(windows))]
+    let _ = language;
+    resolve(program).ok_or_else(|| format!("program not found on PATH: {program}"))
+}
+
+fn script_file_argument(language: &str, file: &Path) -> String {
+    let path = file.display().to_string();
+    if cfg!(windows) && matches!(language.to_ascii_lowercase().as_str(), "bash" | "sh") {
+        path.replace('\\', "/")
+    } else {
+        path
+    }
+}
+
 /// Quote one argument for display in a Windows/PowerShell-agnostic way (display only).
 pub fn quote_display(a: &str) -> String {
     if !a.is_empty() && !a.contains(|c: char| c.is_whitespace() || "\"'&|<>()^;$`".contains(c)) {
@@ -274,7 +333,7 @@ pub async fn run(p: CliParams) -> CliResult {
             return CliResult::failed(format!("write script: {e}"));
         }
         let mut a: Vec<String> = lead.iter().map(|x| x.to_string()).collect();
-        a.push(file.display().to_string());
+        a.push(script_file_argument(&s.language, &file));
         a.extend(s.args.iter().cloned());
         _tmp = Some(dir);
         (prog.to_string(), a)
@@ -282,8 +341,12 @@ pub async fn run(p: CliParams) -> CliResult {
         _tmp = None;
         (p.program.clone().unwrap(), p.args.clone())
     };
-    let Some(resolved) = resolve(&prog_name) else {
-        return CliResult::failed(format!("program not found on PATH: {prog_name}"));
+    let resolved = match p.script.as_ref().map_or_else(
+        || resolve(&prog_name).ok_or_else(|| format!("program not found on PATH: {prog_name}")),
+        |script| resolve_script_program(&script.language, &prog_name),
+    ) {
+        Ok(path) => path,
+        Err(error) => return CliResult::failed(error),
     };
     let display = std::iter::once(quote_display(&resolved.display().to_string()))
         .chain(argv.iter().map(|a| quote_display(a)))
@@ -484,6 +547,55 @@ mod tests {
         assert!(r.ok, "{:?}", r.error);
         assert_eq!(r.exit_code, Some(0));
         assert_eq!(r.stdout, format!("{nasty}|<<EOF\nnot a heredoc\nEOF"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_bash_path_search_skips_system_launchers() {
+        let root = tempfile::tempdir().unwrap();
+        let system32 = root.path().join("System32");
+        let syswow64 = root.path().join("SysWOW64");
+        let native = root.path().join("MSYS").join("usr").join("bin");
+        for directory in [&system32, &syswow64, &native] {
+            std::fs::create_dir_all(directory).unwrap();
+            std::fs::write(directory.join("bash.exe"), []).unwrap();
+        }
+        assert_eq!(
+            native_bash_on_path([system32.clone(), syswow64.clone()]),
+            None
+        );
+        assert_eq!(
+            native_bash_on_path([system32, syswow64, native.clone()]),
+            Some(native.join("bash.exe"))
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bash_script_paths_keep_spaces_and_use_forward_slashes() {
+        assert_eq!(
+            script_file_argument("bash", Path::new(r"C:\test scripts\script.sh")),
+            "C:/test scripts/script.sh"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn windows_bash_script_runs_with_literal_arguments_and_stdin() {
+        let literal = "it's \"quoted\" $HOME `x` %PATH% space";
+        let result = run(CliParams {
+            script: Some(Script {
+                language: "bash".into(),
+                code: "printf '%s|' \"$1\"; cat".into(),
+                args: vec![literal.into()],
+            }),
+            stdin: Some("literal input".into()),
+            ..Default::default()
+        })
+        .await;
+        assert!(result.ok, "{:?}", result.error);
+        assert_eq!(result.exit_code, Some(0), "{}", result.stderr);
+        assert_eq!(result.stdout, format!("{literal}|literal input"));
     }
 
     #[tokio::test]
