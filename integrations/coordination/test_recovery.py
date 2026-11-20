@@ -66,6 +66,23 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.accept(inspected)
 
+    def test_plan_contains_no_floats_and_preserves_original_metadata_on_accept(self):
+        inspected=self.prepare()
+        def no_floats(value):
+            self.assertNotIsInstance(value,float)
+            if isinstance(value,dict):
+                for item in value.values(): no_floats(item)
+            elif isinstance(value,list):
+                for item in value: no_floats(item)
+        no_floats(inspected['plan'])
+        self.assertIsInstance(inspected['plan']['source_declaration']['declared_at'],str)
+        self.accept(inspected)
+        with transaction() as db:
+            import json
+            declaration=json.loads(db.execute('SELECT declaration FROM actors WHERE id=?',(actor_id('codex','fresh'),)).fetchone()[0])
+        self.assertEqual(declaration['declared_at'],self.source['declaration']['declared_at'])
+        self.assertIsInstance(declaration['declared_at'],float)
+
     def test_wrong_successor_and_unacknowledged_gaps_do_not_change_claims(self):
         inspected = self.prepare()
         with self.assertRaisesRegex(ValueError,'successor'):

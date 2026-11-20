@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add Kev Tools 0.5 user-authorized unavailable-owner recovery, including cross-host Claude-to-Codex continuation. The successor can inherit one exact task/scope assignment without an old-owner release or new handoff; live generation/activity/Git checks, source fencing and audit records protect enrolled coordination paths. Unknown conversation context remains unverified.
+- Bind exact declaration bytes separately from a float-free recovery plan, preventing JSON transport timestamp rounding from rejecting valid takeover acknowledgements; preserve original stored metadata when ownership moves.
 
 ## 0.5.0-test.14 — test release (2026-11-19)
 

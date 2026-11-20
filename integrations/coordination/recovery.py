@@ -40,6 +40,21 @@ def digest(plan):
     return hashlib.sha256(json.dumps(plan,sort_keys=True,separators=(',',':')).encode()).hexdigest()
 
 
+def transport_view(value):
+    """Keep plan hashes independent of provider JSON floating-point formatting.
+
+    The raw declaration hash separately binds exact stored types/bytes. Acceptance
+    inherits the original database document, never this display representation.
+    """
+    if isinstance(value,float):
+        return repr(value)
+    if isinstance(value,dict):
+        return {key:transport_view(item) for key,item in value.items()}
+    if isinstance(value,list):
+        return [transport_view(item) for item in value]
+    return value
+
+
 def make_plan(db, key, worktree, source_id, generation, authorization):
     fields(authorization,('kind','user_request','reason'))
     if authorization['kind'] != 'user_request':
@@ -83,8 +98,10 @@ def make_plan(db, key, worktree, source_id, generation, authorization):
     return {'version':1,'repo':info['repo'],'worktree':info['worktree'],
         'source_actor_id':source_id,'source_generation':generation,'source_claim_state':state,
         'source_epoch':epoch['epoch'] if epoch else None,
-        'source_seen':source['seen'],
-        'source_declaration':declaration,'successor_actor_id':key,
+        'source_seen':repr(source['seen']),
+        'source_declaration':transport_view(declaration),
+        'source_declaration_sha256':hashlib.sha256(source['declaration'].encode()).hexdigest(),
+        'successor_actor_id':key,
         'successor_generation':existing['generation'] if existing else None,
         'pending_transfers':pending,'authorization':authorization,'snapshot':snapshot(info['worktree']),
         'context_gaps':GAPS}
@@ -113,7 +130,7 @@ def recover(request):
         if live != plan:
             raise ValueError('Recovery evidence changed; inspect again without discarding work')
         source = plan['source_actor_id']
-        original = plan['source_declaration']
+        original = json.loads(db.execute('SELECT declaration FROM actors WHERE id=?',(source,)).fetchone()[0])
         source_decl = dict(original,access='read_only',transferred_to=key)
         destination = dict(original,host=request['host'],session_id=request['session_id'],
             agent_id=request.get('agent_id','main'),access='edit',transferred_from=source,
