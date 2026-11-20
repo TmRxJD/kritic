@@ -1,6 +1,6 @@
 [package]
 name = "kev-tools"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "Shared MCP server for Claude Code and Codex: Kev-ranked trim/digest (no generation model needed), tier picking, and handoff files."
 license = "Apache-2.0"

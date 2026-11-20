@@ -58,6 +58,23 @@ heartbeat. Matching test.14 adapters are required; test.13 predates transfer sup
 The critics do not start fresh sessions themselves. Do not create handoffs or
 restart sessions without an explicit user request or an explicitly enrolled policy.
 
+With Kev Tools 0.5 or later, **an unavailable predecessor does not need to release
+ownership**. When the user explicitly requests continuation after a token limit,
+crash or lost session, discover `worktree_evaluate(action="schema")` and use
+`action="recover"`, first `phase="inspect"`, then `phase="accept"`. Use your actual
+host/session/agent identity and one exact source actor/generation from status.
+Review and retain the returned plan: inherited task/scopes, staged/dirty/untracked
+inventory and context gaps. Supply the user's authorization and reason; acknowledge
+the exact plan hash and missing context at acceptance. No source-written handoff
+or observed turn boundary is required for this explicit recovery path. Each tree
+is recovered separately; never mass-release peers, expand scopes, pick an old
+fixture by its filename or claim missing conversation context is verified. Accept
+rejects changed evidence, fences the old source and cancels its pending transfers.
+If MCP is stale, use the matching coordinator's restricted native-command bootstrap
+with `action=recover`; do not ask the unavailable source to unblock you. See
+`docs/ownership-recovery.md`. Authorization is self-attested and hooks cannot stop
+already-running or unhooked writes. A model score never authorizes takeover.
+
 ### Setup is the agent's responsibility
 
 Test.14 optionally exposes `prompt_critic` and `kritic prompt` for explicitly

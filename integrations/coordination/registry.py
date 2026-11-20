@@ -196,7 +196,10 @@ def declare(request):
             if other['id'] == key or not other['declaration'] or request.get('access') == 'read_only' or other['declaration'].get('access') == 'read_only':
                 continue
             if identity(other['worktree']) == identity(info['worktree']):
-                raise ValueError(f'Worktree reserved by {other["id"]}; use a separate worktree')
+                raise ValueError(f'Worktree reserved by {other["id"]} at generation {other["generation"]}; use a separate worktree for concurrent work. '
+                    'For an explicitly user-authorized continuation from an unavailable owner, discover action=schema then use '
+                    'action=recover phase=inspect with this source_actor_id, expected_generation and your actual successor identity. '
+                    'Recovery needs no old-owner release or fresh handoff; do not impersonate the source.')
             windows_scope = bool(re.match(r'^[a-z]:/', identity(info['worktree'])))
             conflicts = [(a['path'], b['path']) for a in scopes for b in other['declaration']['scopes'] if overlaps(a['path'], b['path'], case_insensitive=windows_scope)]
             if conflicts:

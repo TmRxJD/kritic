@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 - 2026-11-20
+
+- Add explicit user-authorized recovery when an owner hits a token limit, crashes or cannot cooperate. Inspect an exact assignment, then accept its hash-bound plan as the actual successor without source release or a fresh source handoff.
+- Preserve task/scopes, full staged identity and dirty/untracked work; reject stale generation, activity, Git state, conflicts and wrong-session plans. Atomically fence the old writer and invalidate pending transfers.
+- Expose recovery in MCP, strict native-command bootstrap and host hooks before declaration. Record the authorization and unverified context; no timeout-based eviction or automatic merge occurs.
+
 ## 0.4.0 - 2026-11-19
 
 - Add explicit same-worktree ownership transfer phases for a prepared, bound and accepted session successor; preserve task/scopes, Git state and dirty evidence, and fence previous writers.

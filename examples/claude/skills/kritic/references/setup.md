@@ -1,5 +1,12 @@
 # Agent setup and recovery
 
+For an unavailable worktree owner, Kev Tools 0.5 adds user-authorized
+`worktree_evaluate(action="recover")`: discover its inspect/accept schema and use
+your actual successor identity. No old-owner release or fresh handoff is required.
+Preserve the exact inherited assignment and dirty inventory; acknowledge missing
+context. This is separate from model/setup recovery below. See the matching
+source `docs/ownership-recovery.md`.
+
 `prompt_critic`: opt in with `capabilities.prompts=true`; `prompt.backend=off`
 is deterministic. Choose local installed Qwen, explicit cloud API credentials, or
 the official Codex CLI/login in `[prompt]`. Use `kritic prompt --schema` and

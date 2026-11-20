@@ -54,7 +54,7 @@ def read_pin(reference, limit=1_000_000):
 def snapshot(root):
     info = repository(root)
     dirty = git(root,'status','--porcelain=v1','-z','--untracked-files=all')
-    index = git(root,'diff','--cached','--raw','--no-ext-diff','--no-textconv','-z','HEAD','--')
+    index = git(root,'diff','--cached','--raw','--no-abbrev','--no-ext-diff','--no-textconv','-z','HEAD','--')
     tokens = iter(dirty.split('\0'))
     paths = set()
     for token in tokens:
