@@ -6,6 +6,14 @@ import sys
 import uuid
 
 
+def host_directive(output):
+    # Hermes ignores unknown pre-tool fields; deliver a once-per-session notice
+    # as a tool result, then permit the unchanged retry through the shared cache.
+    if output.get('context'):
+        return {'action':'block','message':output['context']+' This notice is recorded; retry the unchanged tool call to continue under the documented exception.'}
+    return output
+
+
 def register(ctx):
     from hermes_cli.plugins import get_pre_tool_call_directive
     marker='kritic-update-capability-'+uuid.uuid4().hex
@@ -30,7 +38,7 @@ def register(ctx):
                 input=json.dumps(payload),text=True,capture_output=True,timeout=45,
                 creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),check=False)  # nosec B603
             if result.returncode: raise ValueError('Updater process failed')
-            return json.loads(result.stdout)
+            return host_directive(json.loads(result.stdout))
         except Exception as error:
             return {'action':'block','message':'Kritic update check unavailable: '+str(error)}
     ctx.register_hook('pre_tool_call',pre_tool_call)

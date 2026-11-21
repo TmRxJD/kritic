@@ -20,9 +20,18 @@ import hook
 import providers
 import staging
 import state
+import hermes_plugin
 
 
 class UpdateTests(unittest.TestCase):
+    def test_hermes_does_not_drop_once_per_session_notices(self):
+        notice=hermes_plugin.host_directive({'context':'Recorded migration exception'})
+        self.assertEqual(notice['action'],'block')
+        self.assertIn('retry the unchanged tool call',notice['message'])
+        self.assertEqual(hermes_plugin.host_directive({}),{})
+        denied={'action':'block','message':'outdated'}
+        self.assertEqual(hermes_plugin.host_directive(denied),denied)
+
     def setUp(self):
         parent=os.environ.get('UPDATE_TEST_ROOT',tempfile.gettempdir())
         self.root=Path(parent)/('tool-updates-'+str(time.time_ns()))
@@ -264,14 +273,14 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(data['keep'],original['keep'])
 
     def test_config_error_leaves_schema_and_coordination_recovery_reachable(self):
-        import subprocess
+        import subprocess  # nosec B404 - exercise the actual trusted updater CLI
         bad=self.root/'bad.toml'; bad.write_text('invalid = [')
         updater=Path(__file__).parent/'updater.py'
         flags=getattr(subprocess,'CREATE_NO_WINDOW',0)
-        schema=subprocess.run([sys.executable,'-I',str(updater),'--config',str(bad),'schema'],capture_output=True,creationflags=flags,timeout=10)
+        schema=subprocess.run([sys.executable,'-I',str(updater),'--config',str(bad),'schema'],capture_output=True,creationflags=flags,timeout=10)  # nosec B603 - fixed interpreter/script and owned fixture
         self.assertEqual(schema.returncode,0,schema.stderr)
         packet={'session_id':'s','tool_name':'mcp__kev_tools__worktree_evaluate','tool_input':{'action':'recover'}}
-        child=subprocess.run([sys.executable,'-I',str(updater),'--config',str(bad),'hook','codex','pretool'],input=json.dumps(packet).encode(),capture_output=True,creationflags=flags,timeout=10)
+        child=subprocess.run([sys.executable,'-I',str(updater),'--config',str(bad),'hook','codex','pretool'],input=json.dumps(packet).encode(),capture_output=True,creationflags=flags,timeout=10)  # nosec B603 - fixed interpreter/script, no shell
         self.assertEqual(json.loads(child.stdout),{})
 
     def test_old_explicit_cli_path_cannot_hide_behind_current_canonical_version(self):

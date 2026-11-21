@@ -92,6 +92,9 @@ the existing tool with a notice once per session/change and expires when the
 observed latest version changes. A reason/URL is an administrator/agent declaration,
 not independently authenticated proof. Verify its evidence. Do not disable the
 gate, change versions/hashes to pass, or invent migration conflicts to avoid work.
+Hermes does not inject arbitrary context from a pre-tool hook. Its adapter delivers
+this notice once as a blocked tool result; retrying the unchanged call then permits
+the recorded exception. Ordinary fresh/current calls remain silent.
 
 ## Agent recovery and coverage
 
