@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add an operational, model-free tool-update gate separate from advisory dependency review. Default successful-check cadence is weekly, with per-user/per-tool overrides, shared cache/leases, failure backoff and canonical installed-binding checks.
+- Add official npm/PyPI/GitHub/Blender metadata, installed MCP package discovery and explicit coverage gaps. Compatible updates require verified side-by-side downloads; migrations, stale invocations and activation/reconnection requirements cannot silently pass as current.
+- Add additive Codex/Claude/Hermes hooks and permanent update state/downloads/backups. Existing worktree-recovery hooks, running services and older versions stay intact.
+
 ## 0.5.0-test.14 — test release (2026-11-19)
 
 - Add explicit prompt cloud output-format selection for supporting OpenAI-compatible/OpenAI endpoints. A live compatible-API generation returned non-JSON; schema mode requests the canonical candidate contract while retaining strict decoding and original-prompt authority. Generic prompt-only compatibility remains the default.

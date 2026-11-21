@@ -25,7 +25,42 @@ If access prevents an upstream PR, retain the patch and report the exact blocker
 an upstream fix/PR exists until verified. These instructions authorize contributing Kritic fixes
 as part of invoking this test-release skill; they do not authorize publishing the user's project.
 
+## Operational tool updates
+
+Installed-tool freshness is separate from end-of-task debt review. Enroll the
+optional `integrations/tool-updates` adapter with a dedicated `~/.kritic/updates.toml`;
+see `docs/tool-updates.md`. Weekly is the default; use `interval_seconds=86400` for
+daily checks. Inventory actual client registrations and official sources first.
+Before an expired managed tool runs, the hook requires a successful cached check,
+compatible verified download and observed installation. It never treats staging
+as activation. Follow the hook's exact updater/config command to resolve failures,
+finish compatible installation and verify the canonical binding; do not merely
+relay an avoidable setup error to the user or disable enforcement. Preserve old
+versions, active work and custom patches. Real migration conflicts need an explicit
+installed/latest-bound reason and evidence; the exception expires on a new release.
+Opaque code-mode/scripts are not automatically intercepted: consult the cached gate
+for their inner tools. Remote, bundled and custom tools without release authority
+remain explicit coverage gaps. Reconnect loaded MCP clients after registration
+changes; changing a file does not attest the currently running process.
+
 ## Review workflow
+
+### Routine tool freshness is an operational gate
+
+When enrolled, the separate `integrations/tool-updates` hook checks official
+tool releases on a cached cadence: seven days by default, configurable per user
+and tool. It is not a mid-task code critic and requires no model. Follow a gate
+denial by completing compatible staging/installation and checking the actual
+binding; do not merely report the error to the user or disable the gate.
+Do not repeat internet checks on every call. A verified download is not an active
+MCP update; reconnect when required and preserve older versions, active work and
+migration evidence. Use the exact updater/config path from the hook for status.
+Treat unknown providers and opaque/nested execution as coverage gaps: check the
+actual inner tools before relying on them. Package versions come from their own
+metadata, not an SDK's `serverInfo.version`, a stale setup record or a filename.
+Record grounded migration exceptions against both installed and observed latest
+versions; never invent a conflict or overwrite old evidence to force an upgrade.
+See the matching source `docs/tool-updates.md`.
 
 ### Optional worktree coordination is a separate companion
 

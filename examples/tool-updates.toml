@@ -1,0 +1,45 @@
+version = 1
+
+[policy]
+enabled = true
+interval_seconds = 604800 # default: weekly; set86400 for daily
+retry_seconds = 600
+state_dir = "/absolute/permanent/kritic-tool-updates"
+auto_download = true
+auto_discover = true
+max_download_bytes = 1073741824
+client_configs = [] # actual global MCP configs; no workspace indexing
+
+[[tool]]
+id = "rea"
+tool_prefixes = ["mcp__rea__"]
+programs = ["rea", "rea-agents", "rea.mjs"]
+compatibility = "same_major"
+
+[tool.source]
+kind = "npm"
+package = "rea-agents"
+repository = "morluto/rea"
+notes_ref = "rea-agents-{version}"
+notes_path = "CHANGELOG.md"
+
+[tool.installed]
+kind = "npm"
+path = "/absolute/rea/node_modules/rea-agents/package.json"
+runtime = "/absolute/node/bin/node"
+server = "rea"
+client_bindings = [] # actual client config files that register this server
+
+[[tool]]
+id = "blender-app"
+tool_prefixes = ["mcp__blender__"]
+programs = ["blender", "blender.exe"]
+compatibility = "same_minor" # add-on/API changes require review
+
+[tool.source]
+kind = "blender"
+
+[tool.installed]
+kind = "command"
+role = "application"
+argv = ["/absolute/blender/blender", "--version"]

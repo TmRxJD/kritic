@@ -89,6 +89,10 @@ jobs:
           COORDINATION_TEST_ROOT: ${{ runner.temp }}/coordination-tests
           PYTHONDONTWRITEBYTECODE: "1"
         run: python -B -m unittest discover -s integrations/coordination -p 'test_*.py'
+      - name: Cached operational tool-update policy
+        env:
+          UPDATE_TEST_ROOT: ${{ runner.temp }}/tool-update-tests
+        run: python -B -m unittest discover -s integrations/tool-updates -p 'test_*.py'
       - name: Prompt intake adapter contracts
         run: python -B -m unittest discover -s integrations/prompt-critic -p 'test_*.py'
       - name: Prompt core and native-provider event contracts
